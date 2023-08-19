@@ -6,7 +6,7 @@
                 <!-- Logo -->
                 <div class="shrink-0 flex items-center">
                     <a href="{{ route('dashboard') }}">
-                        <x-application-logo class="block h-9 w-auto fill-current text-gray-800 dark:text-gray-200" />
+                        <x-application-logo-sm class="block h-9 w-auto fill-current text-gray-800 dark:text-gray-200"/>
                     </a>
                 </div>
 
@@ -15,6 +15,41 @@
                     <x-nav-link :href="route('dashboard')" :active="request()->routeIs('dashboard')">
                         {{ __('Dashboard') }}
                     </x-nav-link>
+
+                    <x-nav-dropdown-menu :item="'Assets'" :id="'assets'" :active="request()->routeIs('hardware') || request()->routeIs('software')">
+                        <x-dropdown-menu :id="'assets'">
+                            <x-dropdown-nav-link :href="route('assets')">
+                                {{ __('Hardware') }}
+                            </x-dropdown-nav-link>
+                            <x-dropdown-nav-link :href="route('assets')">
+                                {{ __('Software') }}
+                            </x-dropdown-nav-link>
+                            <x-dropdown-nav-link :href="route('assets')">
+                                {{ __('Vware') }}
+                            </x-dropdown-nav-link>
+                        </x-dropdown-menu>
+                    </x-nav-dropdown-menu>
+
+                    <x-nav-dropdown-menu :item="'Network'" :id="'network'" :active="request()->routeIs('assets')">
+                        <x-dropdown-menu :id="'network'">
+                            <x-dropdown-nav-link :href="route('assets')">
+                                {{ __('Network Manager') }}
+                            </x-dropdown-nav-link>
+                            <x-dropdown-nav-link :href="route('assets')">
+                                {{ __('IP Allocations') }}
+                            </x-dropdown-nav-link>
+                        </x-dropdown-menu>
+                    </x-nav-dropdown-menu>
+                    <x-nav-dropdown-menu :item="'Admin'" :id="'admin'" :active="request()->routeIs('admin*')">
+                        <x-dropdown-menu :id="'admin'">
+                            <x-dropdown-nav-link :href="route('admin')">
+                                {{ __('Settings') }}
+                            </x-dropdown-nav-link>
+                            <x-dropdown-nav-link :href="route('admin-users')">
+                                {{ __('Manage Users') }}
+                            </x-dropdown-nav-link>
+                        </x-dropdown-menu>
+                    </x-nav-dropdown-menu>
                 </div>
             </div>
 
