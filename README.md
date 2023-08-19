@@ -1,9 +1,3 @@
-<style>
-img[src*='#center'] {
-    display: block;
-    margin: auto;
-}
-</style>
 <p align="center"><a href="https://assetbee.software/" target="_blank"><img src="https://assetbee.software/assetbee_soon_logo.png" width="400" alt="Logo"></a></p>
 <p align="center">
 <img src="https://github.com/CloudTheWolf/AssetBee/actions/workflows/build.yml/badge.svg" alt="Build" />
