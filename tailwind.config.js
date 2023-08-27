@@ -1,14 +1,12 @@
 import defaultTheme from 'tailwindcss/defaultTheme';
-
 import forms from '@tailwindcss/forms';
-
-const colors = require('tailwindcss/colors')
-
+import typography from '@tailwindcss/typography';
 
 /** @type {import('tailwindcss').Config} */
-module.exports = {
+export default {
     content: [
         './vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php',
+        './vendor/laravel/jetstream/**/*.blade.php',
         './storage/framework/views/*.php',
         './resources/views/**/*.blade.php',
     ],
@@ -17,10 +15,9 @@ module.exports = {
         extend: {
             fontFamily: {
                 sans: ['Figtree', ...defaultTheme.fontFamily.sans],
-                serif: ['Rubik', ...defaultTheme.fontFamily.serif],
-            }
+            },
         },
     },
-    plugins: [forms],
-};
 
+    plugins: [forms, typography],
+};
