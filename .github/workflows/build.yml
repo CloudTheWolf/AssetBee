@@ -32,16 +32,18 @@ jobs:
       run: |
         npm install
         npm run build
-        mv build/assets/*.css public/vendor/app.css
-        mv build/assets/*.js public/vendor/app.js
+        mv public/build/assets/*.css public/vendor/app.css
+        mv public/build/assets/*.js public/vendor/app.js
 
     - name: Archive the project
       uses: actions/upload-artifact@v2
       with:
-        name: laravel-project
-        path: ./
-        exclude: .git/**
-
+        name: assetbee-release
+        path: |
+         .
+         !./node_modules
+         !./public/build
+          
     - name: Create Release
       id: create_release
       uses: actions/create-release@v1
