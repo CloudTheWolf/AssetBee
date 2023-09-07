@@ -2,16 +2,16 @@
 
 namespace App\Http\Livewire;
 
-use App\Models\PasswordResetToken;
 use App\Mail\PasswordResetMail;
+use App\Models\PasswordResetToken;
 use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Contracts\View\View;
+use Illuminate\Foundation\Auth\SendsPasswordResetEmails;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
 use Livewire\Component;
-use Illuminate\Foundation\Auth\SendsPasswordResetEmails;
 
 class PasswordResetComponent extends Component
 {

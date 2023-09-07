@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Assets\ManageHardwareController;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Admin\AdminMainController;
 
@@ -13,5 +14,5 @@ use App\Http\Controllers\Admin\AdminMainController;
 */
 
 Route::prefix('/assets')->group(function (){
-    Route::get('/',[AdminMainController::class,'Get'])->name('assets');
+    Route::get('/hardware',[ManageHardwareController::class,'list'])->name('assets.hardware-list');
 })->middleware(['auth', 'verified']);

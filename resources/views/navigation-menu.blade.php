@@ -12,9 +12,48 @@
 
                 <!-- Navigation Links -->
                 <div class="hidden space-x-8 sm:-my-px sm:ml-10 sm:flex">
-                    <x-nav-link href="{{ route('dashboard') }}" :active="request()->routeIs('dashboard')">
+                    <x-nav-link href="{{ route('dashboard') }}" :active="request()->routeIs('dashboard')" wire:navigate>
                         {{ __('Dashboard') }}
                     </x-nav-link>
+                    <x-nav-dropdown :active="request()->routeIs('assets*')" :title="__('Assets')" :toggle="'assetsMenu'" >
+                        <x-slot name="trigger" :active="request()->routeIs('assets*')" >
+                            <x-nav-link-parent :active="request()->routeIs('assets*')">
+                                {{__('Assets')}}
+                            </x-nav-link-parent>
+
+                        <x-slot name="content">
+                                <ul class="text-sm text-gray-700 dark:text-gray-400" aria-labelledby="dropdownLargeButton">
+                                    <li>
+                                        <a href="{{route('assets.hardware-list')}}" class="block px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-600 dark:hover:text-white">Hardware</a>
+                                    </li>
+                                    <li>
+                                        <a href="#" class="block px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-600 dark:hover:text-white">Software</a>
+                                    </li>
+                                    <li>
+                                        <a href="#" class="block px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-600 dark:hover:text-white">Virtualware</a>
+                                    </li>
+                                </ul>
+                        </x-slot>
+                        </x-slot>
+                    </x-nav-dropdown>
+                    <x-nav-dropdown :active="request()->routeIs('Maps*')" :title="__('Asset Allocation')" >
+                        <x-slot name="trigger" :active="request()->routeIs('Maps*')" >
+                            <x-nav-link-parent :active="request()->routeIs('Maps*')">
+                                {{__('Asset Allocation')}}
+                            </x-nav-link-parent>
+
+                            <x-slot name="content">
+                                <ul class="text-sm text-gray-700 dark:text-gray-400" aria-labelledby="dropdownLargeButton">
+                                    <li>
+                                        <a href="#" class="block px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-600 dark:hover:text-white" wire:navigate>End Users</a>
+                                    </li>
+                                    <li>
+                                        <a href="#" class="block px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-600 dark:hover:text-white" wire:navigate>Software Licences</a>
+                                    </li>
+                                </ul>
+                            </x-slot>
+                        </x-slot>
+                    </x-nav-dropdown>
                 </div>
             </div>
 

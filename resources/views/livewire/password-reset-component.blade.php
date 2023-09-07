@@ -4,7 +4,7 @@
 
         <div class="block">
             <label for="email" value="{{ __('Email') }}" />
-            <input id="email" wire:model="email" type="email" placeholder="Email" autofocus autocomplete="username" class="border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 focus:border-indigo-500 dark:focus:border-indigo-600 focus:ring-indigo-500 dark:focus:ring-indigo-600 rounded-md shadow-sm block mt-1 w-full" />
+            <input id="email" wire:model.live="email" type="email" placeholder="Email" autofocus autocomplete="username" class="border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 focus:border-indigo-500 dark:focus:border-indigo-600 focus:ring-indigo-500 dark:focus:ring-indigo-600 rounded-md shadow-sm block mt-1 w-full" />
             @error('email') <span class="text-red-500">{{ $message }}</span>@enderror
         </div>
         @if (session()->has('message'))

@@ -6,12 +6,14 @@
 
 namespace App\Models;
 
+use App\Enum\HardwareStatus;
 use Illuminate\Database\Eloquent\Model;
 
 /**
  * Class HardwareAsset
- * 
+ *
  * @property int $id
+ * @property string $asset_name
  * @property string $product_name
  * @property int $brand_name
  * @property string $serial_number
@@ -35,6 +37,7 @@ class HardwareAsset extends Model
 	];
 
 	protected $fillable = [
+        'asset_name',
 		'product_name',
 		'brand_name',
 		'serial_number',
@@ -44,4 +47,9 @@ class HardwareAsset extends Model
 		'purchase_order',
 		'state'
 	];
+
+    public  function whereNotDecommed()
+    {
+        return $this->where('state','!=',HardwareStatus::DECOMMED);
+    }
 }

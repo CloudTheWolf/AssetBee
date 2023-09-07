@@ -15,6 +15,7 @@ return new class extends Migration
     {
         Schema::create('hardware_asset', function (Blueprint $table) {
             $table->integer('id', true);
+            $table->string('asset_name')->unique();
             $table->string('product_name');
             $table->integer('brand_name');
             $table->string('serial_number');
