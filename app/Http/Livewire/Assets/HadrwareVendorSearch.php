@@ -8,14 +8,14 @@ use Livewire\Component;
 class HadrwareVendorSearch extends Component
 {
 
-    public $showresult = false;
+    public $showResult = false;
     public $search = '';
     public $records;
     public $vendorDetails;
 
     public function searchResult(){
         if(empty($this->search) || strlen($this->search) < 2) {
-            $this->showresult = false;
+            $this->showResult = false;
             return;
         };
         $this->records = HardwareVendor::query()
@@ -23,14 +23,14 @@ class HadrwareVendorSearch extends Component
             ->orderBy('name')
             ->limit(5)
             ->get();
-        $this->showresult = true;
+        $this->showResult = true;
     }
 
     public function fetchVendorDetail($id = 0){
         $record = HardwareVendor::query()->whereId($id)->first();
         $this->search = $record->name;
         $this->vendorDetails = $record;
-        $this->showDiv = false;
+        $this->showResult = false;
 
     }
 

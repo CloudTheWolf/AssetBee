@@ -12,7 +12,7 @@
                         <livewire:assets.hardware-table />
                 </div>
                 <div class="bg-white col-span-1 dark:bg-gray-800 overflow-hidden shadow-xl sm:rounded-lg">
-                    <livewire:assets.hadrware-vendor-search />
+                        <livewire:assets.add-new-hardware-form />
                 </div>
             </div>
         </div>
