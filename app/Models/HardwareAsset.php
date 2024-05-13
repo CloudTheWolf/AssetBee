@@ -23,6 +23,8 @@ use Illuminate\Database\Eloquent\Model;
  * @property string|null $purchase_order
  * @property int $state
  *
+ * @method static \Illuminate\Database\Eloquent\Builder|HardwareAsset whereNotDecommed()
+ *
  * @package App\Models
  */
 class HardwareAsset extends Model
@@ -48,8 +50,14 @@ class HardwareAsset extends Model
 		'state'
 	];
 
-    public  function whereNotDecommed()
+    /**
+     * Scope a query to only include active (not decommed) entries.
+     *
+     * @param  \Illuminate\Database\Eloquent\Builder  $query
+     * @return \Illuminate\Database\Eloquent\Builder
+     */
+    public function scopeWhereNotDecommed($query)
     {
-        return $this->where('state','!=',HardwareStatus::DECOMMED);
+        return $query->where('state', '!=', HardwareStatus::DECOMMED);
     }
 }
