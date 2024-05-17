@@ -17,9 +17,11 @@ return new class extends Migration
             $table->integer('id', true);
             $table->string('first_name');
             $table->string('last_name');
+            $table->string('email')->unique();
+            $table->integer('employee_id')->nullable()->default(0);
             $table->integer('linked_site')->nullable()->default(0);
             $table->integer('linked_department')->nullable()->default(0);
-            $table->integer('employee_id')->nullable()->default(0);
+            $table->integer('is_inactive')->nullable()->default(0);
         });
     }
 

@@ -5,10 +5,10 @@ namespace App\Http\Controllers\Assets;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 
-class ManageHardwareController extends Controller
+class ManageUserwareController extends Controller
 {
     public function list()
     {
-        return view('assets.hardware.hardware-list');
+        return view('assets.userware.userware-list');
     }
 }

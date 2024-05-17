@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Http\Livewire\Assets;
+namespace App\Http\Livewire\Assets\Hardware;
 
 use App\Models\HardwareVendor;
 use Livewire\Component;
@@ -36,6 +36,6 @@ class HadrwareVendorSearch extends Component
 
     public function render()
     {
-        return view('assets.hadrware-vendor-search');
+        return view('assets.hardware.hardware-vendor-search');
     }
 }

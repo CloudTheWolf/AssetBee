@@ -15,6 +15,16 @@ AssetBee is an Open Source Asset Management System designed to make managing you
 - Assign Assets to users.
 - Easily generate reports on assets based on Users, Hardware/Virtualware or Software
 
+## Required Crons:
+```cronexp
+# Process queue every x mins
+* * * * * php artisan queue:work --stop-when-empty >/dev/null 2>&1
+
+# Run Cron Jobs
+
+```
+
+
 ## License
 
 The AssetBee Project is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).

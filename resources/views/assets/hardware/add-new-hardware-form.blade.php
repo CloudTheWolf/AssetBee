@@ -8,7 +8,7 @@
                 </div>
             </div>
             <div class="flex items-center justify-center px-4 py-3 bg-gray-50 dark:bg-gray-800 text-center sm:px-6 shadow sm:rounded-bl-md sm:rounded-br-md">
-                <livewire:assets.hadrware-vendor-search />
+                <livewire:assets.hardware.hadrware-vendor-search />
             </div>
             <div class="form-group flex items-center justify-center px-4 py-3 bg-gray-50 dark:bg-gray-800 text-center sm:px-6 shadow sm:rounded-bl-md sm:rounded-br-md">
                 <div class="relative">
