@@ -9,8 +9,8 @@
             x-on:livewire-upload-progress="progress = $event.detail.progress"
         >
         <input id="csv" name="csv" style="display: none" type="file" wire:model="csv" accept="text/csv" onchange="document.getElementById('go').click()" />
-        <button onclick="document.getElementById('csv').click();" type="button" class="text-white bg-blue-700 hover:bg-blue-800 focus:ring-4 focus:outline-none focus:ring-blue-300 font-medium rounded-lg text-sm p-2.5 text-center inline-flex items-center me-2 dark:bg-blue-600 dark:hover:bg-blue-700 dark:focus:ring-blue-800">
-            <x-gmdi-upload-file/> Import Users
+        <button onclick="document.getElementById('csv').click();" type="button" class="flex items-center justify-center px-4 py-2 text-sm font-medium text-black rounded-lg bg-yellow-500 hover:bg-yellow-400 focus:ring-4 focus:ring-yellow-300">
+            <x-gmdi-upload-file class="text-black"/> Import Users
         </button>
         @error('csv')  <span class="error text-white">{{ $message }}</span> @enderror
         <button style="display: none" type="submit">Go</button>
