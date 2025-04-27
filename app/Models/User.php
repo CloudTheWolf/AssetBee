@@ -13,6 +13,7 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
 use App\Notifications\PasswordReset;
+use Laravel\Fortify\TwoFactorAuthenticatable;
 
 /**
  * Class User
@@ -39,7 +40,7 @@ use App\Notifications\PasswordReset;
  */
 class User extends Authenticatable
 {
-    use HasApiTokens, HasFactory, Notifiable;
+    use HasApiTokens, HasFactory, Notifiable, TwoFactorAuthenticatable;
 
 	protected $table = 'users';
 
