@@ -6,12 +6,14 @@
 
 namespace App\Models;
 
+use App\Enum\HardwareStatus;
 use Illuminate\Database\Eloquent\Model;
 
 /**
  * Class HardwareAsset
- * 
+ *
  * @property int $id
+ * @property string $asset_name
  * @property string $product_name
  * @property int $brand_name
  * @property string $serial_number
@@ -20,6 +22,8 @@ use Illuminate\Database\Eloquent\Model;
  * @property string|null $photo
  * @property string|null $purchase_order
  * @property int $state
+ *
+ * @method static \Illuminate\Database\Eloquent\Builder|HardwareAsset whereNotDecommed()
  *
  * @package App\Models
  */
@@ -35,6 +39,7 @@ class HardwareAsset extends Model
 	];
 
 	protected $fillable = [
+        'asset_name',
 		'product_name',
 		'brand_name',
 		'serial_number',
@@ -44,4 +49,15 @@ class HardwareAsset extends Model
 		'purchase_order',
 		'state'
 	];
+
+    /**
+     * Scope a query to only include active (not decommed) entries.
+     *
+     * @param  \Illuminate\Database\Eloquent\Builder  $query
+     * @return \Illuminate\Database\Eloquent\Builder
+     */
+    public function scopeWhereNotDecommed($query)
+    {
+        return $query->where('state', '!=', HardwareStatus::DECOMMED);
+    }
 }
