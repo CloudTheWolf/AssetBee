@@ -23,8 +23,3 @@ AssetBee is a Simple Asset Management System designed to make managing you IT As
 # Run Cron Jobs
 
 ```
-
-
-## License
-
-The AssetBee Project is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
