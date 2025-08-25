@@ -7,7 +7,7 @@
 
 ## About AssetBee
 
-AssetBee is an Open Source Asset Management System designed to make managing you IT Assets easy.
+AssetBee is a Simple Asset Management System designed to make managing you IT Assets easy.
 
 - Manage your Hardware Assets
 - Manage your Software Assets / Licence Renewals.
