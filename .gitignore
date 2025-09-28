@@ -1,35 +1,14 @@
 /tmp
 /out-tsc
-
-/node_modules
-<<<<<<< Updated upstream
-/public/build
-/public/hot
-/public/storage
-/storage/*.key
-/vendor
+node_modules
 .env
 .env.backup
 .env.production
-.phpunit.result.cache
-Homestead.json
-Homestead.yaml
-auth.json
-npm-debug.log
-yarn-error.log
-/.fleet
-/.idea
-/.vscode
-/storage/installed
-storage/installed
-=======
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 /.pnp
 .pnp.js
-
 .vscode
 .idea
 .flowbite-react
->>>>>>> Stashed changes
