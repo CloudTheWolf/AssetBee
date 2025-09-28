@@ -1,4 +1,5 @@
 {
+<<<<<<< Updated upstream
     "private": true,
     "type": "module",
     "scripts": {
@@ -21,3 +22,24 @@
         "bootstrap": "^5.3.0"
     }
 }
+=======
+  "name": "AssetBee Server",
+  "version": "1.0.0",
+  "description": "Backend Server for Asset Bee",
+  "main": "dist/index.js",
+  "scripts": {
+    "start": "bun server/index.ts",
+    "dev": "bun --watch server/index.ts"
+  },
+  "dependencies": {
+    "@hono/zod-validator": "^0.5.0",
+    "hono": "^4.7.7",
+    "zod": "^3.24.3"
+  },
+  "devDependencies": {
+    "typescript": "^5.5.3",
+    "@types/bun": "latest"
+  },
+  "private": true
+}
+>>>>>>> Stashed changes
