@@ -12,3 +12,6 @@ yarn-error.log*
 .vscode
 .idea
 .flowbite-react
+frontend/.vscode
+frontend/.flowbite-react
+frontend/node_modules
