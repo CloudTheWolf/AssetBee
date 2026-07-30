@@ -1,44 +1,9 @@
 <?php return array (
-  'blade-ui-kit/blade-heroicons' => 
+  'laravel/boost' => 
   array (
     'providers' => 
     array (
-      0 => 'BladeUI\\Heroicons\\BladeHeroiconsServiceProvider',
-    ),
-  ),
-  'blade-ui-kit/blade-icons' => 
-  array (
-    'providers' => 
-    array (
-      0 => 'BladeUI\\Icons\\BladeIconsServiceProvider',
-    ),
-  ),
-  'codeat3/blade-google-material-design-icons' => 
-  array (
-    'providers' => 
-    array (
-      0 => 'Codeat3\\BladeGoogleMaterialDesignIcons\\BladeGoogleMaterialDesignIconsServiceProvider',
-    ),
-  ),
-  'kitloong/laravel-migrations-generator' => 
-  array (
-    'providers' => 
-    array (
-      0 => 'KitLoong\\MigrationsGenerator\\MigrationsGeneratorServiceProvider',
-    ),
-  ),
-  'krlove/eloquent-model-generator' => 
-  array (
-    'providers' => 
-    array (
-      0 => 'Krlove\\EloquentModelGenerator\\Provider\\GeneratorServiceProvider',
-    ),
-  ),
-  'laravel/dusk' => 
-  array (
-    'providers' => 
-    array (
-      0 => 'Laravel\\Dusk\\DuskServiceProvider',
+      0 => 'Laravel\\Boost\\BoostServiceProvider',
     ),
   ),
   'laravel/fortify' => 
@@ -48,18 +13,61 @@
       0 => 'Laravel\\Fortify\\FortifyServiceProvider',
     ),
   ),
-  'laravel/jetstream' => 
+  'laravel/mcp' => 
   array (
+    'aliases' => 
+    array (
+      'Mcp' => 'Laravel\\Mcp\\Facades\\Mcp',
+    ),
     'providers' => 
     array (
-      0 => 'Laravel\\Jetstream\\JetstreamServiceProvider',
+      0 => 'Laravel\\Mcp\\Server\\McpServiceProvider',
     ),
   ),
-  'laravel/sanctum' => 
+  'laravel/pail' => 
   array (
     'providers' => 
     array (
-      0 => 'Laravel\\Sanctum\\SanctumServiceProvider',
+      0 => 'Laravel\\Pail\\PailServiceProvider',
+    ),
+  ),
+  'laravel/pao' => 
+  array (
+    'providers' => 
+    array (
+      0 => 'Laravel\\Pao\\Laravel\\ServiceProvider',
+    ),
+  ),
+  'laravel/passkeys' => 
+  array (
+    'providers' => 
+    array (
+      0 => 'Laravel\\Passkeys\\PasskeysServiceProvider',
+    ),
+  ),
+  'laravel/roster' => 
+  array (
+    'providers' => 
+    array (
+      0 => 'Laravel\\Roster\\RosterServiceProvider',
+    ),
+  ),
+  'laravel/sail' => 
+  array (
+    'providers' => 
+    array (
+      0 => 'Laravel\\Sail\\SailServiceProvider',
+    ),
+  ),
+  'laravel/socialite' => 
+  array (
+    'aliases' => 
+    array (
+      'Socialite' => 'Laravel\\Socialite\\Facades\\Socialite',
+    ),
+    'providers' => 
+    array (
+      0 => 'Laravel\\Socialite\\SocialiteServiceProvider',
     ),
   ),
   'laravel/tinker' => 
@@ -69,22 +77,33 @@
       0 => 'Laravel\\Tinker\\TinkerServiceProvider',
     ),
   ),
-  'laravel/ui' => 
+  'livewire/blaze' => 
   array (
     'providers' => 
     array (
-      0 => 'Laravel\\Ui\\UiServiceProvider',
+      0 => 'Livewire\\Blaze\\BlazeServiceProvider',
+    ),
+  ),
+  'livewire/flux' => 
+  array (
+    'aliases' => 
+    array (
+      'Flux' => 'Flux\\Flux',
+    ),
+    'providers' => 
+    array (
+      0 => 'Flux\\FluxServiceProvider',
     ),
   ),
   'livewire/livewire' => 
   array (
-    'providers' => 
-    array (
-      0 => 'Livewire\\LivewireServiceProvider',
-    ),
     'aliases' => 
     array (
       'Livewire' => 'Livewire\\Livewire',
+    ),
+    'providers' => 
+    array (
+      0 => 'Livewire\\LivewireServiceProvider',
     ),
   ),
   'nesbot/carbon' => 
@@ -108,29 +127,11 @@
       0 => 'Termwind\\Laravel\\TermwindServiceProvider',
     ),
   ),
-  'rachidlaasri/laravel-installer' => 
+  'pestphp/pest-plugin-laravel' => 
   array (
     'providers' => 
     array (
-      0 => 'RachidLaasri\\LaravelInstaller\\Providers\\LaravelInstallerServiceProvider',
-    ),
-  ),
-  'rappasoft/laravel-livewire-tables' => 
-  array (
-    'providers' => 
-    array (
-      0 => 'Rappasoft\\LaravelLivewireTables\\LaravelLivewireTablesServiceProvider',
-    ),
-  ),
-  'spatie/laravel-ignition' => 
-  array (
-    'providers' => 
-    array (
-      0 => 'Spatie\\LaravelIgnition\\IgnitionServiceProvider',
-    ),
-    'aliases' => 
-    array (
-      'Flare' => 'Spatie\\LaravelIgnition\\Facades\\Flare',
+      0 => 'Pest\\Laravel\\PestServiceProvider',
     ),
   ),
 );
