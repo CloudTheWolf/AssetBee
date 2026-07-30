@@ -22,6 +22,7 @@ use Illuminate\Support\Carbon;
  * @property VirtualwareCategory $category
  * @property VirtualwareStatus $status
  * @property int|null $host_hardware_id
+ * @property int|null $cloud_tenant_id
  * @property int|null $assigned_userware_id
  * @property string|null $notes
  * @property Carbon|null $created_at
@@ -36,6 +37,7 @@ use Illuminate\Support\Carbon;
     'category',
     'status',
     'host_hardware_id',
+    'cloud_tenant_id',
     'assigned_userware_id',
     'notes',
 ])]
@@ -72,6 +74,14 @@ class Virtualware extends Model
     public function hostHardware(): BelongsTo
     {
         return $this->belongsTo(Hardware::class, 'host_hardware_id');
+    }
+
+    /**
+     * @return BelongsTo<CloudTenant, $this>
+     */
+    public function cloudTenant(): BelongsTo
+    {
+        return $this->belongsTo(CloudTenant::class);
     }
 
     /**

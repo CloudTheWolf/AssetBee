@@ -18,4 +18,14 @@ enum HardwareStatus: string
             self::Retired => __('Retired'),
         };
     }
+
+    public function color(): string
+    {
+        return match ($this) {
+            self::Available => 'green',
+            self::Assigned => 'blue',
+            self::Maintenance => 'amber',
+            self::Retired => 'zinc',
+        };
+    }
 }

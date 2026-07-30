@@ -2,14 +2,18 @@
 
 namespace App\Models;
 
+use App\Enums\BitLockerStatus;
 use App\Enums\HardwareCategory;
+use App\Enums\HardwareOperatingSystem;
 use App\Enums\HardwareStatus;
 use Database\Factories\HardwareFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Carbon;
 
@@ -21,6 +25,13 @@ use Illuminate\Support\Carbon;
  * @property string|null $serial_number
  * @property string|null $manufacturer
  * @property string|null $model
+ * @property HardwareOperatingSystem|null $operating_system
+ * @property string|null $cpu
+ * @property int|null $ram_gb
+ * @property int|null $storage_gb
+ * @property BitLockerStatus|null $bitlocker_status
+ * @property string|null $bitlocker_recovery_key
+ * @property bool $is_vm_host
  * @property HardwareCategory $category
  * @property HardwareStatus $status
  * @property int|null $assigned_userware_id
@@ -37,6 +48,13 @@ use Illuminate\Support\Carbon;
     'serial_number',
     'manufacturer',
     'model',
+    'operating_system',
+    'cpu',
+    'ram_gb',
+    'storage_gb',
+    'bitlocker_status',
+    'bitlocker_recovery_key',
+    'is_vm_host',
     'category',
     'status',
     'assigned_userware_id',
@@ -58,8 +76,23 @@ class Hardware extends Model
         return [
             'category' => HardwareCategory::class,
             'status' => HardwareStatus::class,
+            'operating_system' => HardwareOperatingSystem::class,
+            'bitlocker_status' => BitLockerStatus::class,
+            'bitlocker_recovery_key' => 'encrypted',
+            'is_vm_host' => 'boolean',
+            'ram_gb' => 'integer',
+            'storage_gb' => 'integer',
             'purchased_at' => 'date',
         ];
+    }
+
+    /**
+     * @param  Builder<Hardware>  $query
+     * @return Builder<Hardware>
+     */
+    public function scopeVmHosts(Builder $query): Builder
+    {
+        return $query->where('is_vm_host', true)->where('category', HardwareCategory::Server);
     }
 
     /**
@@ -84,5 +117,13 @@ class Hardware extends Model
     public function virtualwares(): HasMany
     {
         return $this->hasMany(Virtualware::class, 'host_hardware_id');
+    }
+
+    /**
+     * @return MorphMany<AssetDocument, $this>
+     */
+    public function documents(): MorphMany
+    {
+        return $this->morphMany(AssetDocument::class, 'documentable');
     }
 }

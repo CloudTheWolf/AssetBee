@@ -5,10 +5,12 @@ namespace App\Actions\Assets;
 use App\Enums\VirtualwareCategory;
 use App\Enums\VirtualwareProvider;
 use App\Enums\VirtualwareStatus;
+use App\Models\Hardware;
 use App\Models\Virtualware;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
+use Illuminate\Validation\Validator as ValidatorContract;
 
 class UpdateVirtualware
 {
@@ -19,7 +21,7 @@ class UpdateVirtualware
      */
     public function handle(Virtualware $virtualware, array $input): Virtualware
     {
-        $validated = Validator::make($input, [
+        $validator = Validator::make($input, [
             'name' => ['required', 'string', 'max:255'],
             'provider' => ['required', Rule::enum(VirtualwareProvider::class)],
             'external_id' => ['nullable', 'string', 'max:255'],
@@ -30,13 +32,47 @@ class UpdateVirtualware
                 'integer',
                 Rule::exists('hardwares', 'id')->where('organization_id', $virtualware->organization_id),
             ],
+            'cloud_tenant_id' => [
+                'nullable',
+                'integer',
+                Rule::exists('cloud_tenants', 'id')->where('organization_id', $virtualware->organization_id),
+            ],
             'assigned_userware_id' => [
                 'nullable',
                 'integer',
                 Rule::exists('userwares', 'id')->where('organization_id', $virtualware->organization_id),
             ],
             'notes' => ['nullable', 'string'],
-        ])->validate();
+        ]);
+
+        $validator->after(function (ValidatorContract $validator) use ($input): void {
+            if (! empty($input['host_hardware_id']) && ! empty($input['cloud_tenant_id'])) {
+                $validator->errors()->add(
+                    'host_hardware_id',
+                    __('Virtualware can be linked to a cloud tenant or a VM host, not both.'),
+                );
+            }
+        });
+
+        $validated = $validator->validate();
+
+        if (! empty($validated['host_hardware_id'])) {
+            $host = Hardware::query()
+                ->where('organization_id', $virtualware->organization_id)
+                ->find($validated['host_hardware_id']);
+
+            if ($host === null || ! $host->is_vm_host || ! $host->category->canBeVmHost()) {
+                throw ValidationException::withMessages([
+                    'host_hardware_id' => __('The selected hardware must be a server marked as a VM host.'),
+                ]);
+            }
+
+            $validated['cloud_tenant_id'] = null;
+        }
+
+        if (! empty($validated['cloud_tenant_id'])) {
+            $validated['host_hardware_id'] = null;
+        }
 
         $virtualware->update($validated);
 

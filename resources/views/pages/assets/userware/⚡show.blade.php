@@ -1,12 +1,17 @@
 <?php
 
+use App\Actions\Assets\CreateUserwareAccount;
 use App\Actions\Assets\DeleteUserware;
+use App\Actions\Assets\DeleteUserwareAccount;
 use App\Actions\Assets\UpdateUserware;
 use App\Enums\UserwareStatus;
+use App\Models\Software;
 use App\Models\Userware;
+use App\Models\UserwareAccount;
 use App\Support\CurrentOrganization;
 use Flux\Flux;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
+use Livewire\Attributes\Computed;
 use Livewire\Attributes\Title;
 use Livewire\Component;
 
@@ -27,14 +32,41 @@ new #[Title('Userware')] class extends Component {
 
     public string $notes = '';
 
+    public string $account_type = 'software';
+
+    public string $account_software_id = '';
+
+    public string $account_site_name = '';
+
+    public string $account_site_url = '';
+
+    public string $account_username = '';
+
+    public string $account_notes = '';
+
     public function mount(Userware $userware): void
     {
         $this->authorize('view', $userware);
 
         abort_unless($userware->organization_id === CurrentOrganization::require()->id, 404);
 
-        $this->userware = $userware;
+        $this->userware = $userware->load([
+            'hardwares',
+            'virtualwares',
+            'softwareAssignments.software',
+            'accounts.software',
+        ]);
         $this->fillForm();
+    }
+
+    public function updatedAccountType(): void
+    {
+        if ($this->account_type === 'software') {
+            $this->account_site_name = '';
+            $this->account_site_url = '';
+        } else {
+            $this->account_software_id = '';
+        }
     }
 
     public function fillForm(): void
@@ -58,9 +90,58 @@ new #[Title('Userware')] class extends Component {
             'department' => $this->department !== '' ? $this->department : null,
             'status' => $this->status,
             'notes' => $this->notes !== '' ? $this->notes : null,
+        ])->load([
+            'hardwares',
+            'virtualwares',
+            'softwareAssignments.software',
+            'accounts.software',
         ]);
 
         Flux::toast(variant: 'success', text: __('Identity updated.'));
+    }
+
+    public function addAccount(CreateUserwareAccount $createUserwareAccount): void
+    {
+        $this->authorize('create', [UserwareAccount::class, $this->userware]);
+
+        $createUserwareAccount->handle($this->userware, [
+            'software_id' => $this->account_type === 'software' && $this->account_software_id !== ''
+                ? (int) $this->account_software_id
+                : null,
+            'site_name' => $this->account_type === 'external' && $this->account_site_name !== ''
+                ? $this->account_site_name
+                : null,
+            'site_url' => $this->account_type === 'external' && $this->account_site_url !== ''
+                ? $this->account_site_url
+                : null,
+            'username' => $this->account_username !== '' ? $this->account_username : null,
+            'notes' => $this->account_notes !== '' ? $this->account_notes : null,
+        ]);
+
+        $this->reset([
+            'account_software_id',
+            'account_site_name',
+            'account_site_url',
+            'account_username',
+            'account_notes',
+        ]);
+        $this->account_type = 'software';
+
+        $this->userware->load(['accounts.software']);
+
+        Flux::modal('add-account')->close();
+        Flux::toast(variant: 'success', text: __('Account added.'));
+    }
+
+    public function deleteAccount(UserwareAccount $account, DeleteUserwareAccount $deleteUserwareAccount): void
+    {
+        $this->authorize('delete', $account);
+        abort_unless($account->userware_id === $this->userware->id, 404);
+
+        $deleteUserwareAccount->handle($account);
+        $this->userware->load(['accounts.software']);
+
+        Flux::toast(variant: 'success', text: __('Account removed.'));
     }
 
     public function delete(DeleteUserware $deleteUserware): void
@@ -70,6 +151,15 @@ new #[Title('Userware')] class extends Component {
         $deleteUserware->handle($this->userware);
 
         $this->redirect(route('assets.userware.index', absolute: false), navigate: true);
+    }
+
+    #[Computed]
+    public function softwares()
+    {
+        return Software::query()
+            ->where('organization_id', CurrentOrganization::require()->id)
+            ->orderBy('name')
+            ->get();
     }
 }; ?>
 
@@ -132,4 +222,113 @@ new #[Title('Userware')] class extends Component {
             </ul>
         </div>
     </div>
+
+    <div class="rounded-xl border border-zinc-200 p-6 dark:border-zinc-700">
+        <flux:heading size="lg">{{ __('Assigned software') }}</flux:heading>
+        <flux:text class="mt-1">{{ __('Seat licenses assigned to this identity.') }}</flux:text>
+
+        <ul class="mt-4 divide-y divide-zinc-200 dark:divide-zinc-700">
+            @forelse ($userware->softwareAssignments as $assignment)
+                <li class="flex items-center justify-between gap-3 py-3">
+                    <div class="min-w-0">
+                        <a href="{{ route('assets.software.show', $assignment->software) }}" class="font-medium text-accent" wire:navigate>
+                            {{ $assignment->software->name }}
+                        </a>
+                        <flux:text>
+                            {{ $assignment->software->vendor ?? $assignment->software->license_type->label() }}
+                            · {{ __('Assigned') }} {{ $assignment->assigned_at->format('M j, Y') }}
+                        </flux:text>
+                    </div>
+                    <flux:button size="sm" :href="route('assets.software.show', $assignment->software)" wire:navigate>
+                        {{ __('View') }}
+                    </flux:button>
+                </li>
+            @empty
+                <li class="py-3"><flux:text>{{ __('No software seats assigned.') }}</flux:text></li>
+            @endforelse
+        </ul>
+    </div>
+
+    <div class="rounded-xl border border-zinc-200 p-6 dark:border-zinc-700">
+        <div class="flex items-start justify-between gap-3">
+            <div>
+                <flux:heading size="lg">{{ __('Accounts') }}</flux:heading>
+                <flux:text class="mt-1">{{ __('Track services and logins for this identity.') }}</flux:text>
+            </div>
+            @can('create', [App\Models\UserwareAccount::class, $userware])
+                <flux:modal.trigger name="add-account">
+                    <flux:button size="sm" variant="primary" icon="plus">{{ __('Add account') }}</flux:button>
+                </flux:modal.trigger>
+            @endcan
+        </div>
+
+        <ul class="mt-4 divide-y divide-zinc-200 dark:divide-zinc-700">
+            @forelse ($userware->accounts as $account)
+                <li class="flex items-start justify-between gap-3 py-3">
+                    <div class="min-w-0">
+                        @if ($account->isLinkedToSoftware())
+                            <a href="{{ route('assets.software.show', $account->software) }}" class="font-medium text-accent" wire:navigate>
+                                {{ $account->displayName() }}
+                            </a>
+                            <flux:text>{{ __('Linked software') }}</flux:text>
+                        @else
+                            <div class="font-medium">{{ $account->displayName() }}</div>
+                            <flux:text>
+                                <a href="{{ $account->site_url }}" target="_blank" rel="noopener noreferrer" class="text-accent">
+                                    {{ $account->site_url }}
+                                </a>
+                            </flux:text>
+                        @endif
+                        @if ($account->username)
+                            <flux:text>{{ __('Username') }}: {{ $account->username }}</flux:text>
+                        @endif
+                        @if ($account->notes)
+                            <flux:text>{{ $account->notes }}</flux:text>
+                        @endif
+                    </div>
+                    @can('delete', $account)
+                        <flux:button size="sm" variant="danger" wire:click="deleteAccount({{ $account->id }})" wire:confirm="{{ __('Remove this account?') }}">
+                            {{ __('Remove') }}
+                        </flux:button>
+                    @endcan
+                </li>
+            @empty
+                <li class="py-3"><flux:text>{{ __('No accounts tracked yet.') }}</flux:text></li>
+            @endforelse
+        </ul>
+    </div>
+
+    <flux:modal name="add-account" class="max-w-lg">
+        <form wire:submit="addAccount" class="space-y-6">
+            <div>
+                <flux:heading size="lg">{{ __('Add account') }}</flux:heading>
+                <flux:text>{{ __('Link software, or record an external site.') }}</flux:text>
+            </div>
+
+            <flux:radio.group wire:model.live="account_type" :label="__('Account type')">
+                <flux:radio value="software" :label="__('Linked software')" />
+                <flux:radio value="external" :label="__('External site')" />
+            </flux:radio.group>
+
+            @if ($account_type === 'software')
+                <flux:select wire:model="account_software_id" :label="__('Software')" required>
+                    <option value="">{{ __('Select software') }}</option>
+                    @foreach ($this->softwares as $software)
+                        <option value="{{ $software->id }}">{{ $software->name }}</option>
+                    @endforeach
+                </flux:select>
+            @else
+                <flux:input wire:model="account_site_name" :label="__('Site name')" required />
+                <flux:input wire:model="account_site_url" type="url" :label="__('Site URL')" placeholder="https://..." required />
+            @endif
+
+            <flux:input wire:model="account_username" :label="__('Username')" />
+            <flux:textarea wire:model="account_notes" :label="__('Notes')" rows="2" />
+
+            <div class="flex justify-end gap-2">
+                <flux:modal.close><flux:button variant="ghost">{{ __('Cancel') }}</flux:button></flux:modal.close>
+                <flux:button variant="primary" type="submit">{{ __('Add account') }}</flux:button>
+            </div>
+        </form>
+    </flux:modal>
 </div>

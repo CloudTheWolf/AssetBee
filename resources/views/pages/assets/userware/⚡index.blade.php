@@ -20,6 +20,10 @@ new #[Title('Userware')] class extends Component {
 
     public string $status = '';
 
+    public string $sortBy = 'name';
+
+    public string $sortDirection = 'asc';
+
     public string $name = '';
 
     public string $email = '';
@@ -45,6 +49,16 @@ new #[Title('Userware')] class extends Component {
     public function updatingStatus(): void
     {
         $this->resetPage();
+    }
+
+    public function sort(string $column): void
+    {
+        if ($this->sortBy === $column) {
+            $this->sortDirection = $this->sortDirection === 'asc' ? 'desc' : 'asc';
+        } else {
+            $this->sortBy = $column;
+            $this->sortDirection = 'asc';
+        }
     }
 
     public function create(CreateUserware $createUserware): void
@@ -79,6 +93,9 @@ new #[Title('Userware')] class extends Component {
     #[Computed]
     public function userwares()
     {
+        $sortable = ['name', 'email', 'department', 'status'];
+        $sortBy = in_array($this->sortBy, $sortable, true) ? $this->sortBy : 'name';
+
         return Userware::query()
             ->where('organization_id', CurrentOrganization::require()->id)
             ->when($this->search !== '', function ($query) {
@@ -89,107 +106,115 @@ new #[Title('Userware')] class extends Component {
                 });
             })
             ->when($this->status !== '', fn ($query) => $query->where('status', $this->status))
-            ->orderBy('name')
+            ->orderBy($sortBy, $this->sortDirection === 'desc' ? 'desc' : 'asc')
             ->paginate(10);
     }
 }; ?>
 
 <div class="flex flex-col gap-6">
-        <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-                <flux:heading size="xl">{{ __('Userware') }}</flux:heading>
-                <flux:text>{{ __('Managed identities across your organization.') }}</flux:text>
-            </div>
-
-            @can('create', App\Models\Userware::class)
-                <flux:modal.trigger name="create-userware">
-                    <flux:button variant="primary" icon="plus" data-test="create-userware">{{ __('Add identity') }}</flux:button>
-                </flux:modal.trigger>
-            @endcan
+    <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+            <flux:heading size="xl">{{ __('Userware') }}</flux:heading>
+            <flux:text>{{ __('Managed identities across your organization.') }}</flux:text>
         </div>
-
-        <div class="flex flex-col gap-3 sm:flex-row">
-            <flux:input wire:model.live.debounce.300ms="search" :placeholder="__('Search name, email, employee ID...')" class="flex-1" />
-            <flux:select wire:model.live="status" class="sm:w-48">
-                <option value="">{{ __('All statuses') }}</option>
-                @foreach (App\Enums\UserwareStatus::cases() as $statusOption)
-                    <option value="{{ $statusOption->value }}">{{ $statusOption->label() }}</option>
-                @endforeach
-            </flux:select>
-        </div>
-
-        <div class="overflow-hidden rounded-xl border border-zinc-200 dark:border-zinc-700">
-            <flux:table>
-                <flux:table.columns>
-                    <flux:table.column>{{ __('Name') }}</flux:table.column>
-                    <flux:table.column>{{ __('Email') }}</flux:table.column>
-                    <flux:table.column>{{ __('Department') }}</flux:table.column>
-                    <flux:table.column>{{ __('Status') }}</flux:table.column>
-                    <flux:table.column></flux:table.column>
-                </flux:table.columns>
-                <flux:table.rows>
-                    @forelse ($this->userwares as $userware)
-                        <flux:table.row :key="$userware->id">
-                            <flux:table.cell>
-                                <a href="{{ route('assets.userware.show', $userware) }}" class="font-medium text-accent" wire:navigate>
-                                    {{ $userware->name }}
-                                </a>
-                            </flux:table.cell>
-                            <flux:table.cell>{{ $userware->email }}</flux:table.cell>
-                            <flux:table.cell>{{ $userware->department ?? '—' }}</flux:table.cell>
-                            <flux:table.cell>{{ $userware->status->label() }}</flux:table.cell>
-                            <flux:table.cell>
-                                <div class="flex justify-end gap-2">
-                                    <flux:button size="sm" :href="route('assets.userware.show', $userware)" wire:navigate>
-                                        {{ __('View') }}
-                                    </flux:button>
-                                    @can('delete', $userware)
-                                        <flux:button size="sm" variant="danger" wire:click="delete({{ $userware->id }})" wire:confirm="{{ __('Delete this identity?') }}">
-                                            {{ __('Delete') }}
-                                        </flux:button>
-                                    @endcan
-                                </div>
-                            </flux:table.cell>
-                        </flux:table.row>
-                    @empty
-                        <flux:table.row>
-                            <flux:table.cell colspan="5">
-                                <flux:text class="py-6 text-center">{{ __('No identities found.') }}</flux:text>
-                            </flux:table.cell>
-                        </flux:table.row>
-                    @endforelse
-                </flux:table.rows>
-            </flux:table>
-        </div>
-
-        {{ $this->userwares->links() }}
 
         @can('create', App\Models\Userware::class)
-            <flux:modal name="create-userware" class="max-w-lg">
-                <form wire:submit="create" class="space-y-6">
-                    <div>
-                        <flux:heading size="lg">{{ __('Add identity') }}</flux:heading>
-                        <flux:text>{{ __('Create a managed identity for assignments.') }}</flux:text>
-                    </div>
-
-                    <flux:input wire:model="name" :label="__('Name')" required />
-                    <flux:input wire:model="email" type="email" :label="__('Email')" required />
-                    <flux:input wire:model="employee_id" :label="__('Employee ID')" />
-                    <flux:input wire:model="department" :label="__('Department')" />
-                    <flux:select wire:model="createStatus" :label="__('Status')">
-                        @foreach (App\Enums\UserwareStatus::cases() as $statusOption)
-                            <option value="{{ $statusOption->value }}">{{ $statusOption->label() }}</option>
-                        @endforeach
-                    </flux:select>
-                    <flux:textarea wire:model="notes" :label="__('Notes')" rows="3" />
-
-                    <div class="flex justify-end gap-2">
-                        <flux:modal.close>
-                            <flux:button variant="ghost">{{ __('Cancel') }}</flux:button>
-                        </flux:modal.close>
-                        <flux:button variant="primary" type="submit">{{ __('Create') }}</flux:button>
-                    </div>
-                </form>
-            </flux:modal>
+            <flux:modal.trigger name="create-userware">
+                <flux:button variant="primary" icon="plus" data-test="create-userware">{{ __('Add identity') }}</flux:button>
+            </flux:modal.trigger>
         @endcan
+    </div>
+
+    <div class="flex flex-col gap-3 sm:flex-row">
+        <flux:input wire:model.live.debounce.300ms="search" :placeholder="__('Search name, email, employee ID...')" class="flex-1" />
+        <flux:select wire:model.live="status" class="sm:w-48">
+            <option value="">{{ __('All statuses') }}</option>
+            @foreach (App\Enums\UserwareStatus::cases() as $statusOption)
+                <option value="{{ $statusOption->value }}">{{ $statusOption->label() }}</option>
+            @endforeach
+        </flux:select>
+    </div>
+
+    <flux:table :paginate="$this->userwares">
+        <flux:table.columns>
+            <flux:table.column sortable :sorted="$sortBy === 'name'" :direction="$sortDirection" wire:click="sort('name')">{{ __('Name') }}</flux:table.column>
+            <flux:table.column sortable :sorted="$sortBy === 'email'" :direction="$sortDirection" wire:click="sort('email')">{{ __('Email') }}</flux:table.column>
+            <flux:table.column sortable :sorted="$sortBy === 'department'" :direction="$sortDirection" wire:click="sort('department')">{{ __('Department') }}</flux:table.column>
+            <flux:table.column sortable :sorted="$sortBy === 'status'" :direction="$sortDirection" wire:click="sort('status')">{{ __('Status') }}</flux:table.column>
+            <flux:table.column></flux:table.column>
+        </flux:table.columns>
+        <flux:table.rows>
+            @forelse ($this->userwares as $userware)
+                <flux:table.row :key="$userware->id">
+                    <flux:table.cell>
+                        <a href="{{ route('assets.userware.show', $userware) }}" class="font-medium text-accent" wire:navigate>
+                            {{ $userware->name }}
+                        </a>
+                        @if ($userware->employee_id)
+                            <div class="text-xs text-zinc-500">{{ $userware->employee_id }}</div>
+                        @endif
+                    </flux:table.cell>
+                    <flux:table.cell>{{ $userware->email }}</flux:table.cell>
+                    <flux:table.cell>{{ $userware->department ?? '—' }}</flux:table.cell>
+                    <flux:table.cell class="py-0">
+                        <flux:badge size="sm" :color="$userware->status->color()">{{ $userware->status->label() }}</flux:badge>
+                    </flux:table.cell>
+                    <flux:table.cell>
+                        <div class="flex justify-end">
+                            <flux:dropdown>
+                                <flux:button variant="ghost" size="sm" icon="ellipsis-horizontal" />
+                                <flux:menu>
+                                    <flux:menu.item :href="route('assets.userware.show', $userware)" wire:navigate icon="eye">{{ __('View') }}</flux:menu.item>
+                                    @can('delete', $userware)
+                                        <flux:menu.separator />
+                                        <flux:menu.item variant="danger" icon="trash" wire:click="delete({{ $userware->id }})" wire:confirm="{{ __('Delete this identity?') }}">
+                                            {{ __('Delete') }}
+                                        </flux:menu.item>
+                                    @endcan
+                                </flux:menu>
+                            </flux:dropdown>
+                        </div>
+                    </flux:table.cell>
+                </flux:table.row>
+            @empty
+                <flux:table.row>
+                    <flux:table.cell colspan="5">
+                        <div class="py-10 text-center">
+                            <flux:heading size="sm">{{ __('No identities found') }}</flux:heading>
+                            <flux:text class="mt-1">{{ __('Add a managed identity to assign assets.') }}</flux:text>
+                        </div>
+                    </flux:table.cell>
+                </flux:table.row>
+            @endforelse
+        </flux:table.rows>
+    </flux:table>
+
+    @can('create', App\Models\Userware::class)
+        <flux:modal name="create-userware" class="max-w-lg">
+            <form wire:submit="create" class="space-y-6">
+                <div>
+                    <flux:heading size="lg">{{ __('Add identity') }}</flux:heading>
+                    <flux:text>{{ __('Create a managed identity for assignments.') }}</flux:text>
+                </div>
+
+                <flux:input wire:model="name" :label="__('Name')" required />
+                <flux:input wire:model="email" type="email" :label="__('Email')" required />
+                <flux:input wire:model="employee_id" :label="__('Employee ID')" />
+                <flux:input wire:model="department" :label="__('Department')" />
+                <flux:select wire:model="createStatus" :label="__('Status')">
+                    @foreach (App\Enums\UserwareStatus::cases() as $statusOption)
+                        <option value="{{ $statusOption->value }}">{{ $statusOption->label() }}</option>
+                    @endforeach
+                </flux:select>
+                <flux:textarea wire:model="notes" :label="__('Notes')" rows="3" />
+
+                <div class="flex justify-end gap-2">
+                    <flux:modal.close>
+                        <flux:button variant="ghost">{{ __('Cancel') }}</flux:button>
+                    </flux:modal.close>
+                    <flux:button variant="primary" type="submit">{{ __('Create') }}</flux:button>
+                </div>
+            </form>
+        </flux:modal>
+    @endcan
 </div>

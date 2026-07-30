@@ -2,6 +2,7 @@
 
 namespace App\Actions\Assets;
 
+use App\Actions\Assets\Concerns\NormalizesHardwareAttributes;
 use App\Enums\HardwareCategory;
 use App\Enums\HardwareStatus;
 use App\Models\Hardware;
@@ -12,6 +13,8 @@ use Illuminate\Validation\ValidationException;
 
 class CreateHardware
 {
+    use NormalizesHardwareAttributes;
+
     /**
      * @param  array<string, mixed>  $input
      *
@@ -19,7 +22,7 @@ class CreateHardware
      */
     public function handle(Organization $organization, array $input): Hardware
     {
-        $validated = Validator::make($input, [
+        $validator = Validator::make($input, [
             'name' => ['required', 'string', 'max:255'],
             'asset_tag' => [
                 'nullable',
@@ -34,7 +37,12 @@ class CreateHardware
             'status' => ['required', Rule::enum(HardwareStatus::class)],
             'purchased_at' => ['nullable', 'date'],
             'notes' => ['nullable', 'string'],
-        ])->validate();
+            ...$this->hardwareAttributeRules(),
+        ]);
+
+        $this->afterHardwareValidation($validator, $input);
+
+        $validated = $this->normalizeHardwareAttributes($validator->validate());
 
         return $organization->hardwares()->create($validated);
     }

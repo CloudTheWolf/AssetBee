@@ -2,6 +2,7 @@
 
 namespace App\Actions\Assets;
 
+use App\Enums\SoftwareBillingInterval;
 use App\Enums\SoftwareLicenseType;
 use App\Enums\SoftwareStatus;
 use App\Models\Software;
@@ -25,6 +26,11 @@ class UpdateSoftware
             'total_seats' => ['nullable', 'integer', 'min:1'],
             'status' => ['required', Rule::enum(SoftwareStatus::class)],
             'expires_at' => ['nullable', 'date'],
+            'is_recurring' => ['sometimes', 'boolean'],
+            'billing_interval' => ['nullable', Rule::enum(SoftwareBillingInterval::class)],
+            'billing_amount' => ['nullable', 'numeric', 'min:0'],
+            'currency' => ['nullable', 'string', 'size:3'],
+            'next_billing_at' => ['nullable', 'date'],
             'notes' => ['nullable', 'string'],
         ])->validate();
 
@@ -38,6 +44,19 @@ class UpdateSoftware
             ])->validate();
         } else {
             $validated['total_seats'] = null;
+        }
+
+        $validated['is_recurring'] = (bool) ($validated['is_recurring'] ?? false);
+        $validated['currency'] = strtoupper($validated['currency'] ?? 'GBP');
+
+        if (! $validated['is_recurring']) {
+            $validated['billing_interval'] = null;
+            $validated['billing_amount'] = null;
+            $validated['next_billing_at'] = null;
+        } else {
+            Validator::make($validated, [
+                'billing_interval' => ['required', Rule::enum(SoftwareBillingInterval::class)],
+            ])->validate();
         }
 
         $software->update($validated);

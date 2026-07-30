@@ -74,4 +74,12 @@ class Userware extends Model
     {
         return $this->hasMany(SoftwareAssignment::class);
     }
+
+    /**
+     * @return HasMany<UserwareAccount, $this>
+     */
+    public function accounts(): HasMany
+    {
+        return $this->hasMany(UserwareAccount::class);
+    }
 }

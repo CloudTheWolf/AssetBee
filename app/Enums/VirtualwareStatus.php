@@ -16,4 +16,13 @@ enum VirtualwareStatus: string
             self::Decommissioned => __('Decommissioned'),
         };
     }
+
+    public function color(): string
+    {
+        return match ($this) {
+            self::Running => 'green',
+            self::Stopped => 'amber',
+            self::Decommissioned => 'zinc',
+        };
+    }
 }

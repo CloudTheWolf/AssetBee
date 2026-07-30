@@ -16,4 +16,13 @@ enum SoftwareStatus: string
             self::Retired => __('Retired'),
         };
     }
+
+    public function color(): string
+    {
+        return match ($this) {
+            self::Active => 'green',
+            self::Expired => 'red',
+            self::Retired => 'zinc',
+        };
+    }
 }

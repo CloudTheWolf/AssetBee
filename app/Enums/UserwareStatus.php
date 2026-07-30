@@ -16,4 +16,13 @@ enum UserwareStatus: string
             self::Terminated => __('Terminated'),
         };
     }
+
+    public function color(): string
+    {
+        return match ($this) {
+            self::Active => 'green',
+            self::Inactive => 'amber',
+            self::Terminated => 'zinc',
+        };
+    }
 }

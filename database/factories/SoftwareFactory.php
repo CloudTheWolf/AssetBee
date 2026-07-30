@@ -28,6 +28,11 @@ class SoftwareFactory extends Factory
             'total_seats' => $licenseType === SoftwareLicenseType::Seat ? fake()->numberBetween(5, 100) : null,
             'status' => SoftwareStatus::Active,
             'expires_at' => fake()->optional()->dateTimeBetween('now', '+2 years'),
+            'is_recurring' => false,
+            'billing_interval' => null,
+            'billing_amount' => null,
+            'currency' => 'GBP',
+            'next_billing_at' => null,
             'notes' => fake()->optional()->sentence(),
         ];
     }
@@ -37,6 +42,18 @@ class SoftwareFactory extends Factory
         return $this->state(fn (array $attributes) => [
             'license_type' => SoftwareLicenseType::Seat,
             'total_seats' => $seats,
+        ]);
+    }
+
+    public function recurring(string $interval = 'monthly', float $amount = 99.00): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'license_type' => SoftwareLicenseType::Subscription,
+            'is_recurring' => true,
+            'billing_interval' => $interval,
+            'billing_amount' => $amount,
+            'currency' => 'GBP',
+            'next_billing_at' => now()->addMonth()->toDateString(),
         ]);
     }
 }

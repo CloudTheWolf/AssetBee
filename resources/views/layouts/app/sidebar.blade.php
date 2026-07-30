@@ -37,6 +37,9 @@
                         <flux:sidebar.item icon="computer-desktop" :href="route('assets.hardware.index')" :current="request()->routeIs('assets.hardware.*')" wire:navigate>
                             {{ __('Hardware') }}
                         </flux:sidebar.item>
+                        <flux:sidebar.item icon="building-library" :href="route('assets.cloud-tenants.index')" :current="request()->routeIs('assets.cloud-tenants.*')" wire:navigate>
+                            {{ __('Cloud Tenants') }}
+                        </flux:sidebar.item>
                         <flux:sidebar.item icon="cloud" :href="route('assets.virtualware.index')" :current="request()->routeIs('assets.virtualware.*')" wire:navigate>
                             {{ __('Virtualware') }}
                         </flux:sidebar.item>
@@ -74,15 +77,15 @@
 
             <flux:spacer />
 
-            <flux:sidebar.nav>
-                <flux:sidebar.item icon="folder-git-2" href="https://github.com/laravel/livewire-starter-kit" target="_blank">
-                    {{ __('Repository') }}
-                </flux:sidebar.item>
+{{--            <flux:sidebar.nav>--}}
+{{--                <flux:sidebar.item icon="folder-git-2" href="https://github.com/laravel/livewire-starter-kit" target="_blank">--}}
+{{--                    {{ __('Repository') }}--}}
+{{--                </flux:sidebar.item>--}}
 
-                <flux:sidebar.item icon="book-open-text" href="https://laravel.com/docs/starter-kits#livewire" target="_blank">
-                    {{ __('Documentation') }}
-                </flux:sidebar.item>
-            </flux:sidebar.nav>
+{{--                <flux:sidebar.item icon="book-open-text" href="https://laravel.com/docs/starter-kits#livewire" target="_blank">--}}
+{{--                    {{ __('Documentation') }}--}}
+{{--                </flux:sidebar.item>--}}
+{{--            </flux:sidebar.nav>--}}
 
             <x-desktop-user-menu class="hidden lg:block" :name="auth()->user()->name" />
         </flux:sidebar>

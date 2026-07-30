@@ -2,6 +2,7 @@
 
 use App\Enums\HardwareStatus;
 use App\Enums\SoftwareLicenseType;
+use App\Models\CloudTenant;
 use App\Models\Hardware;
 use App\Models\Software;
 use App\Models\Userware;
@@ -29,12 +30,17 @@ new #[Title('Dashboard')] class extends Component {
         return [
             'userware' => Userware::query()->where('organization_id', $organization->id)->count(),
             'hardware' => Hardware::query()->where('organization_id', $organization->id)->count(),
+            'cloud_tenants' => CloudTenant::query()->where('organization_id', $organization->id)->count(),
             'virtualware' => Virtualware::query()->where('organization_id', $organization->id)->count(),
             'software' => Software::query()->where('organization_id', $organization->id)->count(),
             'unassigned_hardware' => Hardware::query()
                 ->where('organization_id', $organization->id)
                 ->where('status', HardwareStatus::Available)
                 ->whereNull('assigned_userware_id')
+                ->count(),
+            'recurring_software' => Software::query()
+                ->where('organization_id', $organization->id)
+                ->where('is_recurring', true)
                 ->count(),
             'seats_used' => $seatsUsed,
             'seats_total' => $seatsTotal,
@@ -48,7 +54,7 @@ new #[Title('Dashboard')] class extends Component {
         <flux:text>{{ \App\Support\CurrentOrganization::require()->name }}</flux:text>
     </div>
 
-    <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+    <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
         <a href="{{ route('assets.userware.index') }}" wire:navigate class="rounded-xl border border-zinc-200 p-5 transition hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-900">
             <flux:text>{{ __('Userware') }}</flux:text>
             <flux:heading size="xl" class="mt-2">{{ $this->stats['userware'] }}</flux:heading>
@@ -56,6 +62,10 @@ new #[Title('Dashboard')] class extends Component {
         <a href="{{ route('assets.hardware.index') }}" wire:navigate class="rounded-xl border border-zinc-200 p-5 transition hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-900">
             <flux:text>{{ __('Hardware') }}</flux:text>
             <flux:heading size="xl" class="mt-2">{{ $this->stats['hardware'] }}</flux:heading>
+        </a>
+        <a href="{{ route('assets.cloud-tenants.index') }}" wire:navigate class="rounded-xl border border-zinc-200 p-5 transition hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-900">
+            <flux:text>{{ __('Cloud Tenants') }}</flux:text>
+            <flux:heading size="xl" class="mt-2">{{ $this->stats['cloud_tenants'] }}</flux:heading>
         </a>
         <a href="{{ route('assets.virtualware.index') }}" wire:navigate class="rounded-xl border border-zinc-200 p-5 transition hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-900">
             <flux:text>{{ __('Virtualware') }}</flux:text>
@@ -67,7 +77,7 @@ new #[Title('Dashboard')] class extends Component {
         </a>
     </div>
 
-    <div class="grid gap-4 md:grid-cols-2">
+    <div class="grid gap-4 md:grid-cols-3">
         <div class="rounded-xl border border-zinc-200 p-5 dark:border-zinc-700">
             <flux:text>{{ __('Unassigned hardware') }}</flux:text>
             <flux:heading size="xl" class="mt-2">{{ $this->stats['unassigned_hardware'] }}</flux:heading>
@@ -80,6 +90,10 @@ new #[Title('Dashboard')] class extends Component {
                     <span class="text-base font-normal text-zinc-500">/ {{ $this->stats['seats_total'] }}</span>
                 @endif
             </flux:heading>
+        </div>
+        <div class="rounded-xl border border-zinc-200 p-5 dark:border-zinc-700">
+            <flux:text>{{ __('Recurring subscriptions') }}</flux:text>
+            <flux:heading size="xl" class="mt-2">{{ $this->stats['recurring_software'] }}</flux:heading>
         </div>
     </div>
 </div>

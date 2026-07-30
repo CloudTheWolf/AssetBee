@@ -29,7 +29,7 @@ test('virtualware can be assigned to userware and host hardware', function () {
     [, $organization] = actingAsOrganizationMember();
 
     $userware = Userware::factory()->create(['organization_id' => $organization->id]);
-    $hardware = Hardware::factory()->create(['organization_id' => $organization->id]);
+    $hardware = Hardware::factory()->vmHost()->create(['organization_id' => $organization->id]);
     $virtualware = Virtualware::factory()->create(['organization_id' => $organization->id]);
 
     $virtualware = app(AssignVirtualware::class)->handle($virtualware, $userware, $hardware, updateHost: true);
@@ -42,7 +42,7 @@ test('cross organization virtualware host is rejected', function () {
     [, $organization] = actingAsOrganizationMember();
 
     $virtualware = Virtualware::factory()->create(['organization_id' => $organization->id]);
-    $foreignHost = Hardware::factory()->create([
+    $foreignHost = Hardware::factory()->vmHost()->create([
         'organization_id' => Organization::factory()->create()->id,
     ]);
 

@@ -84,6 +84,22 @@ class Organization extends Model
         return $this->hasMany(Software::class);
     }
 
+    /**
+     * @return HasMany<CloudTenant, $this>
+     */
+    public function cloudTenants(): HasMany
+    {
+        return $this->hasMany(CloudTenant::class);
+    }
+
+    /**
+     * @return HasMany<AssetDocument, $this>
+     */
+    public function assetDocuments(): HasMany
+    {
+        return $this->hasMany(AssetDocument::class);
+    }
+
     public static function findByGoogleDomain(string $domain): ?self
     {
         return static::query()

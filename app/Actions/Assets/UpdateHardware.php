@@ -2,6 +2,7 @@
 
 namespace App\Actions\Assets;
 
+use App\Actions\Assets\Concerns\NormalizesHardwareAttributes;
 use App\Enums\HardwareCategory;
 use App\Enums\HardwareStatus;
 use App\Models\Hardware;
@@ -11,6 +12,8 @@ use Illuminate\Validation\ValidationException;
 
 class UpdateHardware
 {
+    use NormalizesHardwareAttributes;
+
     /**
      * @param  array<string, mixed>  $input
      *
@@ -18,7 +21,7 @@ class UpdateHardware
      */
     public function handle(Hardware $hardware, array $input): Hardware
     {
-        $validated = Validator::make($input, [
+        $validator = Validator::make($input, [
             'name' => ['required', 'string', 'max:255'],
             'asset_tag' => [
                 'nullable',
@@ -35,9 +38,19 @@ class UpdateHardware
             'status' => ['required', Rule::enum(HardwareStatus::class)],
             'purchased_at' => ['nullable', 'date'],
             'notes' => ['nullable', 'string'],
-        ])->validate();
+            ...$this->hardwareAttributeRules(),
+        ]);
 
+        $this->afterHardwareValidation($validator, $input);
+
+        $validated = $this->normalizeHardwareAttributes($validator->validate());
+
+        $wasVmHost = $hardware->is_vm_host;
         $hardware->update($validated);
+
+        if ($wasVmHost && ! $hardware->fresh()->is_vm_host) {
+            $hardware->virtualwares()->update(['host_hardware_id' => null]);
+        }
 
         return $hardware->refresh();
     }

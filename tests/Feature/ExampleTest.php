@@ -1,7 +1,13 @@
 <?php
 
-test('returns a successful response', function () {
-    $response = $this->get(route('home'));
+test('home redirects guests to the login page', function () {
+    $this->get(route('home'))
+        ->assertRedirect(route('login'));
+});
 
-    $response->assertOk();
+test('home redirects authenticated users to the dashboard', function () {
+    actingAsOrganizationMember();
+
+    $this->get(route('home'))
+        ->assertRedirect(route('dashboard'));
 });

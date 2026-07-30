@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Assets\DownloadAssetDocumentController;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware(['auth', 'verified', 'organization'])->group(function () {
@@ -14,4 +15,10 @@ Route::middleware(['auth', 'verified', 'organization'])->group(function () {
 
     Route::livewire('assets/software', 'pages::assets.software.index')->name('assets.software.index');
     Route::livewire('assets/software/{software}', 'pages::assets.software.show')->name('assets.software.show');
+
+    Route::livewire('assets/cloud-tenants', 'pages::assets.cloud-tenants.index')->name('assets.cloud-tenants.index');
+    Route::livewire('assets/cloud-tenants/{cloudTenant}', 'pages::assets.cloud-tenants.show')->name('assets.cloud-tenants.show');
+
+    Route::get('assets/documents/{document}/download', DownloadAssetDocumentController::class)
+        ->name('assets.documents.download');
 });
