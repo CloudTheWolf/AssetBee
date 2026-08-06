@@ -7,6 +7,7 @@ use App\Actions\Organizations\UpdateOrganization;
 use App\Actions\Organizations\UpdateOrganizationMemberRole;
 use App\Enums\OrganizationRole;
 use App\Models\Organization;
+use App\Models\OrganizationApiKey;
 use App\Models\OrganizationInvitation;
 use App\Models\User;
 use App\Support\CurrentOrganization;
@@ -16,7 +17,8 @@ use Livewire\Attributes\Computed;
 use Livewire\Attributes\Title;
 use Livewire\Component;
 
-new #[Title('Organization settings')] class extends Component {
+new #[Title('Organization settings')] class extends Component
+{
     use AuthorizesRequests;
 
     public string $name = '';
@@ -26,6 +28,10 @@ new #[Title('Organization settings')] class extends Component {
     public string $invite_email = '';
 
     public string $invite_role = 'member';
+
+    public string $api_key_name = '';
+
+    public ?string $new_api_key = null;
 
     public function mount(): void
     {
@@ -98,6 +104,41 @@ new #[Title('Organization settings')] class extends Component {
         Flux::toast(variant: 'success', text: __('Member removed.'));
     }
 
+    public function createApiKey(): void
+    {
+        $organization = CurrentOrganization::require();
+        $this->authorize('manageApiKeys', $organization);
+
+        $validated = $this->validate([
+            'api_key_name' => ['required', 'string', 'max:255'],
+        ]);
+
+        [, $this->new_api_key] = OrganizationApiKey::issue(
+            $organization,
+            $validated['api_key_name'],
+        );
+
+        $this->reset('api_key_name');
+        unset($this->apiKeys);
+
+        Flux::toast(variant: 'success', text: __('API key created.'));
+    }
+
+    public function revokeApiKey(int $apiKeyId): void
+    {
+        $organization = CurrentOrganization::require();
+        $this->authorize('manageApiKeys', $organization);
+
+        $apiKey = $organization->apiKeys()
+            ->whereNull('revoked_at')
+            ->findOrFail($apiKeyId);
+        $apiKey->update(['revoked_at' => now()]);
+
+        unset($this->apiKeys);
+
+        Flux::toast(variant: 'success', text: __('API key revoked.'));
+    }
+
     #[Computed]
     public function organization(): Organization
     {
@@ -114,6 +155,15 @@ new #[Title('Organization settings')] class extends Component {
     public function invitations()
     {
         return $this->organization->invitations()->pending()->with('inviter')->latest()->get();
+    }
+
+    #[Computed]
+    public function apiKeys()
+    {
+        return $this->organization->apiKeys()
+            ->whereNull('revoked_at')
+            ->latest()
+            ->get();
     }
 
     #[Computed]
@@ -142,6 +192,66 @@ new #[Title('Organization settings')] class extends Component {
             <flux:button variant="primary" type="submit">{{ __('Save changes') }}</flux:button>
         </div>
     </form>
+
+    <div class="flex flex-col gap-4 rounded-xl border border-zinc-200 p-6 dark:border-zinc-700">
+        <div>
+            <flux:heading size="lg">{{ __('API keys') }}</flux:heading>
+            <flux:text>{{ __('Create keys for inventory collectors. Keys have access to this organization only.') }}</flux:text>
+        </div>
+
+        @if ($new_api_key)
+            <div class="rounded-lg border border-amber-300 bg-amber-50 p-4 dark:border-amber-700 dark:bg-amber-950/30">
+                <flux:text class="font-medium">{{ __('Copy this API key now. It will not be shown again.') }}</flux:text>
+                <code class="mt-2 block break-all rounded bg-white p-3 text-sm dark:bg-zinc-900">{{ $new_api_key }}</code>
+                <flux:button
+                    class="mt-3"
+                    size="sm"
+                    type="button"
+                    x-on:click="navigator.clipboard.writeText(@js($new_api_key))"
+                >
+                    {{ __('Copy API key') }}
+                </flux:button>
+            </div>
+        @endif
+
+        <form wire:submit="createApiKey" class="flex flex-col gap-3 sm:flex-row sm:items-end">
+            <flux:input
+                wire:model="api_key_name"
+                :label="__('Key name')"
+                :placeholder="__('Office inventory collector')"
+                class="flex-1"
+                required
+            />
+            <flux:button variant="primary" type="submit">{{ __('Create API key') }}</flux:button>
+        </form>
+
+        <ul class="divide-y divide-zinc-200 dark:divide-zinc-700">
+            @forelse ($this->apiKeys as $apiKey)
+                <li class="flex items-center justify-between gap-4 py-3" wire:key="api-key-{{ $apiKey->id }}">
+                    <div>
+                        <div class="font-medium">{{ $apiKey->name }}</div>
+                        <flux:text>
+                            {{ $apiKey->key_prefix }}••••
+                            ·
+                            {{ $apiKey->last_used_at
+                                ? __('Last used :date', ['date' => $apiKey->last_used_at->diffForHumans()])
+                                : __('Never used') }}
+                        </flux:text>
+                    </div>
+                    <flux:button
+                        size="sm"
+                        variant="danger"
+                        wire:click="revokeApiKey({{ $apiKey->id }})"
+                        wire:confirm="{{ __('Revoke this API key? Inventory collectors using it will immediately lose access.') }}"
+                    >
+                        {{ __('Revoke') }}
+                    </flux:button>
+                </li>
+            @empty
+                <li class="py-3"><flux:text>{{ __('No active API keys.') }}</flux:text></li>
+            @endforelse
+        </ul>
+    </div>
 
     <div class="flex flex-col gap-4 rounded-xl border border-zinc-200 p-6 dark:border-zinc-700">
         <flux:heading size="lg">{{ __('Members') }}</flux:heading>

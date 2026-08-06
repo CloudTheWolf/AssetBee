@@ -32,6 +32,8 @@ use Illuminate\Support\Carbon;
  * @property BitLockerStatus|null $bitlocker_status
  * @property string|null $bitlocker_recovery_key
  * @property bool $is_vm_host
+ * @property Carbon|null $inventory_collected_at
+ * @property array<string, mixed>|null $inventory_payload
  * @property HardwareCategory $category
  * @property HardwareStatus $status
  * @property int|null $assigned_userware_id
@@ -55,6 +57,8 @@ use Illuminate\Support\Carbon;
     'bitlocker_status',
     'bitlocker_recovery_key',
     'is_vm_host',
+    'inventory_collected_at',
+    'inventory_payload',
     'category',
     'status',
     'assigned_userware_id',
@@ -80,6 +84,8 @@ class Hardware extends Model
             'bitlocker_status' => BitLockerStatus::class,
             'bitlocker_recovery_key' => 'encrypted',
             'is_vm_host' => 'boolean',
+            'inventory_collected_at' => 'datetime',
+            'inventory_payload' => 'encrypted:array',
             'ram_gb' => 'integer',
             'storage_gb' => 'integer',
             'purchased_at' => 'date',

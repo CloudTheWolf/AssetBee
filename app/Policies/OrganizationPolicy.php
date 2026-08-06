@@ -42,6 +42,11 @@ class OrganizationPolicy
         return $this->update($user, $organization);
     }
 
+    public function manageApiKeys(User $user, Organization $organization): bool
+    {
+        return $this->roleInOrganization($user, $organization)?->canManageOrganization() ?? false;
+    }
+
     public function invite(User $user, Organization $organization): bool
     {
         return $this->roleInOrganization($user, $organization)?->canInviteMembers() ?? false;

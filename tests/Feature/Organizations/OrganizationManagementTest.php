@@ -1,6 +1,7 @@
 <?php
 
 use App\Enums\OrganizationRole;
+use App\Models\OrganizationApiKey;
 use App\Models\User;
 use Livewire\Livewire;
 
@@ -32,6 +33,29 @@ test('owners can update organization settings', function () {
     expect($organization->fresh()->name)->toBe('Renamed Org')
         ->and($organization->googleDomains()->pluck('domain')->sort()->values()->all())
         ->toBe(['one.test', 'two.test']);
+});
+
+test('organization admins can create and revoke api keys', function () {
+    [, $organization] = actingAsOrganizationMember(OrganizationRole::Admin);
+
+    $component = Livewire::test('pages::organizations.manage')
+        ->set('api_key_name', 'Office collector')
+        ->call('createApiKey')
+        ->assertHasNoErrors();
+
+    $plainTextKey = $component->get('new_api_key');
+    $apiKey = OrganizationApiKey::query()->sole();
+
+    expect($plainTextKey)->toStartWith('abk_')
+        ->and($apiKey->organization_id)->toBe($organization->id)
+        ->and($apiKey->name)->toBe('Office collector')
+        ->and($apiKey->key_hash)->toBe(hash('sha256', $plainTextKey))
+        ->and($apiKey->key_hash)->not->toBe($plainTextKey);
+
+    $component->call('revokeApiKey', $apiKey->id)
+        ->assertHasNoErrors();
+
+    expect($apiKey->fresh()->revoked_at)->not->toBeNull();
 });
 
 test('owners can change member roles and remove members', function () {

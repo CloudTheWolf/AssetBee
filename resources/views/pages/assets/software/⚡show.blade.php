@@ -161,36 +161,36 @@ new #[Title('Software')] class extends Component {
     </div>
 
     <form wire:submit="save" class="flex flex-col gap-6 rounded-xl border border-zinc-200 p-6 dark:border-zinc-700">
-        <flux:input wire:model="name" :label="__('Name')" required @disabled(! auth()->user()->can('update', $software)) />
-        <flux:input wire:model="vendor" :label="__('Vendor')" @disabled(! auth()->user()->can('update', $software)) />
-        <flux:select wire:model="license_type" :label="__('License type')" @disabled(! auth()->user()->can('update', $software))>
+        <flux:input wire:model="name" :label="__('Name')" required :disabled="! auth()->user()->can('update', $software)" />
+        <flux:input wire:model="vendor" :label="__('Vendor')" :disabled="! auth()->user()->can('update', $software)" />
+        <flux:select wire:model="license_type" :label="__('License type')" :disabled="! auth()->user()->can('update', $software)">
             @foreach (SoftwareLicenseType::cases() as $option)
                 <option value="{{ $option->value }}">{{ $option->label() }}</option>
             @endforeach
         </flux:select>
-        <flux:input wire:model="total_seats" type="number" min="1" :label="__('Total seats')" @disabled(! auth()->user()->can('update', $software)) />
-        <flux:select wire:model="status" :label="__('Status')" @disabled(! auth()->user()->can('update', $software))>
+        <flux:input wire:model="total_seats" type="number" min="1" :label="__('Total seats')" :disabled="! auth()->user()->can('update', $software)" />
+        <flux:select wire:model="status" :label="__('Status')" :disabled="! auth()->user()->can('update', $software)">
             @foreach (SoftwareStatus::cases() as $option)
                 <option value="{{ $option->value }}">{{ $option->label() }}</option>
             @endforeach
         </flux:select>
-        <flux:input wire:model="expires_at" type="date" :label="__('Expires at')" @disabled(! auth()->user()->can('update', $software)) />
+        <flux:input wire:model="expires_at" type="date" :label="__('Expires at')" :disabled="! auth()->user()->can('update', $software)" />
 
-        <flux:checkbox wire:model.live="is_recurring" :label="__('Recurring subscription')" @disabled(! auth()->user()->can('update', $software)) />
+        <flux:checkbox wire:model.live="is_recurring" :label="__('Recurring subscription')" :disabled="! auth()->user()->can('update', $software)" />
         @if ($is_recurring)
             <div class="grid gap-4 rounded-lg border border-zinc-200 p-4 dark:border-zinc-700 sm:grid-cols-2">
-                <flux:select wire:model="billing_interval" :label="__('Billing interval')" @disabled(! auth()->user()->can('update', $software))>
+                <flux:select wire:model="billing_interval" :label="__('Billing interval')" :disabled="! auth()->user()->can('update', $software)">
                     @foreach (SoftwareBillingInterval::cases() as $option)
                         <option value="{{ $option->value }}">{{ $option->label() }}</option>
                     @endforeach
                 </flux:select>
-                <flux:input wire:model="next_billing_at" type="date" :label="__('Next billing date')" @disabled(! auth()->user()->can('update', $software)) />
-                <flux:input wire:model="billing_amount" type="number" step="0.01" min="0" :label="__('Amount')" @disabled(! auth()->user()->can('update', $software)) />
-                <flux:input wire:model="currency" maxlength="3" :label="__('Currency')" @disabled(! auth()->user()->can('update', $software)) />
+                <flux:input wire:model="next_billing_at" type="date" :label="__('Next billing date')" :disabled="! auth()->user()->can('update', $software)" />
+                <flux:input wire:model="billing_amount" type="number" step="0.01" min="0" :label="__('Amount')" :disabled="! auth()->user()->can('update', $software)" />
+                <flux:input wire:model="currency" maxlength="3" :label="__('Currency')" :disabled="! auth()->user()->can('update', $software)" />
             </div>
         @endif
 
-        <flux:textarea wire:model="notes" :label="__('Notes')" rows="3" @disabled(! auth()->user()->can('update', $software)) />
+        <flux:textarea wire:model="notes" :label="__('Notes')" rows="3" :disabled="! auth()->user()->can('update', $software)" />
         @can('update', $software)
             <div class="flex justify-between">
                 <flux:button variant="danger" type="button" wire:click="delete" wire:confirm="{{ __('Delete this software?') }}">{{ __('Delete') }}</flux:button>

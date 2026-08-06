@@ -23,6 +23,8 @@ trait NormalizesHardwareAttributes
             'bitlocker_status' => ['nullable', Rule::enum(BitLockerStatus::class)],
             'bitlocker_recovery_key' => ['nullable', 'string', 'max:5000'],
             'is_vm_host' => ['sometimes', 'boolean'],
+            'inventory_collected_at' => ['nullable', 'date'],
+            'inventory_payload' => ['nullable', 'array'],
         ];
     }
 

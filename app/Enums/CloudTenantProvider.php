@@ -22,4 +22,20 @@ enum CloudTenantProvider: string
             self::Other => __('Other'),
         };
     }
+
+    public function supportsCredentials(): bool
+    {
+        return match ($this) {
+            self::Aws, self::Azure, self::Gcp => true,
+            default => false,
+        };
+    }
+
+    public function supportsVmImport(): bool
+    {
+        return match ($this) {
+            self::Aws => true,
+            default => false,
+        };
+    }
 }

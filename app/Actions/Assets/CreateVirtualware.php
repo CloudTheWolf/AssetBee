@@ -15,6 +15,8 @@ use Illuminate\Validation\Validator as ValidatorContract;
 
 class CreateVirtualware
 {
+    use Concerns\ValidatesVirtualwareInfrastructure;
+
     /**
      * @param  array<string, mixed>  $input
      *
@@ -44,6 +46,7 @@ class CreateVirtualware
                 Rule::exists('userwares', 'id')->where('organization_id', $organization->id),
             ],
             'notes' => ['nullable', 'string'],
+            ...$this->infrastructureRules(),
         ]);
 
         $this->assertExclusivePlacement($validator, $input);

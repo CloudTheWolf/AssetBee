@@ -34,6 +34,22 @@ new #[Title('Virtualware')] class extends Component {
 
     public string $notes = '';
 
+    public string $region = '';
+
+    public string $instance_type = '';
+
+    public string $private_ip = '';
+
+    public string $public_ip = '';
+
+    public string $availability_zone = '';
+
+    public string $subnet_id = '';
+
+    public string $vpc_id = '';
+
+    public string $termination_protection = '';
+
     public string $assigned_userware_id = '';
 
     public string $placement = 'none';
@@ -70,6 +86,18 @@ new #[Title('Virtualware')] class extends Component {
         $this->category = $this->virtualware->category->value;
         $this->status = $this->virtualware->status->value;
         $this->notes = (string) ($this->virtualware->notes ?? '');
+        $this->region = (string) ($this->virtualware->region ?? '');
+        $this->instance_type = (string) ($this->virtualware->instance_type ?? '');
+        $this->private_ip = (string) ($this->virtualware->private_ip ?? '');
+        $this->public_ip = (string) ($this->virtualware->public_ip ?? '');
+        $this->availability_zone = (string) ($this->virtualware->availability_zone ?? '');
+        $this->subnet_id = (string) ($this->virtualware->subnet_id ?? '');
+        $this->vpc_id = (string) ($this->virtualware->vpc_id ?? '');
+        $this->termination_protection = match ($this->virtualware->termination_protection) {
+            true => '1',
+            false => '0',
+            default => '',
+        };
         $this->assigned_userware_id = (string) ($this->virtualware->assigned_userware_id ?? '');
         $this->host_hardware_id = (string) ($this->virtualware->host_hardware_id ?? '');
         $this->cloud_tenant_id = (string) ($this->virtualware->cloud_tenant_id ?? '');
@@ -92,6 +120,19 @@ new #[Title('Virtualware')] class extends Component {
             'category' => $this->category,
             'status' => $this->status,
             'notes' => $this->notes !== '' ? $this->notes : null,
+            'region' => $this->region !== '' ? $this->region : null,
+            'instance_type' => $this->instance_type !== '' ? $this->instance_type : null,
+            'private_ip' => $this->private_ip !== '' ? $this->private_ip : null,
+            'public_ip' => $this->public_ip !== '' ? $this->public_ip : null,
+            'availability_zone' => $this->availability_zone !== '' ? $this->availability_zone : null,
+            'subnet_id' => $this->subnet_id !== '' ? $this->subnet_id : null,
+            'vpc_id' => $this->vpc_id !== '' ? $this->vpc_id : null,
+            'disks' => $this->virtualware->disks,
+            'termination_protection' => match ($this->termination_protection) {
+                '1' => true,
+                '0' => false,
+                default => null,
+            },
             'assigned_userware_id' => $this->virtualware->assigned_userware_id,
             'host_hardware_id' => $this->virtualware->host_hardware_id,
             'cloud_tenant_id' => $this->virtualware->cloud_tenant_id,
@@ -174,24 +215,99 @@ new #[Title('Virtualware')] class extends Component {
     </div>
 
     <form wire:submit="save" class="flex flex-col gap-6 rounded-xl border border-zinc-200 p-6 dark:border-zinc-700">
-        <flux:input wire:model="name" :label="__('Name')" required @disabled(! auth()->user()->can('update', $virtualware)) />
-        <flux:select wire:model="provider" :label="__('Provider')" @disabled(! auth()->user()->can('update', $virtualware))>
+        <flux:input wire:model="name" :label="__('Name')" required :disabled="! auth()->user()->can('update', $virtualware)" />
+        <flux:select wire:model="provider" :label="__('Provider')" :disabled="! auth()->user()->can('update', $virtualware)">
             @foreach (VirtualwareProvider::cases() as $option)
                 <option value="{{ $option->value }}">{{ $option->label() }}</option>
             @endforeach
         </flux:select>
-        <flux:input wire:model="external_id" :label="__('External ID')" @disabled(! auth()->user()->can('update', $virtualware)) />
-        <flux:select wire:model="category" :label="__('Category')" @disabled(! auth()->user()->can('update', $virtualware))>
+        <flux:input wire:model="external_id" :label="__('External ID')" :disabled="! auth()->user()->can('update', $virtualware)" />
+        <flux:select wire:model="category" :label="__('Category')" :disabled="! auth()->user()->can('update', $virtualware)">
             @foreach (VirtualwareCategory::cases() as $option)
                 <option value="{{ $option->value }}">{{ $option->label() }}</option>
             @endforeach
         </flux:select>
-        <flux:select wire:model="status" :label="__('Status')" @disabled(! auth()->user()->can('update', $virtualware))>
+        <flux:select wire:model="status" :label="__('Status')" :disabled="! auth()->user()->can('update', $virtualware)">
             @foreach (VirtualwareStatus::cases() as $option)
                 <option value="{{ $option->value }}">{{ $option->label() }}</option>
             @endforeach
         </flux:select>
-        <flux:textarea wire:model="notes" :label="__('Notes')" rows="3" @disabled(! auth()->user()->can('update', $virtualware)) />
+
+        <div class="space-y-4 rounded-lg border border-zinc-200 p-4 dark:border-zinc-700">
+            <flux:heading size="sm">{{ __('Infrastructure') }}</flux:heading>
+            <div class="grid gap-4 sm:grid-cols-2">
+                <flux:input wire:model="instance_type" :label="__('Type')" :disabled="! auth()->user()->can('update', $virtualware)" />
+                <flux:input wire:model="region" :label="__('Region')" :disabled="! auth()->user()->can('update', $virtualware)" />
+                <flux:input wire:model="availability_zone" :label="__('Zone')" :disabled="! auth()->user()->can('update', $virtualware)" />
+                <flux:select wire:model="termination_protection" :label="__('Termination protection')" :disabled="! auth()->user()->can('update', $virtualware)">
+                    <option value="">{{ __('Unknown') }}</option>
+                    <option value="1">{{ __('Enabled') }}</option>
+                    <option value="0">{{ __('Disabled') }}</option>
+                </flux:select>
+                <flux:input wire:model="private_ip" :label="__('Private IP')" :disabled="! auth()->user()->can('update', $virtualware)" />
+                <flux:input wire:model="public_ip" :label="__('Public IP')" :disabled="! auth()->user()->can('update', $virtualware)" />
+                <flux:input wire:model="vpc_id" :label="__('VPC / VNet')" :disabled="! auth()->user()->can('update', $virtualware)" />
+                <flux:input wire:model="subnet_id" :label="__('Subnet')" :disabled="! auth()->user()->can('update', $virtualware)" />
+            </div>
+
+            @if (! empty($virtualware->secondary_ips))
+                <div class="space-y-2">
+                    <flux:heading size="sm">{{ __('Secondary IPs') }}</flux:heading>
+                    <ul class="divide-y divide-zinc-200 rounded-lg border border-zinc-200 dark:divide-zinc-700 dark:border-zinc-700">
+                        @foreach ($virtualware->secondary_ips as $address)
+                            <li class="flex flex-col gap-1 px-3 py-2 sm:flex-row sm:items-center sm:justify-between">
+                                <div>
+                                    <div class="font-medium">{{ $address['private_ip'] }}</div>
+                                    @if (! empty($address['public_ip']))
+                                        <flux:text>{{ __('Public: :ip', ['ip' => $address['public_ip']]) }}</flux:text>
+                                    @endif
+                                </div>
+                                @if (! empty($address['network_interface_id']))
+                                    <flux:text>{{ $address['network_interface_id'] }}</flux:text>
+                                @endif
+                            </li>
+                        @endforeach
+                    </ul>
+                </div>
+            @endif
+
+            <div class="space-y-2">
+                <flux:heading size="sm">{{ __('Disks') }}</flux:heading>
+                @if (! empty($virtualware->disks))
+                    <ul class="divide-y divide-zinc-200 rounded-lg border border-zinc-200 dark:divide-zinc-700 dark:border-zinc-700">
+                        @foreach ($virtualware->disks as $disk)
+                            <li class="flex flex-col gap-1 px-3 py-2 sm:flex-row sm:items-center sm:justify-between">
+                                <div>
+                                    <div class="font-medium">{{ $disk['device_name'] ?? __('Disk') }}</div>
+                                    <flux:text>
+                                        {{ $disk['volume_id'] ?? '—' }}
+                                        @if (! empty($disk['volume_type']))
+                                            · {{ $disk['volume_type'] }}
+                                        @endif
+                                    </flux:text>
+                                </div>
+                                <flux:text>
+                                    {{ isset($disk['size_gb']) ? __(':size GB', ['size' => $disk['size_gb']]) : '—' }}
+                                    @if (array_key_exists('encrypted', $disk) && $disk['encrypted'] !== null)
+                                        · {{ $disk['encrypted'] ? __('Encrypted') : __('Not encrypted') }}
+                                    @endif
+                                    @if (array_key_exists('delete_on_termination', $disk) && $disk['delete_on_termination'] !== null)
+                                        · {{ $disk['delete_on_termination'] ? __('Delete on termination') : __('Retain on termination') }}
+                                    @endif
+                                </flux:text>
+                            </li>
+                        @endforeach
+                    </ul>
+                    @if ($virtualware->totalDiskSizeGb() !== null)
+                        <flux:text>{{ __('Total: :size GB', ['size' => $virtualware->totalDiskSizeGb()]) }}</flux:text>
+                    @endif
+                @else
+                    <flux:text>{{ __('No disk details recorded. Re-import from the cloud tenant to populate disks.') }}</flux:text>
+                @endif
+            </div>
+        </div>
+
+        <flux:textarea wire:model="notes" :label="__('Notes')" rows="3" :disabled="! auth()->user()->can('update', $virtualware)" />
         @can('update', $virtualware)
             <div class="flex justify-between">
                 <flux:button variant="danger" type="button" wire:click="delete" wire:confirm="{{ __('Delete this virtualware?') }}">{{ __('Delete') }}</flux:button>

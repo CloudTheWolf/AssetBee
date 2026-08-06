@@ -20,6 +20,12 @@ new #[Title('Virtualware')] class extends Component {
 
     public string $search = '';
 
+    public string $providerFilter = '';
+
+    public string $regionFilter = '';
+
+    public string $vpcFilter = '';
+
     public string $status = '';
 
     public string $sortBy = 'name';
@@ -44,6 +50,21 @@ new #[Title('Virtualware')] class extends Component {
     }
 
     public function updatingSearch(): void
+    {
+        $this->resetPage();
+    }
+
+    public function updatingProviderFilter(): void
+    {
+        $this->resetPage();
+    }
+
+    public function updatingRegionFilter(): void
+    {
+        $this->resetPage();
+    }
+
+    public function updatingVpcFilter(): void
     {
         $this->resetPage();
     }
@@ -93,9 +114,33 @@ new #[Title('Virtualware')] class extends Component {
     }
 
     #[Computed]
+    public function regions()
+    {
+        return Virtualware::query()
+            ->where('organization_id', CurrentOrganization::require()->id)
+            ->whereNotNull('region')
+            ->where('region', '!=', '')
+            ->distinct()
+            ->orderBy('region')
+            ->pluck('region');
+    }
+
+    #[Computed]
+    public function vpcs()
+    {
+        return Virtualware::query()
+            ->where('organization_id', CurrentOrganization::require()->id)
+            ->whereNotNull('vpc_id')
+            ->where('vpc_id', '!=', '')
+            ->distinct()
+            ->orderBy('vpc_id')
+            ->pluck('vpc_id');
+    }
+
+    #[Computed]
     public function virtualwares()
     {
-        $sortable = ['name', 'provider', 'category', 'status'];
+        $sortable = ['name', 'provider', 'category', 'status', 'region', 'vpc_id'];
         $sortBy = in_array($this->sortBy, $sortable, true) ? $this->sortBy : 'name';
 
         return Virtualware::query()
@@ -107,6 +152,9 @@ new #[Title('Virtualware')] class extends Component {
                         ->orWhere('external_id', 'like', '%'.$this->search.'%');
                 });
             })
+            ->when($this->providerFilter !== '', fn ($query) => $query->where('provider', $this->providerFilter))
+            ->when($this->regionFilter !== '', fn ($query) => $query->where('region', $this->regionFilter))
+            ->when($this->vpcFilter !== '', fn ($query) => $query->where('vpc_id', $this->vpcFilter))
             ->when($this->status !== '', fn ($query) => $query->where('status', $this->status))
             ->orderBy($sortBy, $this->sortDirection === 'desc' ? 'desc' : 'asc')
             ->paginate(10);
@@ -126,9 +174,27 @@ new #[Title('Virtualware')] class extends Component {
         @endcan
     </div>
 
-    <div class="flex flex-col gap-3 sm:flex-row">
-        <flux:input wire:model.live.debounce.300ms="search" :placeholder="__('Search name or external ID...')" class="flex-1" />
-        <flux:select wire:model.live="status" class="sm:w-48">
+    <div class="flex flex-col gap-3 lg:flex-row lg:flex-wrap">
+        <flux:input wire:model.live.debounce.300ms="search" :placeholder="__('Search name or external ID...')" class="flex-1 lg:min-w-56" />
+        <flux:select wire:model.live="providerFilter" class="lg:w-44">
+            <option value="">{{ __('All providers') }}</option>
+            @foreach (App\Enums\VirtualwareProvider::cases() as $providerOption)
+                <option value="{{ $providerOption->value }}">{{ $providerOption->label() }}</option>
+            @endforeach
+        </flux:select>
+        <flux:select wire:model.live="regionFilter" class="lg:w-44">
+            <option value="">{{ __('All regions') }}</option>
+            @foreach ($this->regions as $regionOption)
+                <option value="{{ $regionOption }}">{{ $regionOption }}</option>
+            @endforeach
+        </flux:select>
+        <flux:select wire:model.live="vpcFilter" class="lg:w-52">
+            <option value="">{{ __('All VPC / VNets') }}</option>
+            @foreach ($this->vpcs as $vpcOption)
+                <option value="{{ $vpcOption }}">{{ $vpcOption }}</option>
+            @endforeach
+        </flux:select>
+        <flux:select wire:model.live="status" class="lg:w-44">
             <option value="">{{ __('All statuses') }}</option>
             @foreach (App\Enums\VirtualwareStatus::cases() as $statusOption)
                 <option value="{{ $statusOption->value }}">{{ $statusOption->label() }}</option>
@@ -140,7 +206,8 @@ new #[Title('Virtualware')] class extends Component {
         <flux:table.columns>
             <flux:table.column sortable :sorted="$sortBy === 'name'" :direction="$sortDirection" wire:click="sort('name')">{{ __('Name') }}</flux:table.column>
             <flux:table.column sortable :sorted="$sortBy === 'provider'" :direction="$sortDirection" wire:click="sort('provider')">{{ __('Provider') }}</flux:table.column>
-            <flux:table.column sortable :sorted="$sortBy === 'category'" :direction="$sortDirection" wire:click="sort('category')">{{ __('Category') }}</flux:table.column>
+            <flux:table.column sortable :sorted="$sortBy === 'region'" :direction="$sortDirection" wire:click="sort('region')">{{ __('Region') }}</flux:table.column>
+            <flux:table.column sortable :sorted="$sortBy === 'vpc_id'" :direction="$sortDirection" wire:click="sort('vpc_id')">{{ __('VPC / VNet') }}</flux:table.column>
             <flux:table.column sortable :sorted="$sortBy === 'status'" :direction="$sortDirection" wire:click="sort('status')">{{ __('Status') }}</flux:table.column>
             <flux:table.column>{{ __('Placement') }}</flux:table.column>
             <flux:table.column>{{ __('Assigned to') }}</flux:table.column>
@@ -156,7 +223,10 @@ new #[Title('Virtualware')] class extends Component {
                         @endif
                     </flux:table.cell>
                     <flux:table.cell>{{ $virtualware->provider->label() }}</flux:table.cell>
-                    <flux:table.cell>{{ $virtualware->category->label() }}</flux:table.cell>
+                    <flux:table.cell>{{ $virtualware->region ?? '—' }}</flux:table.cell>
+                    <flux:table.cell>
+                        <span class="font-mono text-xs">{{ $virtualware->vpc_id ?? '—' }}</span>
+                    </flux:table.cell>
                     <flux:table.cell class="py-0">
                         <flux:badge size="sm" :color="$virtualware->status->color()">{{ $virtualware->status->label() }}</flux:badge>
                     </flux:table.cell>
@@ -191,7 +261,7 @@ new #[Title('Virtualware')] class extends Component {
                 </flux:table.row>
             @empty
                 <flux:table.row>
-                    <flux:table.cell colspan="7">
+                    <flux:table.cell colspan="8">
                         <div class="py-10 text-center">
                             <flux:heading size="sm">{{ __('No virtualware found') }}</flux:heading>
                             <flux:text class="mt-1">{{ __('Add a VM or cloud resource to track it here.') }}</flux:text>

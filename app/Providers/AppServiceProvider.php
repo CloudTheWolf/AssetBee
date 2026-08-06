@@ -2,6 +2,9 @@
 
 namespace App\Providers;
 
+use App\Contracts\Cloud\DiscoversCloudVirtualMachines;
+use App\Services\Cloud\AwsEc2DiscoveryService;
+use App\Services\Cloud\CloudVirtualMachineDiscoveryManager;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\DB;
@@ -15,7 +18,15 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        //
+        $this->app->tag([
+            AwsEc2DiscoveryService::class,
+        ], DiscoversCloudVirtualMachines::class);
+
+        $this->app->singleton(CloudVirtualMachineDiscoveryManager::class, function ($app): CloudVirtualMachineDiscoveryManager {
+            return new CloudVirtualMachineDiscoveryManager(
+                $app->tagged(DiscoversCloudVirtualMachines::class),
+            );
+        });
     }
 
     /**

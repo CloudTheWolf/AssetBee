@@ -29,6 +29,13 @@ class UpdateCloudTenant
 
         $cloudTenant->update($validated);
 
+        if (! $cloudTenant->provider->supportsCredentials() && $cloudTenant->hasCredentials()) {
+            $cloudTenant->update([
+                'credentials' => null,
+                'credentials_verified_at' => null,
+            ]);
+        }
+
         return $cloudTenant->refresh();
     }
 }

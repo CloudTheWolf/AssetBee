@@ -28,4 +28,43 @@ class CloudTenantFactory extends Factory
             'notes' => fake()->optional()->sentence(),
         ];
     }
+
+    public function aws(): static
+    {
+        return $this->state(fn (): array => [
+            'provider' => CloudTenantProvider::Aws,
+            'domain' => null,
+        ]);
+    }
+
+    /**
+     * @param  array<string, mixed>  $credentials
+     */
+    public function withCredentials(array $credentials = []): static
+    {
+        return $this->state(fn (array $attributes): array => [
+            'credentials' => $credentials !== [] ? $credentials : match ($attributes['provider'] ?? null) {
+                CloudTenantProvider::Aws, CloudTenantProvider::Aws->value => [
+                    'access_key_id' => 'AKIAEXAMPLEKEY1234',
+                    'secret_access_key' => 'secret-example-key',
+                    'region' => 'eu-west-1',
+                ],
+                CloudTenantProvider::Azure, CloudTenantProvider::Azure->value => [
+                    'tenant_id' => fake()->uuid(),
+                    'client_id' => fake()->uuid(),
+                    'client_secret' => 'azure-secret',
+                    'subscription_id' => fake()->uuid(),
+                ],
+                CloudTenantProvider::Gcp, CloudTenantProvider::Gcp->value => [
+                    'project_id' => 'example-project',
+                    'service_account_json' => '{"type":"service_account"}',
+                ],
+                default => [
+                    'access_key_id' => 'AKIAEXAMPLEKEY1234',
+                    'secret_access_key' => 'secret-example-key',
+                    'region' => 'eu-west-1',
+                ],
+            },
+        ]);
+    }
 }

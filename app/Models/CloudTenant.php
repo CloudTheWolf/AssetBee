@@ -22,6 +22,8 @@ use Illuminate\Support\Carbon;
  * @property string|null $domain
  * @property CloudTenantStatus $status
  * @property string|null $notes
+ * @property array<string, mixed>|null $credentials
+ * @property Carbon|null $credentials_verified_at
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  * @property Carbon|null $deleted_at
@@ -34,6 +36,8 @@ use Illuminate\Support\Carbon;
     'domain',
     'status',
     'notes',
+    'credentials',
+    'credentials_verified_at',
 ])]
 class CloudTenant extends Model
 {
@@ -41,6 +45,11 @@ class CloudTenant extends Model
     use HasFactory, SoftDeletes;
 
     protected $table = 'cloud_tenants';
+
+    /** @var list<string> */
+    protected $hidden = [
+        'credentials',
+    ];
 
     /**
      * @return array<string, string>
@@ -50,7 +59,44 @@ class CloudTenant extends Model
         return [
             'provider' => CloudTenantProvider::class,
             'status' => CloudTenantStatus::class,
+            'credentials' => 'encrypted:array',
+            'credentials_verified_at' => 'datetime',
         ];
+    }
+
+    public function hasCredentials(): bool
+    {
+        return filled($this->credentials);
+    }
+
+    /**
+     * Non-secret credential fields safe to display in forms.
+     *
+     * @return array<string, string>
+     */
+    public function credentialFormDefaults(): array
+    {
+        $credentials = $this->credentials ?? [];
+
+        return match ($this->provider) {
+            CloudTenantProvider::Aws => [
+                'access_key_id' => (string) ($credentials['access_key_id'] ?? ''),
+                'secret_access_key' => '',
+                'region' => (string) ($credentials['region'] ?? 'us-east-1'),
+                'session_token' => '',
+            ],
+            CloudTenantProvider::Azure => [
+                'tenant_id' => (string) ($credentials['tenant_id'] ?? ''),
+                'client_id' => (string) ($credentials['client_id'] ?? ''),
+                'client_secret' => '',
+                'subscription_id' => (string) ($credentials['subscription_id'] ?? ''),
+            ],
+            CloudTenantProvider::Gcp => [
+                'project_id' => (string) ($credentials['project_id'] ?? ''),
+                'service_account_json' => '',
+            ],
+            default => [],
+        };
     }
 
     /**

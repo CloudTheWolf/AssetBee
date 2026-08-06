@@ -169,6 +169,62 @@ new #[Title('Hardware')] class extends Component {
             ->orderBy('name')
             ->get();
     }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    #[Computed]
+    public function inventory(): ?array
+    {
+        $payload = $this->hardware->inventory_payload;
+
+        return is_array($payload) ? $payload : null;
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    protected function inventoryProbe(string $key): ?array
+    {
+        $probe = data_get($this->inventory, $key);
+
+        return is_array($probe) ? $probe : null;
+    }
+
+    /**
+     * @return list<array<string, mixed>>
+     */
+    protected function inventoryList(string $key): array
+    {
+        $probe = $this->inventoryProbe($key);
+
+        if (($probe['status'] ?? null) !== 'available' || ! is_array($probe['value'] ?? null)) {
+            return [];
+        }
+
+        return array_values(array_filter(
+            $probe['value'],
+            fn (mixed $item): bool => is_array($item),
+        ));
+    }
+
+    protected function formatBytes(mixed $bytes): string
+    {
+        if (! is_int($bytes) || $bytes < 0) {
+            return '—';
+        }
+
+        $units = ['B', 'KB', 'MB', 'GB', 'TB'];
+        $value = (float) $bytes;
+        $unit = 0;
+
+        while ($value >= 1024 && $unit < count($units) - 1) {
+            $value /= 1024;
+            $unit++;
+        }
+
+        return round($value, $unit === 0 ? 0 : 1).' '.$units[$unit];
+    }
 }; ?>
 
 <div class="mx-auto flex w-full max-w-3xl flex-col gap-6">
@@ -184,63 +240,66 @@ new #[Title('Hardware')] class extends Component {
                 @if ($hardware->is_vm_host)
                     · {{ __('VM host') }}
                 @endif
+                @if ($hardware->inventory_collected_at)
+                    · {{ __('Inventory :when', ['when' => $hardware->inventory_collected_at->diffForHumans()]) }}
+                @endif
             </flux:text>
         </div>
     </div>
 
     <form wire:submit="save" class="flex flex-col gap-6 rounded-xl border border-zinc-200 p-6 dark:border-zinc-700">
         <flux:heading size="lg">{{ __('Basics') }}</flux:heading>
-        <flux:input wire:model="name" :label="__('Name')" required @disabled(! auth()->user()->can('update', $hardware)) />
-        <flux:select wire:model.live="category" :label="__('Type')" @disabled(! auth()->user()->can('update', $hardware))>
+        <flux:input wire:model="name" :label="__('Name')" required :disabled="! auth()->user()->can('update', $hardware)" />
+        <flux:select wire:model.live="category" :label="__('Type')" :disabled="! auth()->user()->can('update', $hardware)">
             @foreach (HardwareCategory::cases() as $option)
                 <option value="{{ $option->value }}">{{ $option->label() }}</option>
             @endforeach
         </flux:select>
-        <flux:input wire:model="asset_tag" :label="__('Asset tag')" @disabled(! auth()->user()->can('update', $hardware)) />
-        <flux:select wire:model="status" :label="__('Status')" @disabled(! auth()->user()->can('update', $hardware))>
+        <flux:input wire:model="asset_tag" :label="__('Asset tag')" :disabled="! auth()->user()->can('update', $hardware)" />
+        <flux:select wire:model="status" :label="__('Status')" :disabled="! auth()->user()->can('update', $hardware)">
             @foreach (HardwareStatus::cases() as $option)
                 <option value="{{ $option->value }}">{{ $option->label() }}</option>
             @endforeach
         </flux:select>
-        <flux:input wire:model="purchased_at" type="date" :label="__('Purchased at')" @disabled(! auth()->user()->can('update', $hardware)) />
-        <flux:textarea wire:model="notes" :label="__('Notes')" rows="3" @disabled(! auth()->user()->can('update', $hardware)) />
+        <flux:input wire:model="purchased_at" type="date" :label="__('Purchased at')" :disabled="! auth()->user()->can('update', $hardware)" />
+        <flux:textarea wire:model="notes" :label="__('Notes')" rows="3" :disabled="! auth()->user()->can('update', $hardware)" />
 
         @if ($this->selectedCategory()?->hasComputeSpecs())
             <div class="space-y-4 border-t border-zinc-200 pt-6 dark:border-zinc-700">
                 <flux:heading size="lg">{{ __('Specs') }}</flux:heading>
-                <flux:input wire:model="manufacturer" :label="__('Manufacturer')" @disabled(! auth()->user()->can('update', $hardware)) />
-                <flux:input wire:model="model" :label="__('Model')" @disabled(! auth()->user()->can('update', $hardware)) />
-                <flux:input wire:model="serial_number" :label="__('Serial number')" @disabled(! auth()->user()->can('update', $hardware)) />
-                <flux:select wire:model.live="operating_system" :label="__('Operating system')" @disabled(! auth()->user()->can('update', $hardware))>
+                <flux:input wire:model="manufacturer" :label="__('Manufacturer')" :disabled="! auth()->user()->can('update', $hardware)" />
+                <flux:input wire:model="model" :label="__('Model')" :disabled="! auth()->user()->can('update', $hardware)" />
+                <flux:input wire:model="serial_number" :label="__('Serial number')" :disabled="! auth()->user()->can('update', $hardware)" />
+                <flux:select wire:model.live="operating_system" :label="__('Operating system')" :disabled="! auth()->user()->can('update', $hardware)">
                     <option value="">{{ __('Select OS') }}</option>
                     @foreach (HardwareOperatingSystem::cases() as $option)
                         <option value="{{ $option->value }}">{{ $option->label() }}</option>
                     @endforeach
                 </flux:select>
                 <div class="grid gap-4 sm:grid-cols-3">
-                    <flux:input wire:model="cpu" :label="__('CPU')" @disabled(! auth()->user()->can('update', $hardware)) />
-                    <flux:input wire:model="ram_gb" type="number" min="1" :label="__('RAM (GB)')" @disabled(! auth()->user()->can('update', $hardware)) />
-                    <flux:input wire:model="storage_gb" type="number" min="1" :label="__('Storage (GB)')" @disabled(! auth()->user()->can('update', $hardware)) />
+                    <flux:input wire:model="cpu" :label="__('CPU')" :disabled="! auth()->user()->can('update', $hardware)" />
+                    <flux:input wire:model="ram_gb" type="number" min="1" :label="__('RAM (GB)')" :disabled="! auth()->user()->can('update', $hardware)" />
+                    <flux:input wire:model="storage_gb" type="number" min="1" :label="__('Storage (GB)')" :disabled="! auth()->user()->can('update', $hardware)" />
                 </div>
             </div>
 
             @if ($this->selectedOperatingSystem()?->isWindows())
                 <div class="space-y-4 border-t border-zinc-200 pt-6 dark:border-zinc-700">
                     <flux:heading size="lg">{{ __('BitLocker') }}</flux:heading>
-                    <flux:select wire:model="bitlocker_status" :label="__('BitLocker status')" @disabled(! auth()->user()->can('update', $hardware))>
+                    <flux:select wire:model="bitlocker_status" :label="__('BitLocker status')" :disabled="! auth()->user()->can('update', $hardware)">
                         <option value="">{{ __('Select status') }}</option>
                         @foreach (BitLockerStatus::cases() as $option)
                             <option value="{{ $option->value }}">{{ $option->label() }}</option>
                         @endforeach
                     </flux:select>
-                    <flux:textarea wire:model="bitlocker_recovery_key" :label="__('Recovery key')" rows="3" @disabled(! auth()->user()->can('update', $hardware)) />
+                    <flux:textarea wire:model="bitlocker_recovery_key" :label="__('Recovery key')" rows="3" :disabled="! auth()->user()->can('update', $hardware)" />
                 </div>
             @endif
 
             @if ($this->selectedCategory()?->canBeVmHost())
                 <div class="space-y-4 border-t border-zinc-200 pt-6 dark:border-zinc-700">
                     <flux:heading size="lg">{{ __('Virtualization') }}</flux:heading>
-                    <flux:checkbox wire:model="is_vm_host" :label="__('VM host')" :description="__('Virtualware can be assigned to this server.')" @disabled(! auth()->user()->can('update', $hardware)) />
+                    <flux:checkbox wire:model="is_vm_host" :label="__('VM host')" :description="__('Virtualware can be assigned to this server.')" :disabled="! auth()->user()->can('update', $hardware)" />
                 </div>
             @endif
         @endif
@@ -252,6 +311,226 @@ new #[Title('Hardware')] class extends Component {
             </div>
         @endcan
     </form>
+
+    @if ($this->inventory)
+        @php
+            $operatingSystem = $this->inventoryProbe('operatingSystem');
+            $cpu = $this->inventoryProbe('cpu');
+            $memory = $this->inventoryProbe('memory');
+            $domainWorkspace = $this->inventoryProbe('domainWorkspace');
+            $updates = $this->inventoryProbe('updates');
+            $disks = $this->inventoryList('disks');
+            $encryption = $this->inventoryList('diskEncryption');
+            $loginProviders = $this->inventoryList('loginProviders');
+            $antivirus = $this->inventoryList('antivirus');
+            $installedUpdates = is_array(data_get($updates, 'value.installed')) ? data_get($updates, 'value.installed') : [];
+            $availableUpdates = is_array(data_get($updates, 'value.available')) ? data_get($updates, 'value.available') : [];
+        @endphp
+
+        <div class="flex flex-col gap-6 rounded-xl border border-zinc-200 p-6 dark:border-zinc-700">
+            <div>
+                <flux:heading size="lg">{{ __('Collected inventory') }}</flux:heading>
+                <flux:text>
+                    {{ __('Last collected :when', ['when' => $hardware->inventory_collected_at?->timezone('UTC')->toDayDateTimeString().' UTC']) }}
+                    · {{ strtoupper((string) data_get($this->inventory, 'platform')) }}
+                    · {{ __('Schema :version', ['version' => data_get($this->inventory, 'schemaVersion')]) }}
+                </flux:text>
+            </div>
+
+            <div class="grid gap-4 sm:grid-cols-2">
+                <div>
+                    <flux:text class="font-medium">{{ __('Operating system') }}</flux:text>
+                    @if (($operatingSystem['status'] ?? null) === 'available')
+                        <div>{{ data_get($operatingSystem, 'value.name') }}</div>
+                        <flux:text>
+                            {{ collect([
+                                data_get($operatingSystem, 'value.version'),
+                                data_get($operatingSystem, 'value.displayVersion'),
+                                data_get($operatingSystem, 'value.build') ? __('Build :build', ['build' => data_get($operatingSystem, 'value.build')]) : null,
+                            ])->filter()->implode(' · ') }}
+                        </flux:text>
+                    @else
+                        <flux:text>{{ data_get($operatingSystem, 'status', '—') }}</flux:text>
+                    @endif
+                </div>
+                <div>
+                    <flux:text class="font-medium">{{ __('CPU') }}</flux:text>
+                    @if (($cpu['status'] ?? null) === 'available')
+                        <div>{{ data_get($cpu, 'value.model') }}</div>
+                        <flux:text>
+                            {{ __(':logical logical / :physical physical', [
+                                'logical' => data_get($cpu, 'value.logicalProcessors', '—'),
+                                'physical' => data_get($cpu, 'value.physicalCores') ?? '—',
+                            ]) }}
+                        </flux:text>
+                    @else
+                        <flux:text>{{ data_get($cpu, 'status', '—') }}</flux:text>
+                    @endif
+                </div>
+                <div>
+                    <flux:text class="font-medium">{{ __('Memory') }}</flux:text>
+                    @if (($memory['status'] ?? null) === 'available')
+                        <div>{{ $this->formatBytes(data_get($memory, 'value.totalBytes')) }}</div>
+                        @if (data_get($memory, 'value.availableBytes') !== null)
+                            <flux:text>{{ __(':available available', ['available' => $this->formatBytes(data_get($memory, 'value.availableBytes'))]) }}</flux:text>
+                        @endif
+                    @else
+                        <flux:text>{{ data_get($memory, 'status', '—') }}</flux:text>
+                    @endif
+                </div>
+                <div>
+                    <flux:text class="font-medium">{{ __('Domain / workspace') }}</flux:text>
+                    @if (($domainWorkspace['status'] ?? null) === 'available')
+                        <div>{{ data_get($domainWorkspace, 'value.domain') ?: '—' }}</div>
+                        <flux:text>
+                            {{ collect([
+                                data_get($domainWorkspace, 'value.domainJoined') ? __('Domain joined') : null,
+                                data_get($domainWorkspace, 'value.workspace'),
+                                data_get($domainWorkspace, 'value.workspaceJoined') ? __('Workspace joined') : null,
+                            ])->filter()->implode(' · ') ?: '—' }}
+                        </flux:text>
+                    @else
+                        <flux:text>{{ data_get($domainWorkspace, 'status', '—') }}</flux:text>
+                    @endif
+                </div>
+            </div>
+
+            <div class="space-y-3 border-t border-zinc-200 pt-6 dark:border-zinc-700">
+                <div class="font-medium">{{ __('Disks') }}</div>
+                @forelse ($disks as $disk)
+                    <div class="flex items-start justify-between gap-4 py-2" wire:key="disk-{{ $loop->index }}">
+                        <div>
+                            <div class="font-medium">{{ $disk['name'] ?? '—' }}</div>
+                            <flux:text>
+                                {{ collect([
+                                    $disk['mountPoint'] ?? null,
+                                    $disk['fileSystem'] ?? null,
+                                ])->filter()->implode(' · ') }}
+                            </flux:text>
+                        </div>
+                        <flux:text class="whitespace-nowrap text-right">
+                            {{ $this->formatBytes($disk['totalBytes'] ?? null) }}
+                            @if (($disk['availableBytes'] ?? null) !== null)
+                                <br>{{ __(':available free', ['available' => $this->formatBytes($disk['availableBytes'])]) }}
+                            @endif
+                        </flux:text>
+                    </div>
+                @empty
+                    <flux:text>{{ __('No disk details collected.') }}</flux:text>
+                @endforelse
+            </div>
+
+            <div class="space-y-3 border-t border-zinc-200 pt-6 dark:border-zinc-700">
+                <div class="font-medium">{{ __('Disk encryption') }}</div>
+                @forelse ($encryption as $volume)
+                    <div class="flex items-start justify-between gap-4 py-2" wire:key="encryption-{{ $loop->index }}">
+                        <div>
+                            <div class="font-medium">{{ $volume['volume'] ?? '—' }}</div>
+                            <flux:text>{{ ($volume['technology'] ?? '—').' · '.($volume['state'] ?? '—') }}</flux:text>
+                        </div>
+                        @php
+                            $hasRecoveryKey = collect($volume['recoveryKeys'] ?? [])->filter()->isNotEmpty()
+                                || collect($volume['keyProtectors'] ?? [])->contains(fn ($protector) => filled(data_get($protector, 'recoveryKey')));
+                        @endphp
+                        @if ($hasRecoveryKey)
+                            <flux:badge size="sm" color="green">{{ __('Recovery key stored') }}</flux:badge>
+                        @endif
+                    </div>
+                @empty
+                    <flux:text>{{ __('No encryption details collected.') }}</flux:text>
+                @endforelse
+            </div>
+
+            <div class="space-y-3 border-t border-zinc-200 pt-6 dark:border-zinc-700">
+                <div class="font-medium">{{ __('Login providers') }}</div>
+                @forelse ($loginProviders as $provider)
+                    <div class="py-2" wire:key="login-{{ $loop->index }}">
+                        <div class="font-medium">{{ $provider['name'] ?? '—' }}</div>
+                        <flux:text>{{ collect([$provider['state'] ?? null, $provider['detail'] ?? null])->filter()->implode(' · ') }}</flux:text>
+                    </div>
+                @empty
+                    <flux:text>{{ __('No login providers collected.') }}</flux:text>
+                @endforelse
+            </div>
+
+            <div class="space-y-3 border-t border-zinc-200 pt-6 dark:border-zinc-700">
+                <div class="font-medium">{{ __('Antivirus') }}</div>
+                @forelse ($antivirus as $product)
+                    <div class="flex items-start justify-between gap-4 py-2" wire:key="av-{{ $loop->index }}">
+                        <div>
+                            <div class="font-medium">{{ $product['name'] ?? '—' }}</div>
+                            <flux:text>{{ collect([$product['state'] ?? null, $product['detail'] ?? null])->filter()->implode(' · ') }}</flux:text>
+                        </div>
+                        <div class="flex flex-wrap justify-end gap-2">
+                            @if (($product['enabled'] ?? null) === true)
+                                <flux:badge size="sm" color="green">{{ __('Enabled') }}</flux:badge>
+                            @elseif (($product['enabled'] ?? null) === false)
+                                <flux:badge size="sm" color="zinc">{{ __('Disabled') }}</flux:badge>
+                            @endif
+                            @if (($product['upToDate'] ?? null) === true)
+                                <flux:badge size="sm" color="green">{{ __('Up to date') }}</flux:badge>
+                            @elseif (($product['upToDate'] ?? null) === false)
+                                <flux:badge size="sm" color="amber">{{ __('Out of date') }}</flux:badge>
+                            @endif
+                        </div>
+                    </div>
+                @empty
+                    <flux:text>{{ __('No antivirus details collected.') }}</flux:text>
+                @endforelse
+            </div>
+
+            <div class="space-y-4 border-t border-zinc-200 pt-6 dark:border-zinc-700">
+                <div>
+                    <div class="font-medium">{{ __('Updates') }}</div>
+                    @if (($updates['status'] ?? null) === 'available')
+                        <flux:text>
+                            {{ __(':installed installed · :available available', [
+                                'installed' => count($installedUpdates),
+                                'available' => count($availableUpdates),
+                            ]) }}
+                        </flux:text>
+                    @else
+                        <flux:text>{{ data_get($updates, 'status', '—') }}</flux:text>
+                    @endif
+                </div>
+
+                @if ($availableUpdates !== [])
+                    <div class="space-y-2">
+                        <flux:text class="font-medium">{{ __('Available') }}</flux:text>
+                        @foreach ($availableUpdates as $update)
+                            <div class="py-1" wire:key="available-update-{{ $loop->index }}">
+                                <div>{{ $update['title'] ?? $update['id'] ?? '—' }}</div>
+                                <flux:text>{{ collect([$update['id'] ?? null, $update['category'] ?? null, $update['kbArticle'] ?? null])->filter()->implode(' · ') }}</flux:text>
+                            </div>
+                        @endforeach
+                    </div>
+                @endif
+
+                @if ($installedUpdates !== [])
+                    <div class="space-y-2">
+                        <flux:text class="font-medium">{{ __('Installed') }}</flux:text>
+                        @foreach (array_slice($installedUpdates, 0, 10) as $update)
+                            <div class="py-1" wire:key="installed-update-{{ $loop->index }}">
+                                <div>{{ $update['title'] ?? $update['id'] ?? '—' }}</div>
+                                <flux:text>
+                                    {{ collect([
+                                        $update['id'] ?? null,
+                                        $update['kbArticle'] ?? null,
+                                        filled($update['installedAtUtc'] ?? null)
+                                            ? \Illuminate\Support\Carbon::parse($update['installedAtUtc'])->timezone('UTC')->toFormattedDateString()
+                                            : null,
+                                    ])->filter()->implode(' · ') }}
+                                </flux:text>
+                            </div>
+                        @endforeach
+                        @if (count($installedUpdates) > 10)
+                            <flux:text>{{ __('And :count more…', ['count' => count($installedUpdates) - 10]) }}</flux:text>
+                        @endif
+                    </div>
+                @endif
+            </div>
+        </div>
+    @endif
 
     @can('assign', $hardware)
         <form wire:submit="assign" class="flex flex-col gap-4 rounded-xl border border-zinc-200 p-6 dark:border-zinc-700">

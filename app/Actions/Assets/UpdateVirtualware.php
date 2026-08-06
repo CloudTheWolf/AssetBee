@@ -14,6 +14,8 @@ use Illuminate\Validation\Validator as ValidatorContract;
 
 class UpdateVirtualware
 {
+    use Concerns\ValidatesVirtualwareInfrastructure;
+
     /**
      * @param  array<string, mixed>  $input
      *
@@ -43,6 +45,7 @@ class UpdateVirtualware
                 Rule::exists('userwares', 'id')->where('organization_id', $virtualware->organization_id),
             ],
             'notes' => ['nullable', 'string'],
+            ...$this->infrastructureRules(),
         ]);
 
         $validator->after(function (ValidatorContract $validator) use ($input): void {

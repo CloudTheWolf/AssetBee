@@ -4,6 +4,7 @@ namespace App\Enums;
 
 enum HardwareOperatingSystem: string
 {
+    case Windows = 'windows';
     case Windows11 = 'windows_11';
     case Windows10 = 'windows_10';
     case WindowsServer2025 = 'windows_server_2025';
@@ -19,6 +20,7 @@ enum HardwareOperatingSystem: string
     public function label(): string
     {
         return match ($this) {
+            self::Windows => __('Windows'),
             self::Windows11 => __('Windows 11'),
             self::Windows10 => __('Windows 10'),
             self::WindowsServer2025 => __('Windows Server 2025'),
@@ -36,6 +38,7 @@ enum HardwareOperatingSystem: string
     public function isWindows(): bool
     {
         return match ($this) {
+            self::Windows,
             self::Windows11,
             self::Windows10,
             self::WindowsServer2025,

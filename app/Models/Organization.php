@@ -37,6 +37,14 @@ class Organization extends Model
     }
 
     /**
+     * @return HasMany<OrganizationApiKey, $this>
+     */
+    public function apiKeys(): HasMany
+    {
+        return $this->hasMany(OrganizationApiKey::class);
+    }
+
+    /**
      * @return HasMany<OrganizationGoogleDomain, $this>
      */
     public function googleDomains(): HasMany

@@ -247,6 +247,9 @@ new #[Title('Hardware')] class extends Component {
                                 $hardware->model,
                                 $hardware->operating_system?->label(),
                                 $hardware->is_vm_host ? __('VM host') : null,
+                                $hardware->inventory_collected_at
+                                    ? __('Inventory :when', ['when' => $hardware->inventory_collected_at->diffForHumans()])
+                                    : null,
                             ])->filter()->implode(' · ') }}
                         </div>
                     </flux:table.cell>
