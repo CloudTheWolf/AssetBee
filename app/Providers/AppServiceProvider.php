@@ -35,6 +35,9 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         $this->configureDefaults();
+
+        // Keep Livewire single-file components ASCII-only in filenames.
+        config(['livewire.make_command.emoji' => false]);
     }
 
     /**
