@@ -10,7 +10,6 @@ WORKDIR /app
 COPY composer.json composer.lock ./
 
 RUN composer install \
-    --no-dev \
     --no-scripts \
     --no-autoloader \
     --prefer-dist \
@@ -19,7 +18,7 @@ RUN composer install \
 
 COPY . .
 
-RUN composer dump-autoload --optimize --no-dev --no-scripts
+RUN composer dump-autoload --optimize --no-scripts
 
 # -----------------------------------------------------------------------------
 # Frontend assets
@@ -69,6 +68,9 @@ RUN sed -i 's/\r$//' /usr/local/bin/entrypoint.sh \
     && chmod +x /usr/local/bin/entrypoint.sh
 
 COPY --from=vendor --chown=appuser:appuser /app /app
+
+RUN find vendor -name tests -o -name test -o -name fixtures | xargs rm -rf && \
+    find vendor -name '*.md' ! -name 'README.md' | xargs rm -rf
 COPY --from=frontend --chown=appuser:appuser /app/public/build /app/public/build
 
 RUN mkdir -p \
