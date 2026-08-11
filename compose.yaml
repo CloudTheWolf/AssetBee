@@ -15,12 +15,18 @@ services:
         environment:
             WWWUSER: '${WWWUSER}'
             LARAVEL_SAIL: 1
-            VIEW_COMPILED_PATH: /tmp/assetbee-compiled-views
+            VIEW_COMPILED_PATH: /var/www/html/storage/framework/views
             XDEBUG_MODE: '${SAIL_XDEBUG_MODE:-off}'
             XDEBUG_CONFIG: '${SAIL_XDEBUG_CONFIG:-client_host=host.docker.internal}'
             IGNITION_LOCAL_SITES_PATH: '${PWD}'
         volumes:
             - '.:/var/www/html'
+            - 'sail-node-modules:/var/www/html/node_modules'
+            - 'sail-framework:/var/www/html/storage/framework'
+            - 'sail-bootstrap-cache:/var/www/html/bootstrap/cache'
+        entrypoint:
+            - /bin/bash
+            - /var/www/html/docker/sail/entrypoint.sh
         networks:
             - sail
         depends_on:
@@ -70,7 +76,11 @@ networks:
     sail:
         driver: bridge
 volumes:
-    sail-mysql:
+    sail-node-modules:
+        driver: local
+    sail-framework:
+        driver: local
+    sail-bootstrap-cache:
         driver: local
     sail-redis:
         driver: local

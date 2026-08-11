@@ -6,7 +6,13 @@ use Laravel\Fortify\Features;
 test('login screen can be rendered', function () {
     $response = $this->get(route('login'));
 
-    $response->assertOk();
+    $response->assertOk()
+        ->assertSee(__('Welcome back'))
+        ->assertSee(__('Keep every asset accounted for.'))
+        ->assertSee(__('Hardware, software, cloud, and the people who use them — in one place.'))
+        ->assertSee(asset('img/logo.png'), false)
+        ->assertSee(asset('img/splash.png'), false)
+        ->assertSee(__('Continue with Google'));
 });
 
 test('users can authenticate using the login screen', function () {

@@ -7,6 +7,7 @@ use App\Models\Organization;
 use App\Services\Cloud\AwsEc2DiscoveryService;
 use App\Services\Cloud\CloudVirtualMachineDiscoveryManager;
 use App\Support\OrganizationSubscriptionLimits;
+use App\Support\SailRuntime;
 use App\Support\SystemAuditRecorder;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Model;
@@ -43,11 +44,24 @@ class AppServiceProvider extends ServiceProvider
         Cashier::useCustomerModel(Organization::class);
 
         $this->configureDefaults();
+        $this->configureSailRuntime();
         $this->registerOrganizationSubscriptionLimits();
         $this->registerSystemAuditListeners();
 
         // Keep Livewire single-file components ASCII-only in filenames.
         config(['livewire.make_command.emoji' => false]);
+    }
+
+    /**
+     * Prefer a compiled-view path that supports utime() under Sail/WSL mounts.
+     */
+    private function configureSailRuntime(): void
+    {
+        if (! env('LARAVEL_SAIL')) {
+            return;
+        }
+
+        SailRuntime::ensureCompiledViewPath();
     }
 
     private function registerOrganizationSubscriptionLimits(): void

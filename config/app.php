@@ -13,7 +13,7 @@ return [
     |
     */
 
-    'name' => env('APP_NAME', 'Laravel'),
+    'name' => env('APP_NAME', 'AssetBee'),
 
     /*
     |--------------------------------------------------------------------------
@@ -56,15 +56,15 @@ return [
 
     /*
     |--------------------------------------------------------------------------
-    | Self-Hosted Mode
+    | Cloud-Hosted Mode
     |--------------------------------------------------------------------------
     |
-    | When enabled, public registration is closed after the first user is
+    | When disabled, public registration is closed after the first user is
     | created. Additional users join through organization invitations.
     |
     */
 
-    'self_hosted' => (bool) env('SELF_HOSTED', false),
+    'cloud_hosted' => (bool) env('CLOUD_HOSTED', false),
 
     /*
     |--------------------------------------------------------------------------

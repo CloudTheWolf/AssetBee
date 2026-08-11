@@ -67,7 +67,7 @@ test('customers and self hosted system identities cannot access package manageme
         ->get(route('system.packages'))
         ->assertForbidden();
 
-    config(['app.self_hosted' => true]);
+    config(['app.cloud_hosted' => false]);
     $system = User::factory()->system()->create();
 
     $this->actingAs($system)

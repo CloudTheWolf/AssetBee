@@ -1,24 +1,24 @@
 <x-layouts::auth :title="__('Log in')">
     <div class="flex flex-col gap-6">
-        <x-auth-header :title="__('Log in to your account')" :description="__('Enter your email and password below to log in')" />
+        <x-auth-header
+            :title="__('Welcome back')"
+            :description="__('Sign in to continue managing your organization assets.')"
+        />
 
-        <!-- Session Status -->
-        <x-auth-session-status class="text-center" :status="session('status')" />
+        <x-auth-session-status :status="session('status')" />
 
-        <x-google-auth-button :label="__('Continue with Google')" />
-
-        <div class="relative flex items-center gap-4 py-1">
-            <div class="h-px flex-1 bg-zinc-200 dark:bg-zinc-700"></div>
-            <span class="text-xs font-medium tracking-wide text-zinc-500 uppercase">{{ __('or') }}</span>
-            <div class="h-px flex-1 bg-zinc-200 dark:bg-zinc-700"></div>
+        <div class="flex flex-col gap-2.5">
+            <x-google-auth-button :label="__('Continue with Google')" />
+            <x-passkey-verify :separator="null" />
         </div>
 
-        <x-passkey-verify />
+        <div class="auth-divider">
+            <span>{{ __('or email') }}</span>
+        </div>
 
-        <form method="POST" action="{{ route('login.store') }}" class="flex flex-col gap-6">
+        <form method="POST" action="{{ route('login.store') }}" class="flex flex-col gap-4">
             @csrf
 
-            <!-- Email Address -->
             <flux:input
                 name="email"
                 :label="__('Email address')"
@@ -30,7 +30,6 @@
                 placeholder="email@example.com"
             />
 
-            <!-- Password -->
             <div class="relative">
                 <flux:input
                     name="password"
@@ -43,25 +42,22 @@
                 />
 
                 @if (Route::has('password.request'))
-                    <flux:link class="absolute top-0 text-sm end-0" :href="route('password.request')" wire:navigate>
-                        {{ __('Forgot your password?') }}
+                    <flux:link class="absolute top-0 end-0 text-sm" :href="route('password.request')" wire:navigate>
+                        {{ __('Forgot password?') }}
                     </flux:link>
                 @endif
             </div>
 
-            <!-- Remember Me -->
             <flux:checkbox name="remember" :label="__('Remember me')" :checked="old('remember')" />
 
-            <div class="flex items-center justify-end">
-                <flux:button variant="primary" type="submit" class="w-full" data-test="login-button">
-                    {{ __('Log in') }}
-                </flux:button>
-            </div>
+            <flux:button variant="primary" type="submit" class="mt-1 w-full" data-test="login-button">
+                {{ __('Log in') }}
+            </flux:button>
         </form>
 
-        <div class="space-x-1 text-sm text-center rtl:space-x-reverse text-zinc-600 dark:text-zinc-400">
+        <div class="pt-1 text-center text-sm text-zinc-500">
             @if (\App\Support\Registration::isOpen(\App\Support\Registration::pendingInvitation()))
-                <span>{{ __('Don\'t have an account?') }}</span>
+                <span>{{ __("Don't have an account?") }}</span>
                 <flux:link :href="route('register')" wire:navigate>{{ __('Sign up') }}</flux:link>
             @else
                 <span>{{ __('Need access? Ask an organization owner for an invite.') }}</span>

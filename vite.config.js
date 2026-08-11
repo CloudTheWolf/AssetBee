@@ -18,14 +18,29 @@ export default defineConfig({
                 bunny('Instrument Sans', {
                     weights: [400, 500, 600],
                 }),
+                bunny('Sora', {
+                    weights: [500, 600, 700],
+                }),
             ],
         }),
         tailwindcss(),
     ],
+    build: {
+        reportCompressedSize: false,
+        rolldownOptions: {
+            checks: {
+                pluginTimings: false,
+            },
+        },
+    },
     server: {
         cors: true,
+        hmr: {
+            host: 'localhost',
+        },
         watch: {
             ignored: ['**/storage/framework/views/**'],
+            usePolling: true,
         },
     },
 });

@@ -6,7 +6,7 @@
     href="{{ route('auth.google.redirect') }}"
     data-test="google-auth-button"
     {{ $attributes->merge([
-        'class' => 'inline-flex w-full items-center justify-center gap-3 rounded-lg border border-zinc-200 bg-white px-4 py-2.5 text-sm font-medium text-zinc-700 shadow-xs transition hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800',
+        'class' => 'inline-flex w-full items-center justify-center gap-3 rounded-xl border border-white/15 bg-white/5 px-4 py-3 text-sm font-medium text-zinc-100 transition duration-200 hover:border-brand-cyan/40 hover:bg-white/10',
     ]) }}
 >
     <svg class="size-5 shrink-0" viewBox="0 0 24 24" aria-hidden="true">

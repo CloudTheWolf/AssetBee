@@ -37,7 +37,7 @@ test('cloud system users can access the customer console and customers cannot', 
 });
 
 test('system routes and permissions are disabled in self hosted mode', function () {
-    config(['app.self_hosted' => true]);
+    config(['app.cloud_hosted' => false]);
 
     $system = User::factory()->system()->create();
     $organization = Organization::factory()->create();

@@ -10,7 +10,7 @@ beforeEach(function () {
 });
 
 test('self hosted registration remains open until the first user exists', function () {
-    config(['app.self_hosted' => true]);
+    config(['app.cloud_hosted' => false]);
 
     expect(Registration::isOpen())->toBeTrue();
 
@@ -18,7 +18,7 @@ test('self hosted registration remains open until the first user exists', functi
 });
 
 test('self hosted registration closes after the first user is created', function () {
-    config(['app.self_hosted' => true]);
+    config(['app.cloud_hosted' => false]);
     User::factory()->create();
 
     expect(Registration::isOpen())->toBeFalse();
@@ -32,7 +32,7 @@ test('self hosted registration closes after the first user is created', function
 });
 
 test('self hosted registration still allows invited users', function () {
-    config(['app.self_hosted' => true]);
+    config(['app.cloud_hosted' => false]);
     User::factory()->create();
 
     [$owner, $organization] = actingAsOrganizationMember();

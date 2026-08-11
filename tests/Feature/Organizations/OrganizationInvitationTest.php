@@ -39,7 +39,7 @@ test('admins cannot invite members', function () {
 });
 
 test('invited users can register and join when self hosted', function () {
-    config(['app.self_hosted' => true]);
+    config(['app.cloud_hosted' => false]);
     User::factory()->create();
 
     [$owner, $organization] = createOrganizationMember(OrganizationRole::Owner);

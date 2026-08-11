@@ -63,7 +63,7 @@ test('granting system status is idempotent and refuses organization members', fu
 
 test('granting system status is refused in self hosted mode and revocation is idempotent', function () {
     $user = User::factory()->system()->create(['email' => 'system@example.com']);
-    config(['app.self_hosted' => true]);
+    config(['app.cloud_hosted' => false]);
 
     $this->artisan('system:grant', ['email' => $user->email])
         ->assertFailed();

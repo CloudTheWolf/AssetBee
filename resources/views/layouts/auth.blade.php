@@ -1,3 +1,3 @@
-<x-layouts::auth.simple :title="$title ?? null">
+<x-layouts::auth.fullscreen :title="$title ?? null">
     {{ $slot }}
-</x-layouts::auth.simple>
+</x-layouts::auth.fullscreen>

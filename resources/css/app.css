@@ -3,13 +3,13 @@
 
 @source '../views';
 @source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
-@source '../../vendor/livewire/flux-pro/stubs/**/*.blade.php';
 @source '../../vendor/livewire/flux/stubs/**/*.blade.php';
 
 @custom-variant dark (&:where(.dark, .dark *));
 
 @theme {
     --font-sans: 'Instrument Sans', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji';
+    --font-display: 'Sora', 'Instrument Sans', ui-sans-serif, system-ui, sans-serif;
 
     --color-zinc-50: #fafafa;
     --color-zinc-100: #f5f5f5;
@@ -26,6 +26,11 @@
     --color-accent: var(--color-neutral-800);
     --color-accent-content: var(--color-neutral-800);
     --color-accent-foreground: var(--color-white);
+
+    --color-brand-cyan: #4ec4e8dd;
+    --color-brand-cyan-soft: #7ad6efdd;
+    --color-brand-ink: #120e0c;
+    --color-brand-soil: #161b2a;
 }
 
 @layer theme {
@@ -64,3 +69,99 @@ select:focus[data-flux-control] {
 /* \[:where(&)\]:size-4 {
     @apply size-4;
 } */
+
+@layer components {
+    .auth-screen {
+        --color-accent: var(--color-brand-cyan);
+        --color-accent-content: var(--color-brand-cyan);
+        --color-accent-foreground: var(--color-brand-ink);
+        color: #e8eef1;
+        background-color: #0b0908;
+    }
+
+    .auth-splash {
+        position: absolute;
+        inset: 0;
+        z-index: 0;
+        pointer-events: none;
+        background-position: center;
+        background-repeat: no-repeat;
+        background-size: cover;
+    }
+
+    .auth-splash-shade {
+        position: absolute;
+        inset: 0;
+        z-index: 0;
+        pointer-events: none;
+        background:
+            linear-gradient(90deg, rgba(8, 6, 5, 0.35) 0%, rgba(8, 6, 5, 0.18) 42%, rgba(8, 6, 5, 0.72) 72%, rgba(8, 6, 5, 0.88) 100%),
+            linear-gradient(180deg, rgba(8, 6, 5, 0.25) 0%, transparent 28%, rgba(8, 6, 5, 0.35) 100%);
+    }
+
+    .auth-brand {
+        animation: auth-rise 750ms cubic-bezier(0.22, 1, 0.36, 1) both;
+    }
+
+    .auth-panel {
+        animation: auth-rise 700ms cubic-bezier(0.22, 1, 0.36, 1) 80ms both;
+    }
+
+    .auth-panel::before {
+        content: '';
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+        background: linear-gradient(90deg, transparent 0%, rgba(8, 6, 5, 0.45) 35%, rgba(8, 6, 5, 0.78) 100%);
+    }
+
+    @media (max-width: 1023px) {
+        .auth-splash-shade {
+            background:
+                linear-gradient(180deg, rgba(8, 6, 5, 0.45) 0%, rgba(8, 6, 5, 0.2) 36%, rgba(8, 6, 5, 0.82) 100%);
+        }
+
+        .auth-panel::before {
+            background: linear-gradient(180deg, transparent 0%, rgba(8, 6, 5, 0.5) 28%, rgba(8, 6, 5, 0.82) 100%);
+        }
+    }
+
+    .auth-form-shell {
+        position: relative;
+        z-index: 1;
+    }
+
+    .auth-screen [data-flux-control]:focus {
+        --tw-ring-color: color-mix(in oklab, var(--color-brand-cyan) 55%, transparent);
+        --tw-ring-offset-color: transparent;
+        --tw-ring-offset-width: 0px;
+        box-shadow: 0 0 0 1px color-mix(in oklab, var(--color-brand-cyan) 70%, transparent);
+    }
+
+    .auth-divider {
+        @apply relative flex items-center gap-4 py-1;
+    }
+
+    .auth-divider::before,
+    .auth-divider::after {
+        content: '';
+        @apply h-px flex-1;
+        background: linear-gradient(90deg, transparent, rgba(232, 238, 241, 0.22), transparent);
+    }
+
+    .auth-divider span {
+        @apply text-[0.7rem] font-medium tracking-[0.18em] text-zinc-500 uppercase;
+    }
+}
+
+@keyframes auth-rise {
+    from {
+        opacity: 0;
+        transform: translateY(14px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}

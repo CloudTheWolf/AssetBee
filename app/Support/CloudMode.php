@@ -6,11 +6,11 @@ class CloudMode
 {
     public static function enabled(): bool
     {
-        return ! self::selfHosted();
+        return (bool) config('app.cloud_hosted', true);
     }
 
     public static function selfHosted(): bool
     {
-        return (bool) config('app.self_hosted', false);
+        return ! self::enabled();
     }
 }

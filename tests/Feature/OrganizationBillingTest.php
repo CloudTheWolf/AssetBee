@@ -53,7 +53,7 @@ test('system users cannot use customer billing even in an explicit customer cont
 });
 
 test('organization billing is disabled in self hosted mode', function () {
-    config(['app.self_hosted' => true]);
+    config(['app.cloud_hosted' => false]);
     actingAsOrganizationMember();
 
     $this->get(route('organizations.billing'))->assertForbidden();
