@@ -5,6 +5,7 @@ namespace App\Support;
 use App\Enums\OrganizationRole;
 use App\Models\Organization;
 use App\Models\User;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Session;
 
@@ -34,6 +35,14 @@ class CurrentOrganization
             return null;
         }
 
+        if ($user->hasSystemAccess()) {
+            return Organization::query()->find($id);
+        }
+
+        if (! $user->isCustomer()) {
+            return null;
+        }
+
         return $user->organizations()->where('organizations.id', $id)->first();
     }
 
@@ -48,9 +57,33 @@ class CurrentOrganization
         return $organization;
     }
 
-    public static function set(Organization $organization): void
+    /**
+     * @throws AuthorizationException
+     */
+    public static function set(Organization $organization, ?User $user = null): void
     {
+        $user ??= Auth::user();
+
+        if (! $user instanceof User || ! self::canSelect($user, $organization)) {
+            throw new AuthorizationException(__('You cannot select this organization.'));
+        }
+
         Session::put(self::SESSION_KEY, $organization->id);
+    }
+
+    public static function canSelect(User $user, Organization $organization): bool
+    {
+        if ($user->hasSystemAccess()) {
+            return true;
+        }
+
+        return $user->isCustomer()
+            && $user->organizations()->where('organizations.id', $organization->id)->exists();
+    }
+
+    public static function isManagedBySystem(User $user, Organization $organization): bool
+    {
+        return $user->hasSystemAccess() && self::id() === $organization->id;
     }
 
     public static function clear(): void
@@ -89,10 +122,16 @@ class CurrentOrganization
             return $current;
         }
 
+        if (! $user->isCustomer()) {
+            self::clear();
+
+            return null;
+        }
+
         $organization = $user->organizations()->orderBy('organizations.name')->first();
 
         if ($organization !== null) {
-            self::set($organization);
+            self::set($organization, $user);
         }
 
         return $organization;

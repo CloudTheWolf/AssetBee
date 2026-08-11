@@ -11,17 +11,23 @@ trait AuthorizesOrganizationAssets
 {
     protected function roleInOrganization(User $user, Organization $organization): ?OrganizationRole
     {
+        if (! $user->isCustomer()) {
+            return null;
+        }
+
         return CurrentOrganization::roleFor($user, $organization);
     }
 
     protected function isMember(User $user, Organization $organization): bool
     {
-        return $this->roleInOrganization($user, $organization) !== null;
+        return CurrentOrganization::isManagedBySystem($user, $organization)
+            || $this->roleInOrganization($user, $organization) !== null;
     }
 
     protected function canManage(User $user, Organization $organization): bool
     {
-        return $this->roleInOrganization($user, $organization)?->canManageAssets() ?? false;
+        return CurrentOrganization::isManagedBySystem($user, $organization)
+            || ($this->roleInOrganization($user, $organization)?->canManageAssets() ?? false);
     }
 
     protected function organizationIdMatches(User $user, int $organizationId): bool

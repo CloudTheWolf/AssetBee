@@ -6,6 +6,7 @@ use App\Actions\Organizations\RevokeOrganizationInvitation;
 use App\Actions\Organizations\UpdateOrganization;
 use App\Actions\Organizations\UpdateOrganizationMemberRole;
 use App\Enums\OrganizationRole;
+use App\Enums\UserAccountType;
 use App\Models\Organization;
 use App\Models\OrganizationApiKey;
 use App\Models\OrganizationInvitation;
@@ -148,7 +149,10 @@ new #[Title('Organization settings')] class extends Component
     #[Computed]
     public function members()
     {
-        return $this->organization->users()->orderBy('name')->get();
+        return $this->organization->users()
+            ->where('users.account_type', UserAccountType::Customer)
+            ->orderBy('name')
+            ->get();
     }
 
     #[Computed]
@@ -170,6 +174,12 @@ new #[Title('Organization settings')] class extends Component
     public function canInvite(): bool
     {
         return auth()->user()->can('invite', $this->organization);
+    }
+
+    #[Computed]
+    public function canManageApiKeys(): bool
+    {
+        return auth()->user()->can('manageApiKeys', $this->organization);
     }
 }; ?>
 
@@ -193,6 +203,7 @@ new #[Title('Organization settings')] class extends Component
         </div>
     </form>
 
+    @if ($this->canManageApiKeys)
     <div class="flex flex-col gap-4 rounded-xl border border-zinc-200 p-6 dark:border-zinc-700">
         <div>
             <flux:heading size="lg">{{ __('API keys') }}</flux:heading>
@@ -252,6 +263,7 @@ new #[Title('Organization settings')] class extends Component
             @endforelse
         </ul>
     </div>
+    @endif
 
     <div class="flex flex-col gap-4 rounded-xl border border-zinc-200 p-6 dark:border-zinc-700">
         <flux:heading size="lg">{{ __('Members') }}</flux:heading>

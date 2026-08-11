@@ -6,24 +6,42 @@
     <body class="min-h-screen bg-white dark:bg-zinc-800">
         <flux:sidebar sticky collapsible="mobile" class="border-e border-zinc-200 bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900">
             <flux:sidebar.header>
-                <x-app-logo :sidebar="true" href="{{ route('dashboard') }}" wire:navigate />
+                <x-app-logo :sidebar="true" href="{{ auth()->user()->hasSystemAccess() && ! \App\Support\CurrentOrganization::get() ? route('system.customers') : route('dashboard') }}" wire:navigate />
                 <flux:sidebar.collapse class="lg:hidden" />
             </flux:sidebar.header>
 
             @php
                 $currentOrganization = \App\Support\CurrentOrganization::get();
-                $organizations = auth()->user()->organizations()->orderBy('name')->get();
+                $hasSystemAccess = auth()->user()->hasSystemAccess();
+                $organizations = $hasSystemAccess
+                    ? collect()
+                    : auth()->user()->organizations()->orderBy('name')->get();
             @endphp
 
             <flux:sidebar.nav>
                 <flux:sidebar.group :heading="__('Platform')" class="grid">
-                    <flux:sidebar.item icon="home" :href="route('dashboard')" :current="request()->routeIs('dashboard')" wire:navigate>
-                        {{ __('Dashboard') }}
-                    </flux:sidebar.item>
+                    @if ($currentOrganization)
+                        <flux:sidebar.item icon="home" :href="route('dashboard')" :current="request()->routeIs('dashboard')" wire:navigate>
+                            {{ __('Dashboard') }}
+                        </flux:sidebar.item>
+                    @endif
+                    @if ($hasSystemAccess)
+                        <flux:sidebar.item icon="building-office" :href="route('system.customers')" :current="request()->routeIs('system.customers')" wire:navigate>
+                            {{ __('Customers') }}
+                        </flux:sidebar.item>
+                        <flux:sidebar.item icon="rectangle-stack" :href="route('system.packages')" :current="request()->routeIs('system.packages')" wire:navigate>
+                            {{ __('Packages') }}
+                        </flux:sidebar.item>
+                    @endif
                     @if ($currentOrganization)
                         @can('manage', $currentOrganization)
                             <flux:sidebar.item icon="building-office-2" :href="route('organizations.manage')" :current="request()->routeIs('organizations.manage')" wire:navigate>
                                 {{ __('Organization') }}
+                            </flux:sidebar.item>
+                        @endcan
+                        @can('manageBilling', $currentOrganization)
+                            <flux:sidebar.item icon="credit-card" :href="route('organizations.billing')" :current="request()->routeIs('organizations.billing*')" wire:navigate>
+                                {{ __('Billing') }}
                             </flux:sidebar.item>
                         @endcan
                     @endif
@@ -72,6 +90,22 @@
                             </flux:menu.item>
                         </flux:menu>
                     </flux:dropdown>
+                </div>
+            @endif
+
+            @if ($hasSystemAccess && $currentOrganization)
+                <div class="px-4 py-2">
+                    <flux:text class="mb-2 text-xs font-medium tracking-wide text-amber-700 uppercase dark:text-amber-300">{{ __('System customer') }}</flux:text>
+                    <div class="rounded-lg border border-amber-300 bg-amber-50 p-3 dark:border-amber-700 dark:bg-amber-950/30">
+                        <div class="truncate text-sm font-medium">{{ $currentOrganization->name }}</div>
+                        <form method="POST" action="{{ route('system.customers.exit') }}" class="mt-2">
+                            @csrf
+                            @method('DELETE')
+                            <flux:button type="submit" size="sm" variant="ghost" class="w-full">
+                                {{ __('Exit customer') }}
+                            </flux:button>
+                        </form>
+                    </div>
                 </div>
             @endif
 
@@ -144,6 +178,12 @@
                 </flux:menu>
             </flux:dropdown>
         </flux:header>
+
+        @if ($hasSystemAccess && $currentOrganization)
+            <div class="border-y border-amber-300 bg-amber-100 px-4 py-2 text-center text-sm font-semibold text-amber-950 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-100">
+                {{ __('System — managing :customer', ['customer' => $currentOrganization->name]) }}
+            </div>
+        @endif
 
         {{ $slot }}
 

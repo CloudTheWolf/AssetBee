@@ -6,6 +6,13 @@
       0 => 'Laravel\\Boost\\BoostServiceProvider',
     ),
   ),
+  'laravel/cashier' => 
+  array (
+    'providers' => 
+    array (
+      0 => 'Laravel\\Cashier\\CashierServiceProvider',
+    ),
+  ),
   'laravel/fortify' => 
   array (
     'providers' => 
@@ -22,6 +29,17 @@
     'providers' => 
     array (
       0 => 'Laravel\\Mcp\\Server\\McpServiceProvider',
+    ),
+  ),
+  'laravel/octane' => 
+  array (
+    'aliases' => 
+    array (
+      'Octane' => 'Laravel\\Octane\\Facades\\Octane',
+    ),
+    'providers' => 
+    array (
+      0 => 'Laravel\\Octane\\OctaneServiceProvider',
     ),
   ),
   'laravel/pail' => 

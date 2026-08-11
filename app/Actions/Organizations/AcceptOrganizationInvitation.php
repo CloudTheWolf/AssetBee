@@ -16,6 +16,12 @@ class AcceptOrganizationInvitation
      */
     public function handle(OrganizationInvitation $invitation, User $user): OrganizationInvitation
     {
+        if (! $user->isCustomer()) {
+            throw ValidationException::withMessages([
+                'invitation' => __('System accounts cannot join customer organizations.'),
+            ]);
+        }
+
         if (! $invitation->isPending()) {
             throw ValidationException::withMessages([
                 'invitation' => __('This invitation is no longer valid.'),
@@ -37,7 +43,7 @@ class AcceptOrganizationInvitation
                 'accepted_at' => now(),
             ])->save();
 
-            CurrentOrganization::set($invitation->organization);
+            CurrentOrganization::set($invitation->organization, $user);
             Registration::forgetInvitation();
 
             return $invitation->refresh();

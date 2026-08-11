@@ -23,6 +23,10 @@ class EnsureOrganizationSelected
         $organization = CurrentOrganization::ensureSelected($user);
 
         if ($organization === null) {
+            if ($user->hasSystemAccess()) {
+                return redirect()->route('system.customers');
+            }
+
             if ($request->routeIs('organizations.create', 'organizations.store')) {
                 return $next($request);
             }

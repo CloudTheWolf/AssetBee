@@ -2,6 +2,7 @@
 
 use App\Http\Middleware\AuthenticateOrganizationApiKey;
 use App\Http\Middleware\EnsureOrganizationSelected;
+use App\Http\Middleware\EnsureSystemUser;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -15,9 +16,14 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        $middleware->validateCsrfTokens(except: [
+            'stripe/*',
+        ]);
+
         $middleware->alias([
             'organization.api-key' => AuthenticateOrganizationApiKey::class,
             'organization' => EnsureOrganizationSelected::class,
+            'system' => EnsureSystemUser::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

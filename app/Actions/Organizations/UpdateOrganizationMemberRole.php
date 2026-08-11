@@ -6,6 +6,7 @@ use App\Enums\OrganizationRole;
 use App\Models\Organization;
 use App\Models\User;
 use App\Support\CurrentOrganization;
+use App\Support\SystemAuditRecorder;
 use Illuminate\Validation\ValidationException;
 
 class UpdateOrganizationMemberRole
@@ -38,5 +39,7 @@ class UpdateOrganizationMemberRole
         $organization->users()->updateExistingPivot($member->id, [
             'role' => $role->value,
         ]);
+
+        app(SystemAuditRecorder::class)->record('organization_member.role_updated', $member, $organization->id);
     }
 }

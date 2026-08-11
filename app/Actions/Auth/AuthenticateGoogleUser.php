@@ -2,6 +2,7 @@
 
 namespace App\Actions\Auth;
 
+use App\Enums\UserAccountType;
 use App\Models\User;
 use App\Support\Registration;
 use Illuminate\Support\Facades\Hash;
@@ -52,13 +53,17 @@ class AuthenticateGoogleUser
             ]);
         }
 
-        return User::create([
+        $user = new User([
             'google_id' => $googleUser->getId(),
             'name' => $googleUser->getName() ?: Str::before((string) $googleUser->getEmail(), '@'),
             'email' => $googleUser->getEmail(),
             'email_verified_at' => now(),
             'password' => Hash::make(Str::password(32)),
         ]);
+        $user->account_type = UserAccountType::Customer;
+        $user->save();
+
+        return $user;
     }
 
     /**

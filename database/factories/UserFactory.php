@@ -2,6 +2,7 @@
 
 namespace Database\Factories;
 
+use App\Enums\UserAccountType;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Facades\Hash;
@@ -25,6 +26,7 @@ class UserFactory extends Factory
     public function definition(): array
     {
         return [
+            'account_type' => UserAccountType::Customer,
             'name' => fake()->name(),
             'email' => fake()->unique()->safeEmail(),
             'email_verified_at' => now(),
@@ -35,6 +37,20 @@ class UserFactory extends Factory
             'two_factor_recovery_codes' => null,
             'two_factor_confirmed_at' => null,
         ];
+    }
+
+    public function customer(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'account_type' => UserAccountType::Customer,
+        ]);
+    }
+
+    public function system(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'account_type' => UserAccountType::System,
+        ]);
     }
 
     /**

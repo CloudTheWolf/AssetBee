@@ -6,6 +6,7 @@ use App\Enums\OrganizationRole;
 use App\Models\Organization;
 use App\Models\User;
 use App\Support\CurrentOrganization;
+use App\Support\OrganizationSubscriptionLimits;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
@@ -20,6 +21,10 @@ class EnsureUserOrganization
      */
     public function handle(User $user, ?string $emailDomain = null): ?Organization
     {
+        if (! $user->isCustomer()) {
+            return null;
+        }
+
         if ($user->organizations()->exists()) {
             return CurrentOrganization::ensureSelected($user);
         }
@@ -54,12 +59,14 @@ class EnsureUserOrganization
                 return $organization;
             });
         } else {
+            app(OrganizationSubscriptionLimits::class)->assertCanAddMember($organization);
+
             $organization->users()->syncWithoutDetaching([
                 $user->id => ['role' => OrganizationRole::Member->value],
             ]);
         }
 
-        CurrentOrganization::set($organization);
+        CurrentOrganization::set($organization, $user);
 
         return $organization;
     }

@@ -1,9 +1,10 @@
 {
     "agents": [
-        "cursor"
+        "codex"
     ],
     "cloud": false,
-    "mcp": true,
-    "nightwatch": false,
-    "sail": false
+    "guidelines": true,
+    "packages": [
+        "livewire/blaze"
+    ]
 }

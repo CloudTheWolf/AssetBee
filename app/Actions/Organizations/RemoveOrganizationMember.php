@@ -6,6 +6,7 @@ use App\Enums\OrganizationRole;
 use App\Models\Organization;
 use App\Models\User;
 use App\Support\CurrentOrganization;
+use App\Support\SystemAuditRecorder;
 use Illuminate\Validation\ValidationException;
 
 class RemoveOrganizationMember
@@ -30,5 +31,6 @@ class RemoveOrganizationMember
         }
 
         $organization->users()->detach($member->id);
+        app(SystemAuditRecorder::class)->record('organization_member.removed', $member, $organization->id);
     }
 }

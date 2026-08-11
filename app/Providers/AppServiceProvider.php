@@ -3,13 +3,19 @@
 namespace App\Providers;
 
 use App\Contracts\Cloud\DiscoversCloudVirtualMachines;
+use App\Models\Organization;
 use App\Services\Cloud\AwsEc2DiscoveryService;
 use App\Services\Cloud\CloudVirtualMachineDiscoveryManager;
+use App\Support\OrganizationSubscriptionLimits;
+use App\Support\SystemAuditRecorder;
 use Carbon\CarbonImmutable;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Validation\Rules\Password;
+use Laravel\Cashier\Cashier;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -34,10 +40,38 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        Cashier::useCustomerModel(Organization::class);
+
         $this->configureDefaults();
+        $this->registerOrganizationSubscriptionLimits();
+        $this->registerSystemAuditListeners();
 
         // Keep Livewire single-file components ASCII-only in filenames.
         config(['livewire.make_command.emoji' => false]);
+    }
+
+    private function registerOrganizationSubscriptionLimits(): void
+    {
+        Event::listen('eloquent.creating: *', function (string $eventName, array $models): void {
+            $model = $models[0] ?? null;
+
+            if ($model instanceof Model) {
+                app(OrganizationSubscriptionLimits::class)->assertCanCreate($model);
+            }
+        });
+    }
+
+    private function registerSystemAuditListeners(): void
+    {
+        foreach (['created', 'updated', 'deleted'] as $event) {
+            Event::listen("eloquent.{$event}: *", function (string $eventName, array $models) use ($event): void {
+                $model = $models[0] ?? null;
+
+                if ($model instanceof Model) {
+                    app(SystemAuditRecorder::class)->recordModelEvent($event, $model);
+                }
+            });
+        }
     }
 
     /**

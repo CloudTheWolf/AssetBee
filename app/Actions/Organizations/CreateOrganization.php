@@ -24,6 +24,12 @@ class CreateOrganization
      */
     public function handle(User $user, array $input): Organization
     {
+        if (! $user->isCustomer()) {
+            throw ValidationException::withMessages([
+                'organization' => __('System accounts cannot create customer organizations.'),
+            ]);
+        }
+
         $domains = $this->syncOrganizationGoogleDomains->normalize(
             $input['google_hosted_domains'] ?? $input['google_hosted_domain'] ?? [],
         );
@@ -62,7 +68,7 @@ class CreateOrganization
                 'role' => OrganizationRole::Owner->value,
             ]);
 
-            CurrentOrganization::set($organization);
+            CurrentOrganization::set($organization, $user);
 
             return $organization;
         });

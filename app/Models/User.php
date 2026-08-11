@@ -3,6 +3,8 @@
 namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
+use App\Enums\UserAccountType;
+use App\Support\CloudMode;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
@@ -21,6 +23,7 @@ use Laravel\Fortify\TwoFactorAuthenticatable;
  * @property string|null $google_id
  * @property string $name
  * @property string $email
+ * @property UserAccountType $account_type
  * @property Carbon|null $email_verified_at
  * @property string $password
  * @property string|null $two_factor_secret
@@ -45,6 +48,7 @@ class User extends Authenticatable implements PasskeyUser
     protected function casts(): array
     {
         return [
+            'account_type' => UserAccountType::class,
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
         ];
@@ -60,6 +64,21 @@ class User extends Authenticatable implements PasskeyUser
         return Str::length($initials) > 1
             ? Str::substr($initials, 0, 1).Str::substr($initials, -1)
             : $initials;
+    }
+
+    public function isSystem(): bool
+    {
+        return $this->account_type === UserAccountType::System;
+    }
+
+    public function isCustomer(): bool
+    {
+        return $this->account_type === UserAccountType::Customer;
+    }
+
+    public function hasSystemAccess(): bool
+    {
+        return $this->isSystem() && CloudMode::enabled();
     }
 
     /**

@@ -3,16 +3,26 @@
 use App\Actions\Organizations\CreateOrganization;
 use Flux\Flux;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Livewire\Attributes\Title;
 use Livewire\Component;
 
 new #[Title('Create organization')] class extends Component {
+    use AuthorizesRequests;
+
     public string $name = '';
 
     public string $google_hosted_domains = '';
 
+    public function mount(): void
+    {
+        $this->authorize('create', \App\Models\Organization::class);
+    }
+
     public function create(CreateOrganization $createOrganization): void
     {
+        $this->authorize('create', \App\Models\Organization::class);
+
         $createOrganization->handle(Auth::user(), [
             'name' => $this->name,
             'google_hosted_domains' => $this->google_hosted_domains,

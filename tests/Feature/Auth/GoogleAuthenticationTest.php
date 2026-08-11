@@ -1,5 +1,6 @@
 <?php
 
+use App\Enums\UserAccountType;
 use App\Models\User;
 use Laravel\Socialite\Facades\Socialite;
 use Laravel\Socialite\Two\User as SocialiteUser;
@@ -53,7 +54,8 @@ test('new users can register with a google workspace account', function () {
         'email' => 'ada@acme.com',
     ]);
 
-    expect(User::query()->where('email', 'ada@acme.com')->first()->email_verified_at)->not->toBeNull();
+    expect(User::query()->where('email', 'ada@acme.com')->first()->email_verified_at)->not->toBeNull()
+        ->and(User::query()->where('email', 'ada@acme.com')->first()->account_type)->toBe(UserAccountType::Customer);
 });
 
 test('existing users can authenticate with google', function () {

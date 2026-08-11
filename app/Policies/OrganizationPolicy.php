@@ -6,6 +6,8 @@ use App\Enums\OrganizationRole;
 use App\Models\Organization;
 use App\Models\User;
 use App\Policies\Concerns\AuthorizesOrganizationAssets;
+use App\Support\CloudMode;
+use App\Support\CurrentOrganization;
 use App\Support\Registration;
 
 class OrganizationPolicy
@@ -14,16 +16,24 @@ class OrganizationPolicy
 
     public function viewAny(User $user): bool
     {
-        return $user->organizations()->exists();
+        return $user->hasSystemAccess() || $user->organizations()->exists();
     }
 
     public function view(User $user, Organization $organization): bool
     {
+        if ($user->isSystem()) {
+            return CurrentOrganization::isManagedBySystem($user, $organization);
+        }
+
         return $this->isMember($user, $organization);
     }
 
     public function create(User $user): bool
     {
+        if ($user->isSystem()) {
+            return false;
+        }
+
         if (! Registration::selfHosted()) {
             return true;
         }
@@ -34,6 +44,10 @@ class OrganizationPolicy
 
     public function update(User $user, Organization $organization): bool
     {
+        if ($user->hasSystemAccess()) {
+            return CurrentOrganization::isManagedBySystem($user, $organization);
+        }
+
         return $this->roleInOrganization($user, $organization)?->canManageOrganization() ?? false;
     }
 
@@ -44,16 +58,44 @@ class OrganizationPolicy
 
     public function manageApiKeys(User $user, Organization $organization): bool
     {
+        if ($user->isSystem()) {
+            return false;
+        }
+
         return $this->roleInOrganization($user, $organization)?->canManageOrganization() ?? false;
+    }
+
+    public function manageSubscription(User $user, Organization $organization): bool
+    {
+        return CurrentOrganization::isManagedBySystem($user, $organization);
+    }
+
+    public function manageBilling(User $user, Organization $organization): bool
+    {
+        if ($user->isSystem()) {
+            return false;
+        }
+
+        return $user->isCustomer()
+            && CloudMode::enabled()
+            && $this->roleInOrganization($user, $organization) === OrganizationRole::Owner;
     }
 
     public function invite(User $user, Organization $organization): bool
     {
+        if ($user->hasSystemAccess()) {
+            return CurrentOrganization::isManagedBySystem($user, $organization);
+        }
+
         return $this->roleInOrganization($user, $organization)?->canInviteMembers() ?? false;
     }
 
     public function delete(User $user, Organization $organization): bool
     {
+        if ($user->isSystem()) {
+            return false;
+        }
+
         return $this->roleInOrganization($user, $organization) === OrganizationRole::Owner;
     }
 }

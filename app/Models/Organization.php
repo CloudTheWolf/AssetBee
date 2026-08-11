@@ -2,28 +2,39 @@
 
 namespace App\Models;
 
+use App\Enums\OrganizationRole;
 use Database\Factories\OrganizationFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
+use Laravel\Cashier\Billable;
 
 /**
  * @property int $id
  * @property string $name
  * @property string $slug
+ * @property int|null $subscription_package_id
+ * @property string|null $stripe_id
+ * @property string|null $pm_type
+ * @property string|null $pm_last_four
+ * @property Carbon|null $trial_ends_at
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  * @property-read Collection<int, OrganizationGoogleDomain> $googleDomains
+ * @property-read OrganizationSubscription|null $plan
+ * @property-read SubscriptionPackage|null $package
  */
 #[Fillable(['name', 'slug'])]
 class Organization extends Model
 {
     /** @use HasFactory<OrganizationFactory> */
-    use HasFactory;
+    use Billable, HasFactory;
 
     /**
      * @return BelongsToMany<User, $this>
@@ -42,6 +53,28 @@ class Organization extends Model
     public function apiKeys(): HasMany
     {
         return $this->hasMany(OrganizationApiKey::class);
+    }
+
+    /**
+     * @return HasOne<OrganizationSubscription, $this>
+     */
+    public function plan(): HasOne
+    {
+        return $this->hasOne(OrganizationSubscription::class);
+    }
+
+    /** @return BelongsTo<SubscriptionPackage, $this> */
+    public function package(): BelongsTo
+    {
+        return $this->belongsTo(SubscriptionPackage::class, 'subscription_package_id');
+    }
+
+    public function stripeEmail(): ?string
+    {
+        return $this->users()
+            ->wherePivot('role', OrganizationRole::Owner->value)
+            ->orderBy('users.id')
+            ->value('email');
     }
 
     /**

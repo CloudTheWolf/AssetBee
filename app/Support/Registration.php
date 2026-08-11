@@ -12,7 +12,7 @@ class Registration
 
     public static function selfHosted(): bool
     {
-        return (bool) config('app.self_hosted', false);
+        return CloudMode::selfHosted();
     }
 
     /**

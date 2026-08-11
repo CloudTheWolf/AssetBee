@@ -7,6 +7,7 @@ use App\Models\Organization;
 use App\Models\OrganizationInvitation;
 use App\Models\User;
 use App\Notifications\OrganizationInvitationNotification;
+use App\Support\OrganizationSubscriptionLimits;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
@@ -46,6 +47,23 @@ class InviteOrganizationMember
             throw ValidationException::withMessages([
                 'email' => __('This person is already a member of the organization.'),
             ]);
+        }
+
+        $existingUser = User::query()->where('email', $email)->first();
+
+        if ($existingUser?->isSystem()) {
+            throw ValidationException::withMessages([
+                'email' => __('System accounts cannot join customer organizations.'),
+            ]);
+        }
+
+        $isExistingPendingInvitation = $organization->invitations()
+            ->where('email', $email)
+            ->pending()
+            ->exists();
+
+        if (! $isExistingPendingInvitation) {
+            app(OrganizationSubscriptionLimits::class)->assertCanAddMember($organization);
         }
 
         $invitation = OrganizationInvitation::query()->updateOrCreate(

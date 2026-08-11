@@ -6,6 +6,7 @@ use App\Actions\Organizations\AcceptOrganizationInvitation;
 use App\Actions\Organizations\EnsureUserOrganization;
 use App\Concerns\PasswordValidationRules;
 use App\Concerns\ProfileValidationRules;
+use App\Enums\UserAccountType;
 use App\Models\User;
 use App\Support\Registration;
 use Illuminate\Support\Facades\Validator;
@@ -44,11 +45,13 @@ class CreateNewUser implements CreatesNewUsers
             ]);
         }
 
-        $user = User::create([
+        $user = new User([
             'name' => $input['name'],
             'email' => $input['email'],
             'password' => $input['password'],
         ]);
+        $user->account_type = UserAccountType::Customer;
+        $user->save();
 
         if ($invitation !== null) {
             app(AcceptOrganizationInvitation::class)->handle($invitation, $user);

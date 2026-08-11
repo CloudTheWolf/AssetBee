@@ -2,6 +2,7 @@
 
 use App\Actions\Organizations\InviteOrganizationMember;
 use App\Enums\OrganizationRole;
+use App\Enums\UserAccountType;
 use App\Models\OrganizationInvitation;
 use App\Models\User;
 use App\Notifications\OrganizationInvitationNotification;
@@ -60,6 +61,7 @@ test('invited users can register and join when self hosted', function () {
     $user = User::query()->where('email', 'invitee@example.com')->first();
 
     expect($user)->not->toBeNull()
+        ->and($user->account_type)->toBe(UserAccountType::Customer)
         ->and($organization->users()->where('users.id', $user->id)->exists())->toBeTrue()
         ->and($invitation->fresh()->accepted_at)->not->toBeNull();
 });
