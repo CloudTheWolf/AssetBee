@@ -16,6 +16,24 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        // Prefer process env so this works under `config:cache` and before the
+        // config repository is available (e.g. early Artisan kernel resolve).
+        $trustedProxies = $_ENV['TRUSTED_PROXIES']
+            ?? $_SERVER['TRUSTED_PROXIES']
+            ?? '*';
+
+        $middleware->trustProxies(
+            at: $trustedProxies === '*' || $trustedProxies === ''
+                ? '*'
+                : array_values(array_filter(array_map(
+                    'trim',
+                    explode(',', (string) $trustedProxies),
+                ))),
+            headers: Request::HEADER_X_FORWARDED_TRAEFIK,
+        );
+
+        $middleware->trustHosts();
+
         $middleware->validateCsrfTokens(except: [
             'stripe/*',
         ]);

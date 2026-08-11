@@ -56,6 +56,19 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Trusted Proxies
+    |--------------------------------------------------------------------------
+    |
+    | Comma-separated IP addresses / CIDRs of reverse proxies that terminate
+    | TLS (e.g. Traefik), or "*" to trust all proxies. Prefer "*" only when
+    | the application is not publicly reachable except through the proxy.
+    |
+    */
+
+    'trusted_proxies' => env('TRUSTED_PROXIES', '*'),
+
+    /*
+    |--------------------------------------------------------------------------
     | Cloud-Hosted Mode
     |--------------------------------------------------------------------------
     |
