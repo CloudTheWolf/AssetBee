@@ -1,160 +1,158 @@
-# Production Docker Compose — Traefik + FrankenPHP/Octane + queue + scheduler
+# Production Docker Compose — Includes Traefik Labels
 #
-# Usage:
-#   cp .env.production.example .env.production
-#   # set APP_KEY, DOMAIN, ACME_EMAIL, DB_PASSWORD, DB_ROOT_PASSWORD, APP_URL
-#   docker compose -f compose.production.yaml --env-file .env.production up -d --build
+# Base:
+#   docker compose --env-file .env.production up -d --build
 #
-# Local Sail continues to use compose.yaml.
+# Include MariaDB:
+#   docker compose --env-file .env.production --profile with-sql up -d --build
+#
+# Include Redis:
+#   docker compose --env-file .env.production --profile with-redis up -d --build
+#
+# Include both:
+#   docker compose --env-file .env.production \
+#     --profile with-sql \
+#     --profile with-redis \
+#     up -d --build
 
 name: assetbee
 
 x-app: &app
-  image: assetbee-app:${APP_VERSION:-latest}
-  build:
-    context: .
-    dockerfile: Dockerfile
-    target: production
+  image: cloudthewolf/assetbee-site:${APP_VERSION:-latest}
+
   restart: unless-stopped
-  env_file:
-    - path: .env.production
-      required: false
   networks:
-    - internal
+    - traefik_default
+  env_file:
+    - path: .env
+      required: false
+
   volumes:
     - app_storage:/app/storage/app
     - app_logs:/app/storage/logs
 
+
 x-app-env: &app-env
   APP_ENV: production
   APP_DEBUG: "false"
+
   LOG_CHANNEL: stderr
+
   DB_CONNECTION: mysql
-  DB_HOST: mariadb
-  DB_PORT: 3306
+  DB_HOST: ${DB_HOST:-mariadb}
+  DB_PORT: ${DB_PORT:-3306}
   DB_DATABASE: ${DB_DATABASE:-assetbee}
   DB_USERNAME: ${DB_USERNAME:-assetbee}
   DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
-  REDIS_HOST: redis
-  REDIS_PORT: 6379
+
+  REDIS_HOST: ${REDIS_HOST:-redis}
+  REDIS_PORT: ${REDIS_PORT:-6379}
   REDIS_PASSWORD: ${REDIS_PASSWORD:-}
-  CACHE_STORE: redis
-  SESSION_DRIVER: redis
-  QUEUE_CONNECTION: redis
+
+  CACHE_STORE: ${CACHE_STORE:-redis}
+  SESSION_DRIVER: ${SESSION_DRIVER:-redis}
+  QUEUE_CONNECTION: ${QUEUE_CONNECTION:-redis}
+
   SESSION_SECURE_COOKIE: "true"
   TRUSTED_PROXIES: "*"
+
   OCTANE_SERVER: frankenphp
   OCTANE_HTTPS: "true"
 
+
 services:
-  traefik:
-    image: traefik:v3.3
-    restart: unless-stopped
-    security_opt:
-      - no-new-privileges:true
-    command:
-      - --providers.docker=true
-      - --providers.docker.exposedByDefault=false
-      - --providers.docker.network=assetbee_proxy
-      - --providers.file.filename=/etc/traefik/dynamic.yml
-      - --providers.file.watch=true
-      - --entrypoints.web.address=:80
-      - --entrypoints.web.http.redirections.entryPoint.to=websecure
-      - --entrypoints.web.http.redirections.entryPoint.scheme=https
-      - --entrypoints.web.http.redirections.entryPoint.permanent=true
-      - --entrypoints.websecure.address=:443
-      - --entrypoints.websecure.http.tls=true
-      - --entrypoints.websecure.http.tls.certResolver=letsencrypt
-      - --certificatesresolvers.letsencrypt.acme.email=${ACME_EMAIL:?ACME_EMAIL is required}
-      - --certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json
-      - --certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web
-      - --api.dashboard=false
-      - --ping=true
-      - --log.level=${TRAEFIK_LOG_LEVEL:-INFO}
-      - --accesslog=true
-    ports:
-      - "${TRAEFIK_HTTP_PORT:-80}:80"
-      - "${TRAEFIK_HTTPS_PORT:-443}:443"
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-      - ./docker/production/traefik/dynamic.yml:/etc/traefik/dynamic.yml:ro
-      - traefik_letsencrypt:/letsencrypt
-    networks:
-      - proxy
-    healthcheck:
-      test: ["CMD", "traefik", "healthcheck", "--ping"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
-      start_period: 10s
+
+  # ============================================================
+  # Application
+  # ============================================================
 
   app:
     <<: *app
+
     environment:
       <<: *app-env
       CONTAINER_ROLE: app
       RUN_MIGRATIONS: ${RUN_MIGRATIONS:-true}
-    depends_on:
-      mariadb:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-      traefik:
-        condition: service_healthy
+
     networks:
-      - proxy
-      - internal
+      - traefik_default
+
     labels:
-      - traefik.enable=true
-      - traefik.docker.network=assetbee_proxy
-      - traefik.http.routers.assetbee.rule=Host(`${DOMAIN:?DOMAIN is required}`)
-      - traefik.http.routers.assetbee.entrypoints=websecure
-      - traefik.http.routers.assetbee.tls=true
-      - traefik.http.routers.assetbee.tls.certresolver=letsencrypt
-      - traefik.http.routers.assetbee.middlewares=security-headers@file,compress@file
-      - traefik.http.services.assetbee.loadbalancer.server.port=8000
-      - traefik.http.services.assetbee.loadbalancer.healthcheck.path=/up
-      - traefik.http.services.assetbee.loadbalancer.healthcheck.interval=30s
-    healthcheck:
-      test:
-        [
-          "CMD",
-          "php",
-          "-r",
-          "exit(@file_get_contents('http://127.0.0.1:8000/up') === false ? 1 : 0);",
-        ]
-      interval: 30s
-      timeout: 5s
-      retries: 5
-      start_period: 60s
+      traefik.enable: "true"
+      traefik.http.routers.assetbee.rule: Host(`${DOMAIN:?DOMAIN is required}`)
+      traefik.http.routers.assetbee-site.entrypoints: websecure
+      traefik.http.routers.assetbee-site.tls.certresolver: myresolver
+      traefik.http.services.assetbee-site.loadbalancer.server.port: "8000"
+      traefik.http.middlewares.assetbee-site-cors.headers.accessControlAllowOriginList: "*"
+      traefik.http.middlewares.assetbee-site-cors.headers.accessControlAllowHeaders: "Origin, X-Requested-With, Content-Type, Accept, Authorization"
+      traefik.http.middlewares.assetbee-site-cors.headers.accessControlExposeHeaders: "Content-Length, Content-Range"
+      traefik.http.middlewares.assetbee-site-cors.headers.accesscontrolallowmethods: "GET,OPTIONS,PUT,POST,DELETE,HEAD"
+      traefik.http.routers.assetbee-site.middlewares: "assetbee-site-cors,add-headers"
+      traefik.http.middlewares.add-headers.headers.customrequestheaders.X-Forwarded-For: "{clientIP}"
+      traefik.http.middlewares.add-headers.headers.customrequestheaders.X-Real-IP: "{clientIP}"
+
+    # TODO: Fix healthcheck
+    #healthcheck:
+    #  test:
+    #    [
+    #      "CMD",
+    #      "exit 0 ",
+    #    ]
+    #  interval: 30s
+    #  timeout: 5s
+    #  retries: 5
+    #  start_period: 60s
+
+
+  # ============================================================
+  # Queue Worker
+  # ============================================================
 
   queue:
     <<: *app
+
     environment:
       <<: *app-env
       CONTAINER_ROLE: queue
       RUN_MIGRATIONS: "false"
-    depends_on:
-      app:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
+
+  #    depends_on:
+  #      app:
+  #        condition: service_healthy
+
+
+  # ============================================================
+  # Scheduler
+  # ============================================================
 
   scheduler:
     <<: *app
+
     environment:
       <<: *app-env
       CONTAINER_ROLE: scheduler
       RUN_MIGRATIONS: "false"
-    depends_on:
-      app:
-        condition: service_healthy
-      mariadb:
-        condition: service_healthy
+
+  #    depends_on:
+  #      app:
+  #        condition: service_healthy
+
+
+  # ============================================================
+  # Redis
+  #
+  # Enable with:
+  #   --profile with-redis
+  # ============================================================
 
   redis:
     image: redis:7-alpine
+
+    profiles:
+      - with-redis
+
     restart: unless-stopped
+
     command:
       - redis-server
       - --appendonly
@@ -163,28 +161,50 @@ services:
       - ${REDIS_MAXMEMORY:-256mb}
       - --maxmemory-policy
       - allkeys-lru
+
     volumes:
       - redis_data:/data
+
     networks:
-      - internal
+      - traefik_default
+
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test:
+        - CMD
+        - redis-cli
+        - ping
       interval: 10s
       timeout: 5s
       retries: 5
 
+
+  # ============================================================
+  # MariaDB
+  #
+  # Enable with:
+  #   --profile with-sql
+  # ============================================================
+
   mariadb:
     image: mariadb:11
+
+    profiles:
+      - with-sql
+
     restart: unless-stopped
+
     environment:
       MYSQL_DATABASE: ${DB_DATABASE:-assetbee}
       MYSQL_USER: ${DB_USERNAME:-assetbee}
       MYSQL_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
       MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:?DB_ROOT_PASSWORD is required}
+
     volumes:
       - mariadb_data:/var/lib/mysql
+
     networks:
-      - internal
+      - traefik_default
+
     healthcheck:
       test:
         [
@@ -198,18 +218,25 @@ services:
       retries: 10
       start_period: 30s
 
+
+# ==============================================================
+# Networks
+# ==============================================================
+
 networks:
-  proxy:
-    name: assetbee_proxy
-    driver: bridge
-  internal:
-    name: assetbee_internal
-    driver: bridge
-    internal: true
+
+  # Existing Traefik network
+  traefik_default:
+    external: true
+    name: traefik_default
+
+# ==============================================================
+# Volumes
+# ==============================================================
 
 volumes:
-  traefik_letsencrypt:
-  mariadb_data:
   redis_data:
+  mariadb_data:
   app_storage:
   app_logs:
+
