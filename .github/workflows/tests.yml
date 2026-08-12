@@ -20,6 +20,7 @@ jobs:
     env:
       APP_ENV: testing
       APP_KEY: base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+      CLOUD_HOSTED: 'true'
       DB_CONNECTION: sqlite
       DB_DATABASE: ':memory:'
       DB_URL: ''
