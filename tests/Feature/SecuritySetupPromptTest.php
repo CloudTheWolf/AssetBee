@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\User;
 use Laravel\Fortify\Features;
 use Livewire\Livewire;
 
@@ -15,6 +16,20 @@ test('users without two-factor or passkeys are prompted to set up security', fun
         ->assertOk()
         ->assertSee(__('Secure your account'))
         ->assertSee(__('Set up security'));
+});
+
+test('security setup prompt is deferred until the user has an organization', function () {
+    $user = User::factory()->create();
+
+    $this->actingAs($user);
+
+    Livewire::test('security-setup-prompt')
+        ->assertSet('show', false);
+
+    $this->get(route('organizations.create'))
+        ->assertOk()
+        ->assertSee(__('Create an organization'))
+        ->assertDontSee(__('Secure your account'));
 });
 
 test('users can dismiss the security setup prompt for the session', function () {

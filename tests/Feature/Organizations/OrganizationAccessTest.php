@@ -20,6 +20,11 @@ test('users can create an organization', function () {
 
     $this->actingAs($user);
 
+    $this->get(route('organizations.create'))
+        ->assertOk()
+        ->assertSee(__('Create organization'))
+        ->assertDontSee(__('Secure your account'));
+
     Livewire::test('pages::organizations.create')
         ->set('name', 'Bee Industries')
         ->set('google_hosted_domains', 'bee.test')

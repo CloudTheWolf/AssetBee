@@ -30,7 +30,12 @@ new class extends Component
             return;
         }
 
-        if (request()->routeIs('security.edit', 'password.confirm', 'two-factor.*')) {
+        // Finish organization onboarding before prompting for 2FA / passkeys.
+        if ($user->organizations()->doesntExist()) {
+            return;
+        }
+
+        if (request()->routeIs('security.edit', 'password.confirm', 'two-factor.*', 'organizations.create')) {
             return;
         }
 
