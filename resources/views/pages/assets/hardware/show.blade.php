@@ -537,44 +537,72 @@ new #[Title('Hardware')] class extends Component {
                 @endif
             </div>
 
-            <div class="space-y-3 border-t border-zinc-200 pt-6 dark:border-zinc-700">
-                <div class="font-medium">{{ __('Software bill of materials') }}</div>
-                @if (($sbom['status'] ?? null) === 'available')
-                    <div class="grid gap-4 sm:grid-cols-2">
-                        <div>
-                            <div>{{ data_get($sbom, 'value.format') }} {{ data_get($sbom, 'value.specVersion') }}</div>
-                            <flux:text>
-                                {{ __(':count components across :targets targets', [
+            <div class="space-y-4 border-t border-zinc-200 pt-6 dark:border-zinc-700">
+                <div>
+                    <div class="font-medium">{{ __('Software bill of materials') }}</div>
+                    @if (($sbom['status'] ?? null) === 'available')
+                        <flux:text>
+                            {{ collect([
+                                trim((string) data_get($sbom, 'value.format').' '.(string) data_get($sbom, 'value.specVersion')),
+                                __(':count components across :targets targets', [
                                     'count' => $sbomComponentCount,
                                     'targets' => count(data_get($sbom, 'value.targets', [])),
-                                ]) }}
-                            </flux:text>
-                        </div>
-                        <div>
-                            <flux:text>
-                                {{ filled(data_get($sbom, 'value.generatedAtUtc'))
-                                    ? __('Generated :when', ['when' => \Illuminate\Support\Carbon::parse(data_get($sbom, 'value.generatedAtUtc'))->timezone('UTC')->toDayDateTimeString().' UTC'])
-                                    : '—' }}
-                            </flux:text>
-                        </div>
-                    </div>
-                    <ul class="divide-y divide-zinc-200 dark:divide-zinc-700">
-                        @foreach (data_get($sbom, 'value.targets', []) as $target)
-                            <li class="py-2" wire:key="sbom-target-{{ $loop->index }}">
-                                <div class="font-medium">{{ $target['name'] ?? $target['bomRef'] ?? __('Target') }}</div>
+                                ]),
+                            ])->filter()->implode(' · ') }}
+                        </flux:text>
+                        <flux:text>
+                            {{ filled(data_get($sbom, 'value.generatedAtUtc'))
+                                ? __('Generated :when', ['when' => \Illuminate\Support\Carbon::parse(data_get($sbom, 'value.generatedAtUtc'))->timezone('UTC')->toDayDateTimeString().' UTC'])
+                                : '—' }}
+                        </flux:text>
+                    @else
+                        <flux:text>{{ data_get($sbom, 'status', '—') }}</flux:text>
+                    @endif
+                </div>
+
+                @if (($sbom['status'] ?? null) === 'available')
+                    @foreach (data_get($sbom, 'value.targets', []) as $target)
+                        @php
+                            $sbomComponents = isset($target['components']) && is_array($target['components'])
+                                ? $target['components']
+                                : [];
+                        @endphp
+                        <div class="space-y-2" wire:key="sbom-target-{{ $loop->index }}">
+                            <div>
+                                <flux:text class="font-medium">{{ $target['name'] ?? $target['bomRef'] ?? __('Target') }}</flux:text>
                                 <flux:text>
                                     {{ collect([
                                         $target['kind'] ?? null,
-                                        isset($target['components']) && is_array($target['components'])
-                                            ? __(':count components', ['count' => count($target['components'])])
-                                            : null,
+                                        __(':count components', ['count' => count($sbomComponents)]),
                                     ])->filter()->implode(' · ') }}
                                 </flux:text>
-                            </li>
-                        @endforeach
-                    </ul>
-                @else
-                    <flux:text>{{ data_get($sbom, 'status', '—') }}</flux:text>
+                            </div>
+
+                            @forelse (array_slice($sbomComponents, 0, 50) as $component)
+                                <div class="py-1" wire:key="sbom-component-{{ $loop->parent->index }}-{{ $loop->index }}">
+                                    <div>
+                                        {{ $component['name'] ?? '—' }}
+                                        @if (filled($component['version'] ?? null))
+                                            <span class="text-zinc-500 dark:text-zinc-400">{{ $component['version'] }}</span>
+                                        @endif
+                                    </div>
+                                    <flux:text>
+                                        {{ collect([
+                                            $component['type'] ?? null,
+                                            $component['publisher'] ?? null,
+                                            $component['purl'] ?? null,
+                                        ])->filter()->implode(' · ') }}
+                                    </flux:text>
+                                </div>
+                            @empty
+                                <flux:text>{{ __('No components collected.') }}</flux:text>
+                            @endforelse
+
+                            @if (count($sbomComponents) > 50)
+                                <flux:text>{{ __('And :count more…', ['count' => count($sbomComponents) - 50]) }}</flux:text>
+                            @endif
+                        </div>
+                    @endforeach
                 @endif
             </div>
         </div>

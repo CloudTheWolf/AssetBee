@@ -100,6 +100,9 @@ test('hardware show page displays collected inventory details', function () {
         ->assertSee('2026-07 Cumulative Update')
         ->assertSee(__('Software bill of materials'))
         ->assertSee('CycloneDX')
+        ->assertSee('8.1.0')
+        ->assertSee('application')
+        ->assertSee('pkg:generic/WatchGuard%20EPDR@8.1.0')
         ->assertSee(__('Recovery key stored'));
 });
 
