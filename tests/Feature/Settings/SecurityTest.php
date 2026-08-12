@@ -30,6 +30,8 @@ test('security settings page can be rendered', function () {
     $response->assertSee('No passkeys yet');
     $response->assertSee('Two-factor authentication');
     $response->assertSee('Enable 2FA');
+    $response->assertSee('Connected accounts');
+    $response->assertSee('Connect Google');
 });
 
 test('security settings page requires password confirmation when enabled', function () {

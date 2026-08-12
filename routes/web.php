@@ -11,8 +11,14 @@ Route::get('/', HomeController::class)->name('home');
 Route::middleware('guest')->group(function () {
     Route::get('auth/google/redirect', [GoogleAuthController::class, 'redirect'])
         ->name('auth.google.redirect');
-    Route::get('auth/google/callback', [GoogleAuthController::class, 'callback'])
-        ->name('auth.google.callback');
+});
+
+Route::get('auth/google/callback', [GoogleAuthController::class, 'callback'])
+    ->name('auth.google.callback');
+
+Route::middleware(['auth', 'verified', 'password.confirm'])->group(function () {
+    Route::get('auth/google/link', [GoogleAuthController::class, 'linkRedirect'])
+        ->name('auth.google.link');
 });
 
 Route::middleware(['auth', 'verified'])->group(function () {

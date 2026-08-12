@@ -1,5 +1,6 @@
 <?php
 
+use App\Actions\Auth\UnlinkGoogleAccount;
 use App\Concerns\PasswordValidationRules;
 use Flux\Flux;
 use Illuminate\Support\Facades\Auth;
@@ -40,6 +41,9 @@ new #[Title('Security settings')] class extends Component {
     #[Locked]
     public string $deletingPasskeyName = '';
 
+    #[Locked]
+    public bool $googleLinked = false;
+
     /**
      * Mount the component.
      */
@@ -61,6 +65,24 @@ new #[Title('Security settings')] class extends Component {
         if ($this->canManagePasskeys) {
             $this->loadPasskeys();
         }
+
+        $this->googleLinked = filled(auth()->user()->google_id);
+
+        if (session('status') === 'google-account-linked') {
+            Flux::toast(variant: 'success', text: __('Google account linked.'));
+        }
+    }
+
+    /**
+     * Disconnect Google from the authenticated account.
+     */
+    public function unlinkGoogle(UnlinkGoogleAccount $unlinkGoogleAccount): void
+    {
+        $unlinkGoogleAccount->handle(Auth::user());
+
+        $this->googleLinked = false;
+
+        Flux::toast(variant: 'success', text: __('Google account disconnected.'));
     }
 
     /**
@@ -306,6 +328,61 @@ new #[Title('Security settings')] class extends Component {
                 </div>
             </section>
         @endif
+
+        <section class="mt-12">
+            <flux:heading>{{ __('Connected accounts') }}</flux:heading>
+            <flux:subheading>{{ __('Link Google to sign in with your Workspace account') }}</flux:subheading>
+
+            @error('google')
+                <flux:callout variant="danger" icon="x-circle" class="mt-4" :heading="$message" />
+            @enderror
+
+            <div class="mt-6 border rounded-lg border-zinc-200 dark:border-zinc-700 overflow-hidden">
+                <div class="flex items-center justify-between gap-4 p-4">
+                    <div class="flex items-center gap-4">
+                        <div class="flex size-10 shrink-0 items-center justify-center rounded-xl bg-zinc-100 dark:bg-zinc-800">
+                            <svg class="size-5" viewBox="0 0 24 24" aria-hidden="true">
+                                <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+                                <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+                                <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
+                                <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
+                            </svg>
+                        </div>
+                        <div class="space-y-1">
+                            <p class="font-medium tracking-tight">{{ __('Google') }}</p>
+                            <flux:text class="text-xs">
+                                @if ($googleLinked)
+                                    {{ __('Connected as :email', ['email' => auth()->user()->email]) }}
+                                @else
+                                    {{ __('Not connected') }}
+                                @endif
+                            </flux:text>
+                        </div>
+                    </div>
+
+                    @if ($googleLinked)
+                        <flux:button
+                            variant="danger"
+                            size="sm"
+                            wire:click="unlinkGoogle"
+                            wire:confirm="{{ __('Disconnect Google from this account? You can still sign in with your password.') }}"
+                            data-test="unlink-google-button"
+                        >
+                            {{ __('Disconnect') }}
+                        </flux:button>
+                    @else
+                        <flux:button
+                            variant="primary"
+                            size="sm"
+                            :href="route('auth.google.link')"
+                            data-test="link-google-button"
+                        >
+                            {{ __('Connect Google') }}
+                        </flux:button>
+                    @endif
+                </div>
+            </div>
+        </section>
     </x-pages::settings.layout>
 
     <flux:modal
