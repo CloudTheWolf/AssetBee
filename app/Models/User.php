@@ -91,7 +91,7 @@ class User extends Authenticatable implements MustVerifyEmail, PasskeyUser
     }
 
     /**
-     * @return BelongsToMany<Organization, $this>
+     * @return BelongsToMany<Organization, $this, OrganizationUser>
      */
     public function organizations(): BelongsToMany
     {

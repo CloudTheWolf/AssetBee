@@ -39,11 +39,17 @@ class ImportCloudVirtualMachines
             ],
         )->validate();
 
-        $selectedIds = collect($validated['external_ids'])->unique()->values();
+        /** @var list<string> $externalIdInput */
+        $externalIdInput = array_values(array_filter(
+            $validated['external_ids'],
+            fn (mixed $id): bool => is_string($id) && $id !== '',
+        ));
+
+        $selectedIds = collect($externalIdInput)->unique()->values();
 
         $discovered = collect($this->discoverCloudVirtualMachines->handle(
             $cloudTenant,
-            $validated['region'] ?? null,
+            is_string($validated['region'] ?? null) ? $validated['region'] : null,
         ))
             ->keyBy(fn (DiscoveredCloudVirtualMachine $machine): string => $machine->externalId);
 

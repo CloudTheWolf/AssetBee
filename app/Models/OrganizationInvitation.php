@@ -3,13 +3,13 @@
 namespace App\Models;
 
 use App\Enums\OrganizationRole;
+use Carbon\CarbonImmutable;
 use Database\Factories\OrganizationInvitationFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
 
 /**
@@ -19,10 +19,10 @@ use Illuminate\Support\Str;
  * @property string $email
  * @property OrganizationRole $role
  * @property string $token
- * @property Carbon|null $accepted_at
- * @property Carbon $expires_at
- * @property Carbon|null $created_at
- * @property Carbon|null $updated_at
+ * @property CarbonImmutable|null $accepted_at
+ * @property CarbonImmutable|null $expires_at
+ * @property CarbonImmutable|null $created_at
+ * @property CarbonImmutable|null $updated_at
  */
 #[Fillable(['organization_id', 'invited_by', 'email', 'role', 'token', 'accepted_at', 'expires_at'])]
 class OrganizationInvitation extends Model
@@ -37,8 +37,8 @@ class OrganizationInvitation extends Model
     {
         return [
             'role' => OrganizationRole::class,
-            'accepted_at' => 'datetime',
-            'expires_at' => 'datetime',
+            'accepted_at' => 'immutable_datetime',
+            'expires_at' => 'immutable_datetime',
         ];
     }
 
@@ -50,7 +50,7 @@ class OrganizationInvitation extends Model
             }
 
             if ($invitation->expires_at === null) {
-                $invitation->expires_at = now()->addDays(7);
+                $invitation->expires_at = CarbonImmutable::now()->addDays(7);
             }
         });
     }

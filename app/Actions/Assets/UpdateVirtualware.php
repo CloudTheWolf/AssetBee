@@ -62,7 +62,8 @@ class UpdateVirtualware
         if (! empty($validated['host_hardware_id'])) {
             $host = Hardware::query()
                 ->where('organization_id', $virtualware->organization_id)
-                ->find($validated['host_hardware_id']);
+                ->whereKey($validated['host_hardware_id'])
+                ->first();
 
             if ($host === null || ! $host->is_vm_host || ! $host->category->canBeVmHost()) {
                 throw ValidationException::withMessages([

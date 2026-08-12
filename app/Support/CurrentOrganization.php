@@ -4,6 +4,7 @@ namespace App\Support;
 
 use App\Enums\OrganizationRole;
 use App\Models\Organization;
+use App\Models\OrganizationUser;
 use App\Models\User;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Facades\Auth;
@@ -107,11 +108,13 @@ class CurrentOrganization
             return null;
         }
 
-        $role = $membership->pivot->role;
+        $pivot = $membership->getRelation('pivot');
 
-        return $role instanceof OrganizationRole
-            ? $role
-            : OrganizationRole::from((string) $role);
+        if (! $pivot instanceof OrganizationUser) {
+            return null;
+        }
+
+        return $pivot->role;
     }
 
     public static function ensureSelected(User $user): ?Organization

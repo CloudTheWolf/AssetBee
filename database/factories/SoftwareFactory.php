@@ -22,7 +22,7 @@ class SoftwareFactory extends Factory
 
         return [
             'organization_id' => Organization::factory(),
-            'name' => fake()->words(2, true).' License',
+            'name' => fake()->word().' '.fake()->word().' License',
             'vendor' => fake()->optional()->company(),
             'license_type' => $licenseType,
             'total_seats' => $licenseType === SoftwareLicenseType::Seat ? fake()->numberBetween(5, 100) : null,

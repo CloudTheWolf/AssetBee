@@ -11,6 +11,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Validation\ValidationException;
 use Laravel\Socialite\Facades\Socialite;
+use Laravel\Socialite\Two\GoogleProvider;
 use Laravel\Socialite\Two\InvalidStateException;
 use Laravel\Socialite\Two\User;
 use Symfony\Component\HttpFoundation\RedirectResponse as SymfonyRedirectResponse;
@@ -22,12 +23,13 @@ class GoogleAuthController extends Controller
      */
     public function redirect(): SymfonyRedirectResponse
     {
-        $driver = Socialite::driver('google')
-            ->scopes(['openid', 'profile', 'email']);
+        /** @var GoogleProvider $driver */
+        $driver = Socialite::driver('google');
+        $driver->scopes(['openid', 'profile', 'email']);
 
         $hostedDomains = config('services.google.hosted_domains', []);
 
-        if (count($hostedDomains) === 1) {
+        if (is_array($hostedDomains) && count($hostedDomains) === 1) {
             $driver->with(['hd' => $hostedDomains[0]]);
         }
 

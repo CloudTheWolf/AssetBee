@@ -65,10 +65,14 @@ class SyncOrganizationGoogleDomains
             $domains = preg_split('/[\s,]+/', $domains) ?: [];
         }
 
-        return collect($domains ?? [])
+        /** @var list<string> $normalized */
+        $normalized = collect($domains ?? [])
             ->map(fn (mixed $domain): string => Str::lower(trim((string) $domain)))
-            ->filter()
+            ->filter(fn (string $domain): bool => $domain !== '')
             ->unique()
-            ->values();
+            ->values()
+            ->all();
+
+        return collect($normalized);
     }
 }

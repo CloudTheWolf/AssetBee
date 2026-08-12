@@ -37,7 +37,7 @@ class Organization extends Model
     use Billable, HasFactory;
 
     /**
-     * @return BelongsToMany<User, $this>
+     * @return BelongsToMany<User, $this, OrganizationUser>
      */
     public function users(): BelongsToMany
     {
@@ -149,11 +149,11 @@ class Organization extends Model
     public static function findByGoogleDomain(string $domain, bool $verifiedOnly = true): ?self
     {
         return static::query()
-            ->whereHas('googleDomains', function ($query) use ($domain, $verifiedOnly) {
+            ->whereHas('googleDomains', function ($query) use ($domain, $verifiedOnly): void {
                 $query->where('domain', strtolower($domain));
 
                 if ($verifiedOnly) {
-                    $query->verified();
+                    $query->whereNotNull('verified_at');
                 }
             })
             ->first();

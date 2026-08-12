@@ -30,6 +30,18 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Laravel Sail
+    |--------------------------------------------------------------------------
+    |
+    | Detects when the application is running inside a Sail container so the
+    | runtime can adjust paths that bind mounts cannot utime().
+    |
+    */
+
+    'sail' => (bool) env('LARAVEL_SAIL', false),
+
+    /*
+    |--------------------------------------------------------------------------
     | Application Debug Mode
     |--------------------------------------------------------------------------
     |

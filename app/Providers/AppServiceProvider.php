@@ -82,7 +82,7 @@ class AppServiceProvider extends ServiceProvider
      */
     private function configureSailRuntime(): void
     {
-        if (! env('LARAVEL_SAIL')) {
+        if (! (bool) config('app.sail')) {
             return;
         }
 
