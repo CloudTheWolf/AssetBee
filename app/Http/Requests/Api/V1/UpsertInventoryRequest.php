@@ -35,6 +35,7 @@ class UpsertInventoryRequest extends FormRequest
         'loginProviders',
         'antivirus',
         'updates',
+        'sbom',
     ];
 
     public function authorize(): bool
@@ -171,6 +172,26 @@ class UpsertInventoryRequest extends FormRequest
             'updates.value.*.*.installedAtUtc' => ['nullable', 'date'],
             'updates.value.*.*.kbArticle' => ['nullable', 'string', 'max:255'],
             'updates.detail' => ['nullable', 'string', 'max:1000'],
+
+            'sbom' => ['required', 'array:status,value,detail'],
+            'sbom.status' => $this->probeStatusRules(),
+            'sbom.value' => ['nullable', 'array:format,specVersion,generatedAtUtc,targets'],
+            'sbom.value.format' => ['required_if:sbom.status,available', 'string', Rule::in(['CycloneDX'])],
+            'sbom.value.specVersion' => ['required_if:sbom.status,available', 'string', 'max:50'],
+            'sbom.value.generatedAtUtc' => ['nullable', 'date'],
+            'sbom.value.targets' => ['required_if:sbom.status,available', 'array', 'max:100'],
+            'sbom.value.targets.*' => ['array:bomRef,kind,name,components'],
+            'sbom.value.targets.*.bomRef' => ['required', 'string', 'max:255'],
+            'sbom.value.targets.*.kind' => ['required', 'string', 'max:100'],
+            'sbom.value.targets.*.name' => ['required', 'string', 'max:255'],
+            'sbom.value.targets.*.components' => ['required', 'array', 'max:50000'],
+            'sbom.value.targets.*.components.*' => ['array:name,version,type,purl,publisher'],
+            'sbom.value.targets.*.components.*.name' => ['required', 'string', 'max:500'],
+            'sbom.value.targets.*.components.*.version' => ['nullable', 'string', 'max:255'],
+            'sbom.value.targets.*.components.*.type' => ['required', 'string', 'max:100'],
+            'sbom.value.targets.*.components.*.purl' => ['nullable', 'string', 'max:2000'],
+            'sbom.value.targets.*.components.*.publisher' => ['nullable', 'string', 'max:500'],
+            'sbom.detail' => ['nullable', 'string', 'max:1000'],
         ];
     }
 

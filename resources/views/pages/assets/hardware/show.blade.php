@@ -325,6 +325,13 @@ new #[Title('Hardware')] class extends Component {
             $antivirus = $this->inventoryList('antivirus');
             $installedUpdates = is_array(data_get($updates, 'value.installed')) ? data_get($updates, 'value.installed') : [];
             $availableUpdates = is_array(data_get($updates, 'value.available')) ? data_get($updates, 'value.available') : [];
+            $sbom = $this->inventoryProbe('sbom');
+            $sbomComponentCount = 0;
+            foreach (data_get($sbom, 'value.targets', []) as $target) {
+                if (is_array($target) && is_array($target['components'] ?? null)) {
+                    $sbomComponentCount += count($target['components']);
+                }
+            }
         @endphp
 
         <div class="flex flex-col gap-6 rounded-xl border border-zinc-200 p-6 dark:border-zinc-700">
@@ -527,6 +534,47 @@ new #[Title('Hardware')] class extends Component {
                             <flux:text>{{ __('And :count more…', ['count' => count($installedUpdates) - 10]) }}</flux:text>
                         @endif
                     </div>
+                @endif
+            </div>
+
+            <div class="space-y-3 border-t border-zinc-200 pt-6 dark:border-zinc-700">
+                <div class="font-medium">{{ __('Software bill of materials') }}</div>
+                @if (($sbom['status'] ?? null) === 'available')
+                    <div class="grid gap-4 sm:grid-cols-2">
+                        <div>
+                            <div>{{ data_get($sbom, 'value.format') }} {{ data_get($sbom, 'value.specVersion') }}</div>
+                            <flux:text>
+                                {{ __(':count components across :targets targets', [
+                                    'count' => $sbomComponentCount,
+                                    'targets' => count(data_get($sbom, 'value.targets', [])),
+                                ]) }}
+                            </flux:text>
+                        </div>
+                        <div>
+                            <flux:text>
+                                {{ filled(data_get($sbom, 'value.generatedAtUtc'))
+                                    ? __('Generated :when', ['when' => \Illuminate\Support\Carbon::parse(data_get($sbom, 'value.generatedAtUtc'))->timezone('UTC')->toDayDateTimeString().' UTC'])
+                                    : '—' }}
+                            </flux:text>
+                        </div>
+                    </div>
+                    <ul class="divide-y divide-zinc-200 dark:divide-zinc-700">
+                        @foreach (data_get($sbom, 'value.targets', []) as $target)
+                            <li class="py-2" wire:key="sbom-target-{{ $loop->index }}">
+                                <div class="font-medium">{{ $target['name'] ?? $target['bomRef'] ?? __('Target') }}</div>
+                                <flux:text>
+                                    {{ collect([
+                                        $target['kind'] ?? null,
+                                        isset($target['components']) && is_array($target['components'])
+                                            ? __(':count components', ['count' => count($target['components'])])
+                                            : null,
+                                    ])->filter()->implode(' · ') }}
+                                </flux:text>
+                            </li>
+                        @endforeach
+                    </ul>
+                @else
+                    <flux:text>{{ data_get($sbom, 'status', '—') }}</flux:text>
                 @endif
             </div>
         </div>
