@@ -45,6 +45,9 @@ class UpdateVirtualware
                 Rule::exists('userwares', 'id')->where('organization_id', $virtualware->organization_id),
             ],
             'notes' => ['nullable', 'string'],
+            'serial_number' => ['nullable', 'string', 'max:255'],
+            'inventory_collected_at' => ['nullable', 'date'],
+            'inventory_payload' => ['nullable', 'array'],
             ...$this->infrastructureRules(),
         ]);
 

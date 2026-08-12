@@ -19,6 +19,7 @@ use Illuminate\Support\Carbon;
  * @property string $name
  * @property VirtualwareProvider $provider
  * @property string|null $external_id
+ * @property string|null $serial_number
  * @property VirtualwareCategory $category
  * @property VirtualwareStatus $status
  * @property int|null $host_hardware_id
@@ -35,6 +36,8 @@ use Illuminate\Support\Carbon;
  * @property list<array{private_ip: string, public_ip: string|null, network_interface_id: string|null}>|null $secondary_ips
  * @property list<array{device_name?: string, volume_id?: string|null, size_gb?: int|null, volume_type?: string|null, encrypted?: bool|null, delete_on_termination?: bool|null}>|null $disks
  * @property bool|null $termination_protection
+ * @property Carbon|null $inventory_collected_at
+ * @property array<string, mixed>|null $inventory_payload
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  * @property Carbon|null $deleted_at
@@ -44,6 +47,7 @@ use Illuminate\Support\Carbon;
     'name',
     'provider',
     'external_id',
+    'serial_number',
     'category',
     'status',
     'host_hardware_id',
@@ -60,6 +64,8 @@ use Illuminate\Support\Carbon;
     'secondary_ips',
     'disks',
     'termination_protection',
+    'inventory_collected_at',
+    'inventory_payload',
 ])]
 class Virtualware extends Model
 {
@@ -80,6 +86,8 @@ class Virtualware extends Model
             'secondary_ips' => 'array',
             'disks' => 'array',
             'termination_protection' => 'boolean',
+            'inventory_collected_at' => 'datetime',
+            'inventory_payload' => 'encrypted:array',
         ];
     }
 

@@ -10,6 +10,7 @@ use App\Enums\HardwareStatus;
 use App\Models\Hardware;
 use App\Models\Userware;
 use App\Support\CurrentOrganization;
+use App\Support\SbomListing;
 use Flux\Flux;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Livewire\Attributes\Computed;
@@ -216,60 +217,7 @@ new #[Title('Hardware')] class extends Component {
     #[Computed]
     public function filteredSbomTargets(): array
     {
-        $sbom = $this->inventoryProbe('sbom');
-
-        if (($sbom['status'] ?? null) !== 'available') {
-            return [];
-        }
-
-        $search = mb_strtolower(trim($this->sbomSearch));
-        $displayLimit = 500;
-        $targets = [];
-
-        foreach (data_get($sbom, 'value.targets', []) as $target) {
-            if (! is_array($target)) {
-                continue;
-            }
-
-            $components = isset($target['components']) && is_array($target['components'])
-                ? array_values(array_filter($target['components'], fn (mixed $component): bool => is_array($component)))
-                : [];
-
-            if ($search !== '') {
-                $components = array_values(array_filter(
-                    $components,
-                    function (array $component) use ($search, $target): bool {
-                        $haystack = mb_strtolower(implode(' ', array_filter([
-                            $target['name'] ?? null,
-                            $target['kind'] ?? null,
-                            $target['bomRef'] ?? null,
-                            $target['image'] ?? null,
-                            $component['name'] ?? null,
-                            $component['version'] ?? null,
-                            $component['type'] ?? null,
-                            $component['publisher'] ?? null,
-                            $component['purl'] ?? null,
-                        ], fn (mixed $value): bool => filled($value))));
-
-                        return str_contains($haystack, $search);
-                    },
-                ));
-            }
-
-            $matchingCount = count($components);
-
-            if ($matchingCount === 0) {
-                continue;
-            }
-
-            $targets[] = [
-                'target' => $target,
-                'components' => array_slice($components, 0, $displayLimit),
-                'matchingCount' => $matchingCount,
-            ];
-        }
-
-        return $targets;
+        return SbomListing::filteredTargets($this->inventoryProbe('sbom'), $this->sbomSearch);
     }
 
     protected function formatBytes(mixed $bytes): string
@@ -390,12 +338,7 @@ new #[Title('Hardware')] class extends Component {
             $installedUpdates = is_array(data_get($updates, 'value.installed')) ? data_get($updates, 'value.installed') : [];
             $availableUpdates = is_array(data_get($updates, 'value.available')) ? data_get($updates, 'value.available') : [];
             $sbom = $this->inventoryProbe('sbom');
-            $sbomComponentCount = 0;
-            foreach (data_get($sbom, 'value.targets', []) as $target) {
-                if (is_array($target) && is_array($target['components'] ?? null)) {
-                    $sbomComponentCount += count($target['components']);
-                }
-            }
+            $sbomComponentCount = SbomListing::componentCount($sbom);
         @endphp
 
         <div class="flex flex-col gap-6 rounded-xl border border-zinc-200 p-6 dark:border-zinc-700">

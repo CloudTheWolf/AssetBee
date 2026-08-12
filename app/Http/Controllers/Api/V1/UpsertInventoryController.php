@@ -3,15 +3,21 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Actions\Assets\CreateHardware;
+use App\Actions\Assets\CreateVirtualware;
 use App\Actions\Assets\UpdateHardware;
+use App\Actions\Assets\UpdateVirtualware;
 use App\Enums\BitLockerStatus;
 use App\Enums\HardwareCategory;
 use App\Enums\HardwareOperatingSystem;
 use App\Enums\HardwareStatus;
+use App\Enums\VirtualwareCategory;
+use App\Enums\VirtualwareProvider;
+use App\Enums\VirtualwareStatus;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\V1\UpsertInventoryRequest;
 use App\Models\Hardware;
 use App\Models\Organization;
+use App\Models\Virtualware;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
 
@@ -21,10 +27,39 @@ class UpsertInventoryController extends Controller
         UpsertInventoryRequest $request,
         CreateHardware $createHardware,
         UpdateHardware $updateHardware,
+        CreateVirtualware $createVirtualware,
+        UpdateVirtualware $updateVirtualware,
     ): JsonResponse {
         /** @var Organization $organization */
         $organization = $request->attributes->get('organization');
         $payload = $request->validated();
+
+        if (($payload['type'] ?? null) === 'virtualware') {
+            return $this->upsertVirtualware(
+                $organization,
+                $payload,
+                $createVirtualware,
+                $updateVirtualware,
+            );
+        }
+
+        return $this->upsertHardware(
+            $organization,
+            $payload,
+            $createHardware,
+            $updateHardware,
+        );
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     */
+    private function upsertHardware(
+        Organization $organization,
+        array $payload,
+        CreateHardware $createHardware,
+        UpdateHardware $updateHardware,
+    ): JsonResponse {
         $serialNumber = trim((string) data_get($payload, 'serialNumber.value'));
 
         /** @var array{0: Hardware, 1: bool} $result */
@@ -66,6 +101,55 @@ class UpsertInventoryController extends Controller
                 'storageGb' => $hardware->storage_gb,
                 'bitlockerStatus' => $hardware->bitlocker_status?->value,
                 'collectedAtUtc' => $hardware->inventory_collected_at?->toIso8601String(),
+            ],
+        ], $created ? 201 : 200);
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     */
+    private function upsertVirtualware(
+        Organization $organization,
+        array $payload,
+        CreateVirtualware $createVirtualware,
+        UpdateVirtualware $updateVirtualware,
+    ): JsonResponse {
+        $serialNumber = trim((string) data_get($payload, 'serialNumber.value'));
+
+        /** @var array{0: Virtualware, 1: bool} $result */
+        $result = DB::transaction(function () use (
+            $organization,
+            $payload,
+            $serialNumber,
+            $createVirtualware,
+            $updateVirtualware,
+        ): array {
+            $virtualware = $organization->virtualwares()
+                ->where('serial_number', $serialNumber)
+                ->lockForUpdate()
+                ->first();
+
+            $attributes = $this->virtualwareAttributes($payload, $virtualware);
+
+            if ($virtualware === null) {
+                return [$createVirtualware->handle($organization, $attributes), true];
+            }
+
+            return [$updateVirtualware->handle($virtualware, $attributes), false];
+        }, attempts: 3);
+
+        [$virtualware, $created] = $result;
+
+        return response()->json([
+            'data' => [
+                'id' => $virtualware->id,
+                'type' => 'virtualware',
+                'name' => $virtualware->name,
+                'category' => $virtualware->category->value,
+                'serialNumber' => $virtualware->serial_number,
+                'provider' => $virtualware->provider->value,
+                'status' => $virtualware->status->value,
+                'collectedAtUtc' => $virtualware->inventory_collected_at?->toIso8601String(),
             ],
         ], $created ? 201 : 200);
     }
@@ -155,6 +239,38 @@ class UpsertInventoryController extends Controller
         }
 
         return $attributes;
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     * @return array<string, mixed>
+     */
+    private function virtualwareAttributes(array $payload, ?Virtualware $virtualware): array
+    {
+        return [
+            'name' => trim((string) data_get($payload, 'deviceName.value')),
+            'provider' => $virtualware?->provider ?? VirtualwareProvider::Other,
+            'external_id' => $virtualware?->external_id,
+            'serial_number' => trim((string) data_get($payload, 'serialNumber.value')),
+            'category' => $virtualware?->category ?? VirtualwareCategory::Vm,
+            'status' => $virtualware === null ? VirtualwareStatus::Running : $virtualware->status,
+            'host_hardware_id' => $virtualware?->host_hardware_id,
+            'cloud_tenant_id' => $virtualware?->cloud_tenant_id,
+            'assigned_userware_id' => $virtualware?->assigned_userware_id,
+            'notes' => $virtualware?->notes,
+            'region' => $virtualware?->region,
+            'instance_type' => $virtualware?->instance_type,
+            'private_ip' => $virtualware?->private_ip,
+            'public_ip' => $virtualware?->public_ip,
+            'availability_zone' => $virtualware?->availability_zone,
+            'subnet_id' => $virtualware?->subnet_id,
+            'vpc_id' => $virtualware?->vpc_id,
+            'secondary_ips' => $virtualware?->secondary_ips,
+            'disks' => $virtualware?->disks,
+            'termination_protection' => $virtualware?->termination_protection,
+            'inventory_collected_at' => $payload['collectedAtUtc'],
+            'inventory_payload' => $payload,
+        ];
     }
 
     /**

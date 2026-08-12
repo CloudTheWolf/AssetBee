@@ -5,6 +5,7 @@ use App\Enums\HardwareOperatingSystem;
 use App\Models\Hardware;
 use App\Models\Organization;
 use App\Models\OrganizationApiKey;
+use App\Models\Virtualware;
 use Illuminate\Support\Facades\DB;
 use Livewire\Livewire;
 
@@ -68,7 +69,7 @@ test('inventory endpoint creates encrypted organization-scoped hardware', functi
         ->and($apiKey->fresh()?->last_used_at)->not->toBeNull();
 });
 
-test('inventory endpoint accepts virtualware payloads as hardware assets', function () {
+test('inventory endpoint creates virtualware assets for virtualware payloads', function () {
     $organization = Organization::factory()->create();
     [, $plainTextKey] = OrganizationApiKey::issue($organization, 'Collector');
 
@@ -121,14 +122,20 @@ test('inventory endpoint accepts virtualware payloads as hardware assets', funct
             ],
         ]))
         ->assertCreated()
-        ->assertJsonPath('data.type', 'hardware')
-        ->assertJsonPath('data.name', 'UKMICHAELH25');
+        ->assertJsonPath('data.type', 'virtualware')
+        ->assertJsonPath('data.name', 'UKMICHAELH25')
+        ->assertJsonPath('data.category', 'vm')
+        ->assertJsonPath('data.provider', 'other')
+        ->assertJsonPath('data.serialNumber', 'PF5FH9HR');
 
-    $hardware = Hardware::query()->sole();
+    expect(Hardware::query()->count())->toBe(0);
 
-    expect($hardware->organization_id)->toBe($organization->id)
-        ->and(data_get($hardware->inventory_payload, 'type'))->toBe('virtualware')
-        ->and(data_get($hardware->inventory_payload, 'sbom.value.targets.1.image'))
+    $virtualware = Virtualware::query()->sole();
+
+    expect($virtualware->organization_id)->toBe($organization->id)
+        ->and($virtualware->serial_number)->toBe('PF5FH9HR')
+        ->and(data_get($virtualware->inventory_payload, 'type'))->toBe('virtualware')
+        ->and(data_get($virtualware->inventory_payload, 'sbom.value.targets.1.image'))
         ->toBe('cloudthewolf/assetbee-site:main');
 });
 
@@ -215,6 +222,72 @@ test('hardware show page sbom list is searchable', function () {
         ->assertSee(__('No components match your search.'));
 
     expect($component->instance()->filteredSbomTargets)->toBeEmpty();
+});
+
+test('virtualware show page displays searchable sbom inventory', function () {
+    [, $organization] = actingAsOrganizationMember();
+    [, $plainTextKey] = OrganizationApiKey::issue($organization, 'Collector');
+
+    $this->withToken($plainTextKey)
+        ->postJson('/api/v1/inventory', inventoryPayload([
+            'type' => 'virtualware',
+            'platform' => 'linux',
+            'hardwareType' => [
+                'status' => 'unsupported',
+                'value' => null,
+                'detail' => 'Virtualization detected: qemu.',
+            ],
+            'sbom' => [
+                'status' => 'available',
+                'value' => [
+                    'format' => 'CycloneDX',
+                    'specVersion' => '1.6',
+                    'generatedAtUtc' => '2026-08-12T19:06:49.2102776+00:00',
+                    'targets' => [
+                        [
+                            'bomRef' => 'host',
+                            'kind' => 'host',
+                            'name' => 'c4',
+                            'components' => [
+                                [
+                                    'name' => 'bash',
+                                    'version' => '5.2.37-2',
+                                    'type' => 'library',
+                                    'purl' => 'pkg:deb/bash@5.2.37-2',
+                                ],
+                                [
+                                    'name' => 'openssl',
+                                    'version' => '3.0.2',
+                                    'type' => 'library',
+                                    'purl' => 'pkg:deb/openssl@3.0.2',
+                                ],
+                            ],
+                        ],
+                    ],
+                ],
+            ],
+        ]))
+        ->assertCreated();
+
+    $virtualware = Virtualware::query()->sole();
+
+    $this->get(route('assets.virtualware.show', $virtualware))
+        ->assertOk()
+        ->assertSee(__('Collected inventory'))
+        ->assertSee(__('Software bill of materials'))
+        ->assertSee('CycloneDX')
+        ->assertSee('bash')
+        ->assertSee(__('Search SBOM components…'));
+
+    $component = Livewire::test('pages::assets.virtualware.show', ['virtualware' => $virtualware])
+        ->assertSee('bash')
+        ->assertSee('openssl')
+        ->set('sbomSearch', 'openssl');
+
+    expect($component->instance()->filteredSbomTargets)
+        ->toHaveCount(1)
+        ->and($component->instance()->filteredSbomTargets[0]['matchingCount'])->toBe(1)
+        ->and($component->instance()->filteredSbomTargets[0]['components'][0]['name'])->toBe('openssl');
 });
 
 test('inventory endpoint updates by serial number within the api key organization', function () {
