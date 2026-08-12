@@ -83,7 +83,16 @@ RUN mkdir -p \
         bootstrap/cache \
     && chown -R appuser:appuser storage bootstrap/cache \
     && APP_ENV=production APP_KEY=base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA= \
-        php artisan package:discover --ansi
+        php artisan package:discover --ansi \
+    && APP_ENV=production APP_KEY=base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA= \
+        php artisan event:cache --ansi \
+    && APP_ENV=production APP_KEY=base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA= \
+        php artisan route:cache --ansi \
+    && APP_ENV=production APP_KEY=base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA= \
+        php artisan view:cache --ansi \
+    && APP_ENV=production APP_KEY=base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA= \
+        php artisan storage:link --force --ansi \
+    && chown -R appuser:appuser storage bootstrap/cache public/storage
 
 USER appuser
 

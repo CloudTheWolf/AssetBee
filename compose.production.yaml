@@ -74,6 +74,14 @@ services:
       CONTAINER_ROLE: app
       RUN_MIGRATIONS: ${RUN_MIGRATIONS:-true}
 
+    depends_on:
+      mariadb:
+        condition: service_healthy
+        required: false
+      redis:
+        condition: service_healthy
+        required: false
+
     networks:
       - traefik_default
 
@@ -91,17 +99,18 @@ services:
       traefik.http.middlewares.add-headers.headers.customrequestheaders.X-Forwarded-For: "{clientIP}"
       traefik.http.middlewares.add-headers.headers.customrequestheaders.X-Real-IP: "{clientIP}"
 
-    # TODO: Fix healthcheck
-    #healthcheck:
-    #  test:
-    #    [
-    #      "CMD",
-    #      "exit 0 ",
-    #    ]
-    #  interval: 30s
-    #  timeout: 5s
-    #  retries: 5
-    #  start_period: 60s
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "php",
+          "-r",
+          "exit(@file_get_contents('http://127.0.0.1:8000/up') === false ? 1 : 0);",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
 
 
   # ============================================================
@@ -116,9 +125,15 @@ services:
       CONTAINER_ROLE: queue
       RUN_MIGRATIONS: "false"
 
-  #    depends_on:
-  #      app:
-  #        condition: service_healthy
+    depends_on:
+      app:
+        condition: service_healthy
+      mariadb:
+        condition: service_healthy
+        required: false
+      redis:
+        condition: service_healthy
+        required: false
 
 
   # ============================================================
@@ -133,9 +148,15 @@ services:
       CONTAINER_ROLE: scheduler
       RUN_MIGRATIONS: "false"
 
-  #    depends_on:
-  #      app:
-  #        condition: service_healthy
+    depends_on:
+      app:
+        condition: service_healthy
+      mariadb:
+        condition: service_healthy
+        required: false
+      redis:
+        condition: service_healthy
+        required: false
 
 
   # ============================================================

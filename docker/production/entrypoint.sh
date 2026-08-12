@@ -6,16 +6,36 @@ run_migrations="${RUN_MIGRATIONS:-false}"
 
 echo "AssetBee: starting container (role=${role})"
 
+# Config must be cached at runtime so container env vars are applied.
+# Route/view/event caches and storage:link are baked into the image.
 php artisan config:cache --ansi
-php artisan route:cache --ansi
-php artisan view:cache --ansi
-php artisan event:cache --ansi 2>/dev/null || true
 
-if [[ ! -L public/storage ]]; then
-    php artisan storage:link --ansi --force 2>/dev/null || true
-fi
+wait_for_database() {
+    local max_attempts="${DB_WAIT_ATTEMPTS:-30}"
+    local sleep_seconds="${DB_WAIT_SLEEP:-2}"
+    local attempt=1
+
+    echo "AssetBee: waiting for database"
+
+    while (( attempt <= max_attempts )); do
+        if php artisan db:show --quiet >/dev/null 2>&1; then
+            echo "AssetBee: database is ready"
+
+            return 0
+        fi
+
+        echo "AssetBee: database not ready (attempt ${attempt}/${max_attempts})"
+        sleep "${sleep_seconds}"
+        attempt=$((attempt + 1))
+    done
+
+    echo "AssetBee: database did not become ready in time" >&2
+
+    return 1
+}
 
 if [[ "${run_migrations}" == "true" && "${role}" == "app" ]]; then
+    wait_for_database
     echo "AssetBee: running database migrations"
     php artisan migrate --force --ansi
 fi
