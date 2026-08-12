@@ -6,9 +6,12 @@ run_migrations="${RUN_MIGRATIONS:-false}"
 
 echo "AssetBee: starting container (role=${role})"
 
-# Config must be cached at runtime so container env vars are applied.
-# Route/view/event caches and storage:link are baked into the image.
+# Config + routes must be cached at runtime so container env vars (especially
+# APP_KEY) are applied. Livewire serves JS from /livewire-{hash}/… where the
+# hash is derived from APP_KEY; a build-time route cache with a dummy key 404s.
+# View/event caches and storage:link remain baked into the image.
 php artisan config:cache --ansi
+php artisan route:cache --ansi
 
 wait_for_database() {
     local max_attempts="${DB_WAIT_ATTEMPTS:-30}"

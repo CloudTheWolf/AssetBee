@@ -87,12 +87,14 @@ RUN mkdir -p \
     && APP_ENV=production APP_KEY=base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA= \
         php artisan event:cache --ansi \
     && APP_ENV=production APP_KEY=base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA= \
-        php artisan route:cache --ansi \
-    && APP_ENV=production APP_KEY=base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA= \
         php artisan view:cache --ansi \
     && APP_ENV=production APP_KEY=base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA= \
         php artisan storage:link --force --ansi \
     && chown -R appuser:appuser storage bootstrap/cache public/storage
+
+# Route cache is built at container start (see entrypoint). Livewire endpoint
+# paths are derived from APP_KEY, so baking route:cache here with a dummy key
+# makes /livewire-*/livewire.min.js 404 in production.
 
 USER appuser
 
