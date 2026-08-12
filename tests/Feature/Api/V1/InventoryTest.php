@@ -67,17 +67,68 @@ test('inventory endpoint creates encrypted organization-scoped hardware', functi
         ->and($apiKey->fresh()?->last_used_at)->not->toBeNull();
 });
 
-test('inventory endpoint rejects virtualware payloads for now', function () {
+test('inventory endpoint accepts virtualware payloads as hardware assets', function () {
     $organization = Organization::factory()->create();
     [, $plainTextKey] = OrganizationApiKey::issue($organization, 'Collector');
 
     $this->withToken($plainTextKey)
         ->postJson('/api/v1/inventory', inventoryPayload([
             'type' => 'virtualware',
-            'hardwareType' => ['status' => 'unavailable', 'value' => null],
+            'platform' => 'linux',
+            'hardwareType' => [
+                'status' => 'unsupported',
+                'value' => null,
+                'detail' => 'Virtualization detected: qemu.',
+            ],
+            'sbom' => [
+                'status' => 'available',
+                'value' => [
+                    'format' => 'CycloneDX',
+                    'specVersion' => '1.6',
+                    'generatedAtUtc' => '2026-08-12T19:06:49.2102776+00:00',
+                    'targets' => [
+                        [
+                            'bomRef' => 'host',
+                            'kind' => 'host',
+                            'name' => 'c4',
+                            'components' => [
+                                [
+                                    'name' => 'bash',
+                                    'version' => '5.2.37-2',
+                                    'type' => 'library',
+                                    'purl' => 'pkg:deb/bash@5.2.37-2',
+                                ],
+                            ],
+                        ],
+                        [
+                            'bomRef' => 'container:643b4718eccf',
+                            'kind' => 'container',
+                            'name' => 'assetbee-queue-1',
+                            'image' => 'cloudthewolf/assetbee-site:main',
+                            'containerId' => '643b4718eccf',
+                            'components' => [
+                                [
+                                    'name' => 'curl',
+                                    'version' => '7.88.1-10',
+                                    'type' => 'library',
+                                    'purl' => 'pkg:deb/curl@7.88.1-10',
+                                ],
+                            ],
+                        ],
+                    ],
+                ],
+            ],
         ]))
-        ->assertUnprocessable()
-        ->assertJsonValidationErrors(['type']);
+        ->assertCreated()
+        ->assertJsonPath('data.type', 'hardware')
+        ->assertJsonPath('data.name', 'UKMICHAELH25');
+
+    $hardware = Hardware::query()->sole();
+
+    expect($hardware->organization_id)->toBe($organization->id)
+        ->and(data_get($hardware->inventory_payload, 'type'))->toBe('virtualware')
+        ->and(data_get($hardware->inventory_payload, 'sbom.value.targets.1.image'))
+        ->toBe('cloudthewolf/assetbee-site:main');
 });
 
 test('hardware show page displays collected inventory details', function () {

@@ -106,7 +106,7 @@ class UpsertInventoryRequest extends FormRequest
 
             'disks' => ['required', 'array:status,value,detail'],
             'disks.status' => $this->probeStatusRules(),
-            'disks.value' => ['nullable', 'array', 'max:100'],
+            'disks.value' => ['nullable', 'array', 'max:500'],
             'disks.value.*' => ['array:name,mountPoint,totalBytes,availableBytes,fileSystem'],
             'disks.value.*.name' => ['required', 'string', 'max:255'],
             'disks.value.*.mountPoint' => ['nullable', 'string', 'max:255'],
@@ -180,10 +180,12 @@ class UpsertInventoryRequest extends FormRequest
             'sbom.value.specVersion' => ['required_if:sbom.status,available', 'string', 'max:50'],
             'sbom.value.generatedAtUtc' => ['nullable', 'date'],
             'sbom.value.targets' => ['required_if:sbom.status,available', 'array', 'max:100'],
-            'sbom.value.targets.*' => ['array:bomRef,kind,name,components'],
+            'sbom.value.targets.*' => ['array:bomRef,kind,name,components,image,containerId'],
             'sbom.value.targets.*.bomRef' => ['required', 'string', 'max:255'],
             'sbom.value.targets.*.kind' => ['required', 'string', 'max:100'],
             'sbom.value.targets.*.name' => ['required', 'string', 'max:255'],
+            'sbom.value.targets.*.image' => ['nullable', 'string', 'max:500'],
+            'sbom.value.targets.*.containerId' => ['nullable', 'string', 'max:255'],
             'sbom.value.targets.*.components' => ['required', 'array', 'max:50000'],
             'sbom.value.targets.*.components.*' => ['array:name,version,type,purl,publisher'],
             'sbom.value.targets.*.components.*.name' => ['required', 'string', 'max:500'],
@@ -204,13 +206,6 @@ class UpsertInventoryRequest extends FormRequest
             function (Validator $validator): void {
                 foreach (array_diff(array_keys($this->all()), self::TOP_LEVEL_PROPERTIES) as $property) {
                     $validator->errors()->add($property, "The {$property} property is not allowed.");
-                }
-
-                if ($this->input('type') === 'virtualware') {
-                    $validator->errors()->add(
-                        'type',
-                        'Virtualware inventory ingestion is not supported yet.',
-                    );
                 }
 
                 foreach (['deviceName', 'serialNumber'] as $probe) {
