@@ -6,6 +6,7 @@ use App\Models\Hardware;
 use App\Models\Organization;
 use App\Models\OrganizationApiKey;
 use Illuminate\Support\Facades\DB;
+use Livewire\Livewire;
 
 test('inventory endpoint requires a valid organization api key', function () {
     $this->postJson('/api/v1/inventory', inventoryPayload())
@@ -154,7 +155,66 @@ test('hardware show page displays collected inventory details', function () {
         ->assertSee('8.1.0')
         ->assertSee('application')
         ->assertSee('pkg:generic/WatchGuard%20EPDR@8.1.0')
+        ->assertSee(__('Search SBOM components…'))
         ->assertSee(__('Recovery key stored'));
+});
+
+test('hardware show page sbom list is searchable', function () {
+    [, $organization] = actingAsOrganizationMember();
+    [, $plainTextKey] = OrganizationApiKey::issue($organization, 'Collector');
+
+    $this->withToken($plainTextKey)
+        ->postJson('/api/v1/inventory', inventoryPayload([
+            'sbom' => [
+                'status' => 'available',
+                'value' => [
+                    'format' => 'CycloneDX',
+                    'specVersion' => '1.6',
+                    'generatedAtUtc' => '2026-08-11T14:44:20+00:00',
+                    'targets' => [
+                        [
+                            'bomRef' => 'host',
+                            'kind' => 'host',
+                            'name' => 'UKMICHAELH25',
+                            'components' => [
+                                [
+                                    'name' => 'WatchGuard EPDR',
+                                    'version' => '8.1.0',
+                                    'type' => 'application',
+                                    'purl' => 'pkg:generic/WatchGuard%20EPDR@8.1.0',
+                                    'publisher' => 'WatchGuard',
+                                ],
+                                [
+                                    'name' => 'openssl',
+                                    'version' => '3.0.2',
+                                    'type' => 'library',
+                                    'purl' => 'pkg:deb/debian/openssl@3.0.2',
+                                    'publisher' => 'Debian',
+                                ],
+                            ],
+                        ],
+                    ],
+                ],
+            ],
+        ]))
+        ->assertCreated();
+
+    $hardware = Hardware::query()->sole();
+
+    $component = Livewire::test('pages::assets.hardware.show', ['hardware' => $hardware])
+        ->assertSee('WatchGuard EPDR')
+        ->assertSee('openssl')
+        ->set('sbomSearch', 'openssl');
+
+    expect($component->instance()->filteredSbomTargets)
+        ->toHaveCount(1)
+        ->and($component->instance()->filteredSbomTargets[0]['matchingCount'])->toBe(1)
+        ->and($component->instance()->filteredSbomTargets[0]['components'][0]['name'])->toBe('openssl');
+
+    $component->set('sbomSearch', 'no-such-component')
+        ->assertSee(__('No components match your search.'));
+
+    expect($component->instance()->filteredSbomTargets)->toBeEmpty();
 });
 
 test('inventory endpoint updates by serial number within the api key organization', function () {

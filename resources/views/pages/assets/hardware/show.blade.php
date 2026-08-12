@@ -55,6 +55,8 @@ new #[Title('Hardware')] class extends Component {
 
     public string $assigned_userware_id = '';
 
+    public string $sbomSearch = '';
+
     public function mount(Hardware $hardware): void
     {
         $this->authorize('view', $hardware);
@@ -206,6 +208,68 @@ new #[Title('Hardware')] class extends Component {
             $probe['value'],
             fn (mixed $item): bool => is_array($item),
         ));
+    }
+
+    /**
+     * @return list<array{target: array<string, mixed>, components: list<array<string, mixed>>, matchingCount: int}>
+     */
+    #[Computed]
+    public function filteredSbomTargets(): array
+    {
+        $sbom = $this->inventoryProbe('sbom');
+
+        if (($sbom['status'] ?? null) !== 'available') {
+            return [];
+        }
+
+        $search = mb_strtolower(trim($this->sbomSearch));
+        $displayLimit = 500;
+        $targets = [];
+
+        foreach (data_get($sbom, 'value.targets', []) as $target) {
+            if (! is_array($target)) {
+                continue;
+            }
+
+            $components = isset($target['components']) && is_array($target['components'])
+                ? array_values(array_filter($target['components'], fn (mixed $component): bool => is_array($component)))
+                : [];
+
+            if ($search !== '') {
+                $components = array_values(array_filter(
+                    $components,
+                    function (array $component) use ($search, $target): bool {
+                        $haystack = mb_strtolower(implode(' ', array_filter([
+                            $target['name'] ?? null,
+                            $target['kind'] ?? null,
+                            $target['bomRef'] ?? null,
+                            $target['image'] ?? null,
+                            $component['name'] ?? null,
+                            $component['version'] ?? null,
+                            $component['type'] ?? null,
+                            $component['publisher'] ?? null,
+                            $component['purl'] ?? null,
+                        ], fn (mixed $value): bool => filled($value))));
+
+                        return str_contains($haystack, $search);
+                    },
+                ));
+            }
+
+            $matchingCount = count($components);
+
+            if ($matchingCount === 0) {
+                continue;
+            }
+
+            $targets[] = [
+                'target' => $target,
+                'components' => array_slice($components, 0, $displayLimit),
+                'matchingCount' => $matchingCount,
+            ];
+        }
+
+        return $targets;
     }
 
     protected function formatBytes(mixed $bytes): string
@@ -561,48 +625,60 @@ new #[Title('Hardware')] class extends Component {
                 </div>
 
                 @if (($sbom['status'] ?? null) === 'available')
-                    @foreach (data_get($sbom, 'value.targets', []) as $target)
-                        @php
-                            $sbomComponents = isset($target['components']) && is_array($target['components'])
-                                ? $target['components']
-                                : [];
-                        @endphp
-                        <div class="space-y-2" wire:key="sbom-target-{{ $loop->index }}">
-                            <div>
-                                <flux:text class="font-medium">{{ $target['name'] ?? $target['bomRef'] ?? __('Target') }}</flux:text>
-                                <flux:text>
-                                    {{ collect([
-                                        $target['kind'] ?? null,
-                                        __(':count components', ['count' => count($sbomComponents)]),
-                                    ])->filter()->implode(' · ') }}
-                                </flux:text>
-                            </div>
+                    <flux:input
+                        wire:model.live.debounce.300ms="sbomSearch"
+                        :placeholder="__('Search SBOM components…')"
+                    />
 
-                            @forelse (array_slice($sbomComponents, 0, 50) as $component)
-                                <div class="py-1" wire:key="sbom-component-{{ $loop->parent->index }}-{{ $loop->index }}">
-                                    <div>
-                                        {{ $component['name'] ?? '—' }}
-                                        @if (filled($component['version'] ?? null))
-                                            <span class="text-zinc-500 dark:text-zinc-400">{{ $component['version'] }}</span>
-                                        @endif
-                                    </div>
+                    <div class="max-h-96 space-y-4 overflow-y-auto rounded-lg border border-zinc-200 p-3 dark:border-zinc-700">
+                        @forelse ($this->filteredSbomTargets as $sbomTarget)
+                            @php
+                                $target = $sbomTarget['target'];
+                                $sbomComponents = $sbomTarget['components'];
+                                $matchingCount = $sbomTarget['matchingCount'];
+                            @endphp
+                            <div class="space-y-2" wire:key="sbom-target-{{ $loop->index }}">
+                                <div>
+                                    <flux:text class="font-medium">{{ $target['name'] ?? $target['bomRef'] ?? __('Target') }}</flux:text>
                                     <flux:text>
                                         {{ collect([
-                                            $component['type'] ?? null,
-                                            $component['publisher'] ?? null,
-                                            $component['purl'] ?? null,
+                                            $target['kind'] ?? null,
+                                            filled($target['image'] ?? null) ? $target['image'] : null,
+                                            __(':count components', ['count' => $matchingCount]),
                                         ])->filter()->implode(' · ') }}
                                     </flux:text>
                                 </div>
-                            @empty
-                                <flux:text>{{ __('No components collected.') }}</flux:text>
-                            @endforelse
 
-                            @if (count($sbomComponents) > 50)
-                                <flux:text>{{ __('And :count more…', ['count' => count($sbomComponents) - 50]) }}</flux:text>
-                            @endif
-                        </div>
-                    @endforeach
+                                @foreach ($sbomComponents as $component)
+                                    <div class="py-1" wire:key="sbom-component-{{ $loop->parent->index }}-{{ $loop->index }}">
+                                        <div>
+                                            {{ $component['name'] ?? '—' }}
+                                            @if (filled($component['version'] ?? null))
+                                                <span class="text-zinc-500 dark:text-zinc-400">{{ $component['version'] }}</span>
+                                            @endif
+                                        </div>
+                                        <flux:text>
+                                            {{ collect([
+                                                $component['type'] ?? null,
+                                                $component['publisher'] ?? null,
+                                                $component['purl'] ?? null,
+                                            ])->filter()->implode(' · ') }}
+                                        </flux:text>
+                                    </div>
+                                @endforeach
+
+                                @if ($matchingCount > count($sbomComponents))
+                                    <flux:text>{{ __('Showing first :shown of :count components…', ['shown' => count($sbomComponents), 'count' => $matchingCount]) }}</flux:text>
+                                @endif
+                            </div>
+                        @empty
+                            <flux:text>
+                                {{ filled(trim($sbomSearch))
+                                    ? __('No components match your search.')
+                                    : __('No components collected.') }}
+                            </flux:text>
+                        @endforelse
+                    </div>
                 @endif
             </div>
         </div>
