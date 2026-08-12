@@ -20,6 +20,16 @@ class OrganizationGoogleDomainFactory extends Factory
         return [
             'organization_id' => Organization::factory(),
             'domain' => Str::lower(fake()->unique()->domainName()),
+            'verification_token' => OrganizationGoogleDomain::generateVerificationToken(),
+            'verified_at' => null,
+            'verification_last_checked_at' => null,
         ];
+    }
+
+    public function verified(): static
+    {
+        return $this->state(fn (): array => [
+            'verified_at' => now(),
+        ]);
     }
 }

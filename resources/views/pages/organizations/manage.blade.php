@@ -5,6 +5,7 @@ use App\Actions\Organizations\RemoveOrganizationMember;
 use App\Actions\Organizations\RevokeOrganizationInvitation;
 use App\Actions\Organizations\UpdateOrganization;
 use App\Actions\Organizations\UpdateOrganizationMemberRole;
+use App\Actions\Organizations\VerifyOrganizationGoogleDomain;
 use App\Enums\OrganizationRole;
 use App\Enums\UserAccountType;
 use App\Models\Organization;
@@ -14,6 +15,7 @@ use App\Models\User;
 use App\Support\CurrentOrganization;
 use Flux\Flux;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
+use Illuminate\Validation\ValidationException;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Title;
 use Livewire\Component;
@@ -53,7 +55,34 @@ new #[Title('Organization settings')] class extends Component
             'google_hosted_domains' => $this->google_hosted_domains,
         ]);
 
+        unset($this->organization);
+
         Flux::toast(variant: 'success', text: __('Organization updated.'));
+    }
+
+    public function verifyGoogleDomain(int $domainId, VerifyOrganizationGoogleDomain $verifyOrganizationGoogleDomain): void
+    {
+        $organization = CurrentOrganization::require();
+        $this->authorize('update', $organization);
+
+        $googleDomain = $organization->googleDomains()->findOrFail($domainId);
+
+        try {
+            $verifyOrganizationGoogleDomain->handle($googleDomain);
+        } catch (ValidationException $exception) {
+            $message = collect($exception->errors())->flatten()->first()
+                ?? __('Domain verification failed.');
+
+            Flux::toast(variant: 'danger', text: $message);
+
+            return;
+        }
+
+        unset($this->organization);
+
+        Flux::toast(variant: 'success', text: __('Domain :domain verified.', [
+            'domain' => $googleDomain->domain,
+        ]));
     }
 
     public function invite(InviteOrganizationMember $inviteOrganizationMember): void
@@ -195,9 +224,62 @@ new #[Title('Organization settings')] class extends Component
         <flux:textarea
             wire:model="google_hosted_domains"
             :label="__('Google Workspace domains')"
-            :description="__('Comma or newline separated. Users signing in from these domains can join automatically when allowed.')"
+            :description="__('Comma or newline separated. Domains must pass TXT ownership verification before users can join automatically.')"
             rows="3"
         />
+
+        @if ($this->organization->googleDomains->isNotEmpty())
+            <div class="flex flex-col gap-3">
+                <flux:heading size="sm">{{ __('Domain verification') }}</flux:heading>
+                <flux:text>
+                    {{ __('Add a DNS TXT record for each domain, then verify. Unverified domains do not auto-assign users.') }}
+                </flux:text>
+
+                <ul class="divide-y divide-zinc-200 rounded-lg border border-zinc-200 dark:divide-zinc-700 dark:border-zinc-700">
+                    @foreach ($this->organization->googleDomains as $googleDomain)
+                        <li class="flex flex-col gap-3 p-4" wire:key="google-domain-{{ $googleDomain->id }}">
+                            <div class="flex flex-wrap items-center justify-between gap-3">
+                                <div class="flex items-center gap-2">
+                                    <span class="font-medium">{{ $googleDomain->domain }}</span>
+                                    @if ($googleDomain->isVerified())
+                                        <flux:badge color="green">{{ __('Verified') }}</flux:badge>
+                                    @else
+                                        <flux:badge color="amber">{{ __('Unverified') }}</flux:badge>
+                                    @endif
+                                </div>
+
+                                @unless ($googleDomain->isVerified())
+                                    <flux:button
+                                        size="sm"
+                                        variant="primary"
+                                        wire:click="verifyGoogleDomain({{ $googleDomain->id }})"
+                                        wire:loading.attr="disabled"
+                                    >
+                                        {{ __('Verify DNS') }}
+                                    </flux:button>
+                                @endunless
+                            </div>
+
+                            @unless ($googleDomain->isVerified())
+                                <div class="rounded-lg bg-zinc-50 p-3 dark:bg-zinc-900">
+                                    <flux:text class="text-sm">{{ __('TXT record value') }}</flux:text>
+                                    <code class="mt-1 block break-all text-sm">{{ $googleDomain->txtRecordValue() }}</code>
+                                    <flux:button
+                                        class="mt-2"
+                                        size="sm"
+                                        type="button"
+                                        x-on:click="navigator.clipboard.writeText(@js($googleDomain->txtRecordValue()))"
+                                    >
+                                        {{ __('Copy TXT value') }}
+                                    </flux:button>
+                                </div>
+                            @endunless
+                        </li>
+                    @endforeach
+                </ul>
+            </div>
+        @endif
+
         <div class="flex justify-end">
             <flux:button variant="primary" type="submit">{{ __('Save changes') }}</flux:button>
         </div>

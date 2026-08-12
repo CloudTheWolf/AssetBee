@@ -187,6 +187,8 @@
 
         {{ $slot }}
 
+        <livewire:security-setup-prompt />
+
         @persist('toast')
             <flux:toast.group>
                 <flux:toast />

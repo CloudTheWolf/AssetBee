@@ -62,8 +62,12 @@ test('invited users can register and join when self hosted', function () {
 
     expect($user)->not->toBeNull()
         ->and($user->account_type)->toBe(UserAccountType::Customer)
+        ->and($user->hasVerifiedEmail())->toBeFalse()
         ->and($organization->users()->where('users.id', $user->id)->exists())->toBeTrue()
         ->and($invitation->fresh()->accepted_at)->not->toBeNull();
+
+    $this->get(route('dashboard'))
+        ->assertRedirect(route('verification.notice', absolute: false));
 });
 
 test('invitation page stores pending invitation for registration', function () {

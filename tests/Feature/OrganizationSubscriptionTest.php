@@ -127,7 +127,10 @@ test('member limits include pending invitations', function () {
 
 test('member limits prevent automatic google domain joins', function () {
     [$owner, $organization] = createOrganizationMember();
-    $organization->googleDomains()->create(['domain' => 'acme.test']);
+    $organization->googleDomains()->create([
+        'domain' => 'acme.test',
+        'verified_at' => now(),
+    ]);
     OrganizationSubscription::factory()->create([
         'organization_id' => $organization->id,
         'member_limit' => 1,

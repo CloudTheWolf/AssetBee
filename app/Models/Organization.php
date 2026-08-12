@@ -141,10 +141,21 @@ class Organization extends Model
         return $this->hasMany(AssetDocument::class);
     }
 
-    public static function findByGoogleDomain(string $domain): ?self
+    /**
+     * Find an organization that has claimed a Google Workspace domain.
+     *
+     * @param  bool  $verifiedOnly  When true, only domains that passed TXT ownership verification match.
+     */
+    public static function findByGoogleDomain(string $domain, bool $verifiedOnly = true): ?self
     {
         return static::query()
-            ->whereHas('googleDomains', fn ($query) => $query->where('domain', strtolower($domain)))
+            ->whereHas('googleDomains', function ($query) use ($domain, $verifiedOnly) {
+                $query->where('domain', strtolower($domain));
+
+                if ($verifiedOnly) {
+                    $query->verified();
+                }
+            })
             ->first();
     }
 }

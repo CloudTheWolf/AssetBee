@@ -42,6 +42,19 @@ test('users joining via any linked google domain attach to the same organization
         ->and(CurrentOrganization::id())->toBe($organization->id);
 });
 
+test('unverified google domains do not auto-join users', function () {
+    Organization::factory()
+        ->withUnverifiedGoogleDomains(['acme.com'])
+        ->create();
+
+    $user = User::factory()->create([
+        'email' => 'ada@acme.com',
+    ]);
+
+    expect(app(EnsureUserOrganization::class)->handle($user))->toBeNull()
+        ->and($user->fresh()->organizations)->toHaveCount(0);
+});
+
 test('google domains cannot be claimed by two organizations', function () {
     $first = Organization::factory()->withGoogleDomains(['shared.com'])->create();
     $second = Organization::factory()->create();

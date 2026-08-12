@@ -28,18 +28,29 @@ class OrganizationFactory extends Factory
     /**
      * @param  string|array<int, string>  $domains
      */
-    public function withGoogleDomains(string|array $domains): static
+    public function withGoogleDomains(string|array $domains, bool $verified = true): static
     {
         $domains = is_array($domains) ? $domains : [$domains];
 
-        return $this->afterCreating(function (Organization $organization) use ($domains): void {
+        return $this->afterCreating(function (Organization $organization) use ($domains, $verified): void {
             foreach ($domains as $domain) {
-                OrganizationGoogleDomain::query()->create([
-                    'organization_id' => $organization->id,
-                    'domain' => Str::lower($domain),
-                ]);
+                OrganizationGoogleDomain::factory()
+                    ->for($organization)
+                    ->state([
+                        'domain' => Str::lower($domain),
+                        'verified_at' => $verified ? now() : null,
+                    ])
+                    ->create();
             }
         });
+    }
+
+    /**
+     * @param  string|array<int, string>  $domains
+     */
+    public function withUnverifiedGoogleDomains(string|array $domains): static
+    {
+        return $this->withGoogleDomains($domains, verified: false);
     }
 
     /**

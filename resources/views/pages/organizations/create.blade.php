@@ -45,7 +45,7 @@ new #[Title('Create organization')] class extends Component {
         <flux:textarea
             wire:model="google_hosted_domains"
             :label="__('Google Workspace domains')"
-            :description="__('Optional. Comma or newline separated. Users signing in from these domains join automatically.')"
+            :description="__('Optional. Comma or newline separated. After creating the organization, verify each domain with a DNS TXT record before users can join automatically.')"
             placeholder="example.com, example.org"
             rows="3"
         />

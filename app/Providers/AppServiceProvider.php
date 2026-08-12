@@ -3,14 +3,18 @@
 namespace App\Providers;
 
 use App\Contracts\Cloud\DiscoversCloudVirtualMachines;
+use App\Contracts\DomainDnsLookup;
 use App\Models\Organization;
 use App\Services\Cloud\AwsEc2DiscoveryService;
 use App\Services\Cloud\CloudVirtualMachineDiscoveryManager;
+use App\Services\PhpDomainDnsLookup;
 use App\Support\OrganizationSubscriptionLimits;
 use App\Support\SailRuntime;
 use App\Support\SystemAuditRecorder;
 use Carbon\CarbonImmutable;
+use Illuminate\Auth\Notifications\VerifyEmail;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
@@ -25,6 +29,8 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
+        $this->app->singleton(DomainDnsLookup::class, PhpDomainDnsLookup::class);
+
         $this->app->tag([
             AwsEc2DiscoveryService::class,
         ], DiscoversCloudVirtualMachines::class);
@@ -45,11 +51,30 @@ class AppServiceProvider extends ServiceProvider
 
         $this->configureDefaults();
         $this->configureSailRuntime();
+        $this->configureEmailVerification();
         $this->registerOrganizationSubscriptionLimits();
         $this->registerSystemAuditListeners();
 
         // Keep Livewire single-file components ASCII-only in filenames.
         config(['livewire.make_command.emoji' => false]);
+    }
+
+    /**
+     * Send a welcome email that asks new users to verify their address.
+     */
+    private function configureEmailVerification(): void
+    {
+        VerifyEmail::toMailUsing(function (object $notifiable, string $url): MailMessage {
+            $appName = config('app.name');
+
+            return (new MailMessage)
+                ->subject(__('Welcome to :app — verify your email', ['app' => $appName]))
+                ->markdown('mail.welcome-verify-email', [
+                    'url' => $url,
+                    'name' => $notifiable->name ?? __('there'),
+                    'appName' => $appName,
+                ]);
+        });
     }
 
     /**

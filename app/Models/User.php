@@ -2,10 +2,10 @@
 
 namespace App\Models;
 
-// use Illuminate\Contracts\Auth\MustVerifyEmail;
 use App\Enums\UserAccountType;
 use App\Support\CloudMode;
 use Database\Factories\UserFactory;
+use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -35,7 +35,7 @@ use Laravel\Fortify\TwoFactorAuthenticatable;
  */
 #[Fillable(['name', 'email', 'password', 'google_id', 'email_verified_at'])]
 #[Hidden(['password', 'two_factor_secret', 'two_factor_recovery_codes', 'remember_token'])]
-class User extends Authenticatable implements PasskeyUser
+class User extends Authenticatable implements MustVerifyEmail, PasskeyUser
 {
     /** @use HasFactory<UserFactory> */
     use HasFactory, Notifiable, PasskeyAuthenticatable, TwoFactorAuthenticatable;
@@ -79,6 +79,15 @@ class User extends Authenticatable implements PasskeyUser
     public function hasSystemAccess(): bool
     {
         return $this->isSystem() && CloudMode::enabled();
+    }
+
+    /**
+     * Whether the user has configured two-factor authentication or a passkey/security key.
+     */
+    public function hasConfiguredSecurity(): bool
+    {
+        return $this->hasEnabledTwoFactorAuthentication()
+            || $this->passkeys()->exists();
     }
 
     /**

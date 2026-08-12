@@ -45,7 +45,11 @@ class SyncOrganizationGoogleDomains
             ->delete();
 
         foreach ($normalized as $domain) {
-            $organization->googleDomains()->firstOrCreate(['domain' => $domain]);
+            $organization->googleDomains()->firstOrCreate(
+                ['domain' => $domain],
+                // New claims start unverified; existing rows keep their token / verified_at.
+                [],
+            );
         }
 
         return $normalized;
