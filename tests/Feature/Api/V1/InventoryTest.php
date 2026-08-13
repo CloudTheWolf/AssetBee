@@ -330,6 +330,50 @@ test('hardware show page sbom list is searchable', function () {
     expect($component->instance()->filteredSbomTargets)->toBeEmpty();
 });
 
+test('hardware show page renders all installed updates in a scrollable list', function () {
+    [, $organization] = actingAsOrganizationMember();
+    [, $plainTextKey] = OrganizationApiKey::issue($organization, 'Collector');
+
+    $installed = collect(range(1, 12))->map(fn (int $index): array => [
+        'id' => 'KB50626'.str_pad((string) $index, 2, '0', STR_PAD_LEFT),
+        'title' => "Installed update {$index}",
+        'category' => 'Security Updates',
+        'installedAtUtc' => '2026-08-01T10:00:00+00:00',
+        'kbArticle' => 'KB50626'.str_pad((string) $index, 2, '0', STR_PAD_LEFT),
+    ])->all();
+
+    $this->withToken($plainTextKey)
+        ->postJson('/api/v1/inventory', inventoryPayload([
+            'updates' => [
+                'status' => 'available',
+                'value' => [
+                    'installed' => $installed,
+                    'available' => [
+                        [
+                            'id' => 'KB9999999',
+                            'title' => 'Pending security update',
+                            'category' => 'Security Updates',
+                            'kbArticle' => 'KB9999999',
+                        ],
+                    ],
+                ],
+            ],
+        ]))
+        ->assertCreated();
+
+    $hardware = Hardware::query()->sole();
+
+    $this->get(route('assets.hardware.show', $hardware))
+        ->assertOk()
+        ->assertSee(__('Installed'))
+        ->assertSee(__('Available'))
+        ->assertSee('Installed update 1')
+        ->assertSee('Installed update 12')
+        ->assertSee('Pending security update')
+        ->assertSee('max-h-96')
+        ->assertDontSee(__('And :count more…', ['count' => 2]));
+});
+
 test('inventory endpoint updates existing virtualware by name without changing type', function () {
     $organization = Organization::factory()->create();
     [, $plainTextKey] = OrganizationApiKey::issue($organization, 'Collector');

@@ -185,35 +185,36 @@
             @if ($availableUpdates !== [])
                 <div class="space-y-2">
                     <flux:text class="font-medium">{{ __('Available') }}</flux:text>
-                    @foreach ($availableUpdates as $update)
-                        <div class="py-1" wire:key="available-update-{{ $loop->index }}">
-                            <div>{{ $update['title'] ?? $update['id'] ?? '—' }}</div>
-                            <flux:text>{{ collect([$update['id'] ?? null, $update['category'] ?? null, $update['kbArticle'] ?? null])->filter()->implode(' · ') }}</flux:text>
-                        </div>
-                    @endforeach
+                    <div class="max-h-96 space-y-2 overflow-y-auto rounded-lg border border-zinc-200 p-3 dark:border-zinc-700">
+                        @foreach ($availableUpdates as $update)
+                            <div class="py-1" wire:key="available-update-{{ $loop->index }}">
+                                <div>{{ $update['title'] ?? $update['id'] ?? '—' }}</div>
+                                <flux:text>{{ collect([$update['id'] ?? null, $update['category'] ?? null, $update['kbArticle'] ?? null])->filter()->implode(' · ') }}</flux:text>
+                            </div>
+                        @endforeach
+                    </div>
                 </div>
             @endif
 
             @if ($installedUpdates !== [])
                 <div class="space-y-2">
                     <flux:text class="font-medium">{{ __('Installed') }}</flux:text>
-                    @foreach (array_slice($installedUpdates, 0, 10) as $update)
-                        <div class="py-1" wire:key="installed-update-{{ $loop->index }}">
-                            <div>{{ $update['title'] ?? $update['id'] ?? '—' }}</div>
-                            <flux:text>
-                                {{ collect([
-                                    $update['id'] ?? null,
-                                    $update['kbArticle'] ?? null,
-                                    filled($update['installedAtUtc'] ?? null)
-                                        ? \Illuminate\Support\Carbon::parse($update['installedAtUtc'])->timezone('UTC')->toFormattedDateString()
-                                        : null,
-                                ])->filter()->implode(' · ') }}
-                            </flux:text>
-                        </div>
-                    @endforeach
-                    @if (count($installedUpdates) > 10)
-                        <flux:text>{{ __('And :count more…', ['count' => count($installedUpdates) - 10]) }}</flux:text>
-                    @endif
+                    <div class="max-h-96 space-y-2 overflow-y-auto rounded-lg border border-zinc-200 p-3 dark:border-zinc-700">
+                        @foreach ($installedUpdates as $update)
+                            <div class="py-1" wire:key="installed-update-{{ $loop->index }}">
+                                <div>{{ $update['title'] ?? $update['id'] ?? '—' }}</div>
+                                <flux:text>
+                                    {{ collect([
+                                        $update['id'] ?? null,
+                                        $update['kbArticle'] ?? null,
+                                        filled($update['installedAtUtc'] ?? null)
+                                            ? \Illuminate\Support\Carbon::parse($update['installedAtUtc'])->timezone('UTC')->toFormattedDateString()
+                                            : null,
+                                    ])->filter()->implode(' · ') }}
+                                </flux:text>
+                            </div>
+                        @endforeach
+                    </div>
                 </div>
             @endif
         </div>
