@@ -6,12 +6,12 @@ use App\Actions\Assets\UpdateVirtualware;
 use App\Enums\VirtualwareCategory;
 use App\Enums\VirtualwareProvider;
 use App\Enums\VirtualwareStatus;
+use App\Livewire\Concerns\DisplaysCollectedInventory;
 use App\Models\CloudTenant;
 use App\Models\Hardware;
 use App\Models\Userware;
 use App\Models\Virtualware;
 use App\Support\CurrentOrganization;
-use App\Support\SbomListing;
 use Flux\Flux;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Livewire\Attributes\Computed;
@@ -19,7 +19,7 @@ use Livewire\Attributes\Title;
 use Livewire\Component;
 
 new #[Title('Virtualware')] class extends Component {
-    use AuthorizesRequests;
+    use AuthorizesRequests, DisplaysCollectedInventory;
 
     public Virtualware $virtualware;
 
@@ -217,25 +217,6 @@ new #[Title('Virtualware')] class extends Component {
 
         return is_array($payload) ? $payload : null;
     }
-
-    /**
-     * @return array<string, mixed>|null
-     */
-    protected function inventoryProbe(string $key): ?array
-    {
-        $probe = data_get($this->inventory, $key);
-
-        return is_array($probe) ? $probe : null;
-    }
-
-    /**
-     * @return list<array{target: array<string, mixed>, components: list<array<string, mixed>>, matchingCount: int}>
-     */
-    #[Computed]
-    public function filteredSbomTargets(): array
-    {
-        return SbomListing::filteredTargets($this->inventoryProbe('sbom'), $this->sbomSearch);
-    }
 }; ?>
 
 <div class="mx-auto flex w-full max-w-3xl flex-col gap-6">
@@ -243,7 +224,12 @@ new #[Title('Virtualware')] class extends Component {
         <flux:button size="sm" :href="route('assets.virtualware.index')" wire:navigate icon="arrow-left">{{ __('Back') }}</flux:button>
         <div>
             <flux:heading size="xl">{{ $virtualware->name }}</flux:heading>
-            <flux:text>{{ $virtualware->provider->label() }} · {{ $virtualware->category->label() }}</flux:text>
+            <flux:text>
+                {{ $virtualware->provider->label() }} · {{ $virtualware->category->label() }}
+                @if ($virtualware->inventory_collected_at)
+                    · {{ __('Inventory :when', ['when' => $virtualware->inventory_collected_at->diffForHumans()]) }}
+                @endif
+            </flux:text>
         </div>
     </div>
 
@@ -349,104 +335,9 @@ new #[Title('Virtualware')] class extends Component {
         @endcan
     </form>
 
-    @if ($this->inventory)
-        @php
-            $sbom = $this->inventoryProbe('sbom');
-            $sbomComponentCount = SbomListing::componentCount($sbom);
-        @endphp
-
-        <div class="flex flex-col gap-6 rounded-xl border border-zinc-200 p-6 dark:border-zinc-700">
-            <div>
-                <flux:heading size="lg">{{ __('Collected inventory') }}</flux:heading>
-                <flux:text>
-                    {{ __('Last collected :when', ['when' => $virtualware->inventory_collected_at?->timezone('UTC')->toDayDateTimeString().' UTC']) }}
-                    · {{ strtoupper((string) data_get($this->inventory, 'platform')) }}
-                    · {{ __('Schema :version', ['version' => data_get($this->inventory, 'schemaVersion')]) }}
-                </flux:text>
-            </div>
-
-            <div class="space-y-4 border-t border-zinc-200 pt-6 dark:border-zinc-700">
-                <div>
-                    <div class="font-medium">{{ __('Software bill of materials') }}</div>
-                    @if (($sbom['status'] ?? null) === 'available')
-                        <flux:text>
-                            {{ collect([
-                                trim((string) data_get($sbom, 'value.format').' '.(string) data_get($sbom, 'value.specVersion')),
-                                __(':count components across :targets targets', [
-                                    'count' => $sbomComponentCount,
-                                    'targets' => count(data_get($sbom, 'value.targets', [])),
-                                ]),
-                            ])->filter()->implode(' · ') }}
-                        </flux:text>
-                        <flux:text>
-                            {{ filled(data_get($sbom, 'value.generatedAtUtc'))
-                                ? __('Generated :when', ['when' => \Illuminate\Support\Carbon::parse(data_get($sbom, 'value.generatedAtUtc'))->timezone('UTC')->toDayDateTimeString().' UTC'])
-                                : '—' }}
-                        </flux:text>
-                    @else
-                        <flux:text>{{ data_get($sbom, 'status', '—') }}</flux:text>
-                    @endif
-                </div>
-
-                @if (($sbom['status'] ?? null) === 'available')
-                    <flux:input
-                        wire:model.live.debounce.300ms="sbomSearch"
-                        :placeholder="__('Search SBOM components…')"
-                    />
-
-                    <div class="max-h-96 space-y-4 overflow-y-auto rounded-lg border border-zinc-200 p-3 dark:border-zinc-700">
-                        @forelse ($this->filteredSbomTargets as $sbomTarget)
-                            @php
-                                $target = $sbomTarget['target'];
-                                $sbomComponents = $sbomTarget['components'];
-                                $matchingCount = $sbomTarget['matchingCount'];
-                            @endphp
-                            <div class="space-y-2" wire:key="sbom-target-{{ $loop->index }}">
-                                <div>
-                                    <flux:text class="font-medium">{{ $target['name'] ?? $target['bomRef'] ?? __('Target') }}</flux:text>
-                                    <flux:text>
-                                        {{ collect([
-                                            $target['kind'] ?? null,
-                                            filled($target['image'] ?? null) ? $target['image'] : null,
-                                            __(':count components', ['count' => $matchingCount]),
-                                        ])->filter()->implode(' · ') }}
-                                    </flux:text>
-                                </div>
-
-                                @foreach ($sbomComponents as $component)
-                                    <div class="py-1" wire:key="sbom-component-{{ $loop->parent->index }}-{{ $loop->index }}">
-                                        <div>
-                                            {{ $component['name'] ?? '—' }}
-                                            @if (filled($component['version'] ?? null))
-                                                <span class="text-zinc-500 dark:text-zinc-400">{{ $component['version'] }}</span>
-                                            @endif
-                                        </div>
-                                        <flux:text>
-                                            {{ collect([
-                                                $component['type'] ?? null,
-                                                $component['publisher'] ?? null,
-                                                $component['purl'] ?? null,
-                                            ])->filter()->implode(' · ') }}
-                                        </flux:text>
-                                    </div>
-                                @endforeach
-
-                                @if ($matchingCount > count($sbomComponents))
-                                    <flux:text>{{ __('Showing first :shown of :count components…', ['shown' => count($sbomComponents), 'count' => $matchingCount]) }}</flux:text>
-                                @endif
-                            </div>
-                        @empty
-                            <flux:text>
-                                {{ filled(trim($sbomSearch))
-                                    ? __('No components match your search.')
-                                    : __('No components collected.') }}
-                            </flux:text>
-                        @endforelse
-                    </div>
-                @endif
-            </div>
-        </div>
-    @endif
+    @include('pages.assets.partials.collected-inventory', [
+        'collectedAt' => $virtualware->inventory_collected_at,
+    ])
 
     @can('assign', $virtualware)
         <form wire:submit="assign" class="flex flex-col gap-4 rounded-xl border border-zinc-200 p-6 dark:border-zinc-700">

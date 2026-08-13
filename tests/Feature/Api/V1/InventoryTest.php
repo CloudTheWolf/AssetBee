@@ -1,7 +1,11 @@
 <?php
 
 use App\Enums\BitLockerStatus;
+use App\Enums\HardwareCategory;
 use App\Enums\HardwareOperatingSystem;
+use App\Enums\VirtualwareCategory;
+use App\Enums\VirtualwareProvider;
+use App\Enums\VirtualwareStatus;
 use App\Models\Hardware;
 use App\Models\Organization;
 use App\Models\OrganizationApiKey;
@@ -326,6 +330,73 @@ test('hardware show page sbom list is searchable', function () {
     expect($component->instance()->filteredSbomTargets)->toBeEmpty();
 });
 
+test('inventory endpoint updates existing virtualware by name without changing type', function () {
+    $organization = Organization::factory()->create();
+    [, $plainTextKey] = OrganizationApiKey::issue($organization, 'Collector');
+
+    $virtualware = Virtualware::factory()->create([
+        'organization_id' => $organization->id,
+        'name' => 'aws-wus-utl-iac1',
+        'provider' => VirtualwareProvider::Aws,
+        'category' => VirtualwareCategory::Vm,
+        'status' => VirtualwareStatus::Running,
+        'serial_number' => null,
+        'instance_type' => 't3.medium',
+        'private_ip' => '10.0.0.12',
+    ]);
+
+    $this->withToken($plainTextKey)
+        ->postJson('/api/v1/inventory', inventoryPayload([
+            'type' => 'virtualware',
+            'deviceName' => ['status' => 'available', 'value' => 'AWS-WUS-UTL-IAC1'],
+        ]))
+        ->assertOk()
+        ->assertJsonPath('data.id', $virtualware->id)
+        ->assertJsonPath('data.type', 'virtualware')
+        ->assertJsonPath('data.provider', 'aws')
+        ->assertJsonPath('data.name', 'aws-wus-utl-iac1')
+        ->assertJsonPath('data.serialNumber', 'PF5FH9HR');
+
+    expect(Virtualware::query()->count())->toBe(1)
+        ->and(Hardware::query()->count())->toBe(0);
+
+    $virtualware->refresh();
+
+    expect($virtualware->provider)->toBe(VirtualwareProvider::Aws)
+        ->and($virtualware->instance_type)->toBe('t3.medium')
+        ->and($virtualware->private_ip)->toBe('10.0.0.12')
+        ->and($virtualware->serial_number)->toBe('PF5FH9HR')
+        ->and(data_get($virtualware->inventory_payload, 'type'))->toBe('virtualware');
+});
+
+test('inventory endpoint updates existing hardware by name without converting type', function () {
+    $organization = Organization::factory()->create();
+    [, $plainTextKey] = OrganizationApiKey::issue($organization, 'Collector');
+
+    $hardware = Hardware::factory()->create([
+        'organization_id' => $organization->id,
+        'name' => 'UKMICHAELH25',
+        'category' => HardwareCategory::Laptop,
+        'serial_number' => null,
+        'cpu' => 'Existing CPU',
+    ]);
+
+    $this->withToken($plainTextKey)
+        ->postJson('/api/v1/inventory', inventoryPayload([
+            'type' => 'virtualware',
+        ]))
+        ->assertOk()
+        ->assertJsonPath('data.id', $hardware->id)
+        ->assertJsonPath('data.type', 'hardware')
+        ->assertJsonPath('data.name', 'UKMICHAELH25');
+
+    expect(Hardware::query()->count())->toBe(1)
+        ->and(Virtualware::query()->count())->toBe(0)
+        ->and($hardware->fresh()->cpu)->toBe('Existing CPU')
+        ->and($hardware->fresh()->category)->toBe(HardwareCategory::Laptop)
+        ->and($hardware->fresh()->serial_number)->toBe('PF5FH9HR');
+});
+
 test('virtualware show page displays searchable sbom inventory', function () {
     [, $organization] = actingAsOrganizationMember();
     [, $plainTextKey] = OrganizationApiKey::issue($organization, 'Collector');
@@ -376,6 +447,10 @@ test('virtualware show page displays searchable sbom inventory', function () {
     $this->get(route('assets.virtualware.show', $virtualware))
         ->assertOk()
         ->assertSee(__('Collected inventory'))
+        ->assertSee(__('Operating system'))
+        ->assertSee('Microsoft Windows 11 Pro')
+        ->assertSee('Intel(R) Core(TM) Ultra 7 155H')
+        ->assertSee('WatchGuard EPDR')
         ->assertSee(__('Software bill of materials'))
         ->assertSee('CycloneDX')
         ->assertSee('bash')
@@ -407,9 +482,13 @@ test('inventory endpoint updates by serial number within the api key organizatio
         ]))
         ->assertOk()
         ->assertJsonPath('data.id', $firstResponse->json('data.id'))
-        ->assertJsonPath('data.name', 'RENAMED-DEVICE');
+        ->assertJsonPath('data.name', 'UKMICHAELH25');
 
-    expect(Hardware::query()->count())->toBe(1);
+    $hardware = Hardware::query()->sole();
+
+    expect(Hardware::query()->count())->toBe(1)
+        ->and($hardware->name)->toBe('UKMICHAELH25')
+        ->and(data_get($hardware->inventory_payload, 'deviceName.value'))->toBe('RENAMED-DEVICE');
 });
 
 test('the same serial number remains isolated between organizations', function () {
