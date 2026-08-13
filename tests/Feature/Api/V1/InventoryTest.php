@@ -139,6 +139,108 @@ test('inventory endpoint creates virtualware assets for virtualware payloads', f
         ->toBe('cloudthewolf/assetbee-site:main');
 });
 
+test('inventory endpoint accepts linux virtualware payloads with container sbom details', function () {
+    $organization = Organization::factory()->create();
+    [, $plainTextKey] = OrganizationApiKey::issue($organization, 'Collector');
+    $overlayPath = '/var/lib/docker/overlay2/06c761ab2ff924afe8adbe8953f35e7c377a9b5a44fa5477dd67a3f0e4424c53/merged';
+    $execFailure = 'OCI runtime exec failed: exec failed: unable to start container process: exec: "apk": executable file not found in $PATH: unknown';
+
+    $payload = inventoryPayload([
+        'type' => 'virtualware',
+        'platform' => 'linux',
+        'hardwareType' => [
+            'status' => 'unsupported',
+            'detail' => 'Asset type was configured as virtualware.',
+        ],
+        'cpu' => [
+            'status' => 'available',
+            'value' => [
+                'model' => 'Intel(R) Xeon(R) Platinum 8259CL CPU @ 2.50GHz',
+                'logicalProcessors' => 8,
+            ],
+        ],
+        'disks' => [
+            'status' => 'available',
+            'value' => [
+                [
+                    'name' => '/',
+                    'mountPoint' => '/',
+                    'totalBytes' => 137135644672,
+                    'availableBytes' => 52187070464,
+                    'fileSystem' => 'ext4',
+                ],
+                [
+                    'name' => $overlayPath,
+                    'mountPoint' => $overlayPath,
+                    'totalBytes' => 137135644672,
+                    'availableBytes' => 52187070464,
+                    'fileSystem' => 'overlay',
+                ],
+            ],
+        ],
+        'sbom' => [
+            'status' => 'available',
+            'value' => [
+                'format' => 'CycloneDX',
+                'specVersion' => '1.6',
+                'generatedAtUtc' => '2026-08-13T07:50:04.5674951+00:00',
+                'targets' => [
+                    [
+                        'bomRef' => 'host',
+                        'kind' => 'host',
+                        'name' => 'aws-wus-utl-iac1',
+                        'components' => [
+                            [
+                                'name' => 'bash',
+                                'version' => '5.2.15-2+b13',
+                                'type' => 'library',
+                                'purl' => 'pkg:deb/bash@5.2.15-2%2Bb13',
+                            ],
+                        ],
+                    ],
+                    [
+                        'bomRef' => 'container:ae7277aefbcd',
+                        'kind' => 'container',
+                        'name' => 'flow-collector',
+                        'image' => 'elastiflow/flow-collector:6.4.2',
+                        'containerId' => 'ae7277aefbcd',
+                        'components' => [],
+                        'detail' => 'Container package inventory was unavailable from the package manager.',
+                    ],
+                    [
+                        'bomRef' => 'container:4ab3266c2739',
+                        'kind' => 'container',
+                        'name' => 'coredns',
+                        'image' => 'coredns/coredns:latest',
+                        'containerId' => '4ab3266c2739',
+                        'components' => [
+                            [
+                                'name' => $execFailure,
+                                'type' => 'library',
+                                'purl' => 'pkg:apk/'.rawurlencode($execFailure),
+                            ],
+                        ],
+                    ],
+                ],
+            ],
+        ],
+    ]);
+    unset($payload['hardwareType']['value'], $payload['cpu']['value']['physicalCores']);
+
+    $this->withToken($plainTextKey)
+        ->postJson('/api/v1/inventory', $payload)
+        ->assertCreated()
+        ->assertJsonPath('data.type', 'virtualware')
+        ->assertJsonPath('data.name', 'UKMICHAELH25');
+
+    $virtualware = Virtualware::query()->sole();
+
+    expect(data_get($virtualware->inventory_payload, 'sbom.value.targets.1.detail'))
+        ->toBe('Container package inventory was unavailable from the package manager.')
+        ->and(data_get($virtualware->inventory_payload, 'disks.value.1.mountPoint'))
+        ->toBe($overlayPath);
+});
+
 test('hardware show page displays collected inventory details', function () {
     [, $organization] = actingAsOrganizationMember();
     [, $plainTextKey] = OrganizationApiKey::issue($organization, 'Collector');
