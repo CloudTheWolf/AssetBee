@@ -2,8 +2,10 @@
 
 namespace App\Services\Soc2;
 
+use App\Enums\VirtualwareProvider;
 use App\Models\Hardware;
 use App\Models\Organization;
+use App\Models\Virtualware;
 use Carbon\CarbonInterface;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
@@ -17,12 +19,27 @@ class Soc2AuditReportBuilder
     {
         $generatedAt = now('UTC');
 
-        /** @var Collection<int, Hardware> $devices */
-        $devices = $organization->hardwares()
+        /** @var Collection<int, Hardware> $hardwareAssets */
+        $hardwareAssets = $organization->hardwares()
             ->orderBy('name')
             ->get();
 
-        $deviceReports = $devices->map(fn (Hardware $hardware): array => $this->deviceReport($hardware))->values();
+        /** @var Collection<int, Virtualware> $virtualwareAssets */
+        $virtualwareAssets = $organization->virtualwares()
+            ->with('cloudTenant')
+            ->orderBy('name')
+            ->get();
+
+        $hardwareReports = $hardwareAssets
+            ->map(fn (Hardware $hardware): array => $this->hardwareReport($hardware))
+            ->values();
+
+        $virtualwareReports = $virtualwareAssets
+            ->map(fn (Virtualware $virtualware): array => $this->virtualwareReport($virtualware))
+            ->values();
+
+        /** @var Collection<int, array<string, mixed>> $deviceReports */
+        $deviceReports = $hardwareReports->concat($virtualwareReports)->values();
 
         $controls = [
             $this->controlEncryption($deviceReports),
@@ -51,7 +68,7 @@ class Soc2AuditReportBuilder
         };
 
         return [
-            'schemaVersion' => '1.0',
+            'schemaVersion' => '1.1',
             'reportType' => 'soc2_inventory_controls',
             'generatedAtUtc' => $generatedAt->toIso8601String(),
             'organization' => [
@@ -62,6 +79,8 @@ class Soc2AuditReportBuilder
             'summary' => [
                 'overallStatus' => $overallStatus,
                 'deviceCount' => $deviceReports->count(),
+                'hardwareCount' => $hardwareReports->count(),
+                'virtualwareCount' => $virtualwareReports->count(),
                 'devicesWithInventory' => $deviceReports->whereNotNull('inventoryCollectedAtUtc')->count(),
                 'controlsPassed' => $statusCounts['pass'],
                 'controlsPartial' => $statusCounts['partial'],
@@ -69,6 +88,8 @@ class Soc2AuditReportBuilder
                 'controlsInsufficientData' => $statusCounts['insufficient_data'],
             ],
             'controls' => $controls,
+            'hardware' => $hardwareReports->all(),
+            'virtualware' => $this->groupVirtualware($virtualwareReports),
             'devices' => $deviceReports->all(),
             'disclaimer' => 'This report summarizes inventory-derived control evidence for SOC 2 Trust Services Criteria. It is not a formal SOC 2 attestation.',
         ];
@@ -88,6 +109,7 @@ class Soc2AuditReportBuilder
             'Summary',
             'Overall status: '.strtoupper((string) data_get($report, 'summary.overallStatus')),
             'Devices: '.data_get($report, 'summary.deviceCount').' total / '.data_get($report, 'summary.devicesWithInventory').' with inventory',
+            'Hardware: '.data_get($report, 'summary.hardwareCount').' | Virtualware: '.data_get($report, 'summary.virtualwareCount'),
             'Controls: '.data_get($report, 'summary.controlsPassed').' pass / '.data_get($report, 'summary.controlsPartial').' partial / '.data_get($report, 'summary.controlsFailed').' fail / '.data_get($report, 'summary.controlsInsufficientData').' insufficient data',
             '',
             'Controls',
@@ -105,13 +127,47 @@ class Soc2AuditReportBuilder
         }
 
         $lines[] = '';
-        $lines[] = 'Devices';
+        $lines[] = 'Hardware';
 
-        foreach ($report['devices'] as $device) {
+        foreach ($report['hardware'] ?? [] as $device) {
+            $lines = [...$lines, ...$this->pdfDeviceLines($device)];
+        }
+
+        if (($report['hardware'] ?? []) === []) {
             $lines[] = '';
-            $lines[] = ($device['name'] ?? 'Unknown').' ['.($device['serialNumber'] ?? 'no-serial').']';
-            $lines[] = 'Category: '.($device['category'] ?? '—').' | Inventory: '.($device['inventoryCollectedAtUtc'] ?? 'none');
-            $lines[] = 'Encryption: '.data_get($device, 'encryption.status', 'unknown').' | Antivirus enabled: '.(data_get($device, 'antivirus.enabledCount', 0)).' | Available updates: '.(data_get($device, 'updates.availableCount', 0)).' | SBOM components: '.(data_get($device, 'sbom.componentCount', 0));
+            $lines[] = 'No hardware assets.';
+        }
+
+        $lines[] = '';
+        $lines[] = 'Virtualware';
+
+        $tenantGroups = data_get($report, 'virtualware.byCloudTenant', []);
+        $ungrouped = data_get($report, 'virtualware.ungrouped', []);
+
+        if ($tenantGroups === [] && $ungrouped === []) {
+            $lines[] = '';
+            $lines[] = 'No virtualware assets.';
+        }
+
+        foreach ($tenantGroups as $group) {
+            $lines[] = '';
+            $lines[] = 'Cloud tenant external ID: '.($group['externalId'] ?? '—')
+                .' ('.strtoupper((string) ($group['provider'] ?? 'cloud'))
+                .(filled($group['cloudTenantName'] ?? null) ? ' / '.$group['cloudTenantName'] : '')
+                .')';
+
+            foreach ($group['devices'] ?? [] as $device) {
+                $lines = [...$lines, ...$this->pdfDeviceLines($device)];
+            }
+        }
+
+        if ($ungrouped !== []) {
+            $lines[] = '';
+            $lines[] = 'Other virtualware';
+
+            foreach ($ungrouped as $device) {
+                $lines = [...$lines, ...$this->pdfDeviceLines($device)];
+            }
         }
 
         $lines[] = '';
@@ -121,12 +177,89 @@ class Soc2AuditReportBuilder
     }
 
     /**
+     * @param  array<string, mixed>  $device
+     * @return list<string>
+     */
+    private function pdfDeviceLines(array $device): array
+    {
+        $lines = [
+            '',
+            ($device['name'] ?? 'Unknown').' ['.($device['serialNumber'] ?? 'no-serial').']',
+        ];
+
+        if (($device['assetType'] ?? null) === 'virtualware') {
+            $lines[] = 'Type: '.($device['type'] ?? '—')
+                .' | Provider: '.($device['provider'] ?? '—')
+                .' | Inventory: '.($device['inventoryCollectedAtUtc'] ?? 'none');
+        } else {
+            $lines[] = 'Category: '.($device['category'] ?? '—')
+                .' | Inventory: '.($device['inventoryCollectedAtUtc'] ?? 'none');
+        }
+
+        $lines[] = 'Encryption: '.data_get($device, 'encryption.status', 'unknown')
+            .' | Antivirus enabled: '.(data_get($device, 'antivirus.enabledCount', 0))
+            .' | Available updates: '.(data_get($device, 'updates.availableCount', 0))
+            .' | SBOM components: '.(data_get($device, 'sbom.componentCount', 0));
+
+        return $lines;
+    }
+
+    /**
      * @return array<string, mixed>
      */
-    private function deviceReport(Hardware $hardware): array
+    private function hardwareReport(Hardware $hardware): array
     {
         $payload = is_array($hardware->inventory_payload) ? $hardware->inventory_payload : [];
 
+        return [
+            'id' => $hardware->id,
+            'assetType' => 'hardware',
+            'name' => $hardware->name,
+            'serialNumber' => $hardware->serial_number,
+            'category' => $hardware->category->value,
+            'status' => $hardware->status->value,
+            'operatingSystem' => $hardware->operating_system?->value,
+            'inventoryCollectedAtUtc' => $hardware->inventory_collected_at?->toIso8601String(),
+            ...$this->inventoryEvidence(
+                $payload,
+                bitlockerStatus: $hardware->bitlocker_status?->value,
+                recoveryKeyStored: filled($hardware->bitlocker_recovery_key),
+            ),
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function virtualwareReport(Virtualware $virtualware): array
+    {
+        $payload = is_array($virtualware->inventory_payload) ? $virtualware->inventory_payload : [];
+
+        return [
+            'id' => $virtualware->id,
+            'assetType' => 'virtualware',
+            'name' => $virtualware->name,
+            'serialNumber' => $virtualware->serial_number,
+            'type' => $virtualware->category->value,
+            'provider' => $virtualware->provider->value,
+            'status' => $virtualware->status->value,
+            'cloudTenantId' => $virtualware->cloud_tenant_id,
+            'cloudTenantName' => $virtualware->cloudTenant?->name,
+            'cloudTenantExternalId' => $virtualware->cloudTenant?->external_id,
+            'inventoryCollectedAtUtc' => $virtualware->inventory_collected_at?->toIso8601String(),
+            ...$this->inventoryEvidence($payload),
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     * @return array<string, mixed>
+     */
+    private function inventoryEvidence(
+        array $payload,
+        ?string $bitlockerStatus = null,
+        bool $recoveryKeyStored = false,
+    ): array {
         $encryptionVolumes = $this->probeList($payload, 'diskEncryption');
         $encryptedVolumes = collect($encryptionVolumes)->filter(
             fn (array $volume): bool => str_contains(strtolower((string) ($volume['state'] ?? '')), 'encrypted'),
@@ -150,13 +283,6 @@ class Soc2AuditReportBuilder
         }
 
         return [
-            'id' => $hardware->id,
-            'name' => $hardware->name,
-            'serialNumber' => $hardware->serial_number,
-            'category' => $hardware->category->value,
-            'status' => $hardware->status->value,
-            'operatingSystem' => $hardware->operating_system?->value,
-            'inventoryCollectedAtUtc' => $hardware->inventory_collected_at?->toIso8601String(),
             'encryption' => [
                 'probeStatus' => data_get($payload, 'diskEncryption.status'),
                 'status' => match (true) {
@@ -166,8 +292,8 @@ class Soc2AuditReportBuilder
                 },
                 'volumeCount' => count($encryptionVolumes),
                 'encryptedVolumeCount' => $encryptedVolumes,
-                'bitlockerStatus' => $hardware->bitlocker_status?->value,
-                'recoveryKeyStored' => filled($hardware->bitlocker_recovery_key),
+                'bitlockerStatus' => $bitlockerStatus,
+                'recoveryKeyStored' => $recoveryKeyStored,
             ],
             'antivirus' => [
                 'probeStatus' => data_get($payload, 'antivirus.status'),
@@ -208,6 +334,48 @@ class Soc2AuditReportBuilder
                 'targetCount' => is_array(data_get($sbom, 'targets')) ? count(data_get($sbom, 'targets')) : 0,
                 'componentCount' => $componentCount,
             ],
+        ];
+    }
+
+    /**
+     * @param  Collection<int, array<string, mixed>>  $virtualwareReports
+     * @return array{byCloudTenant: list<array<string, mixed>>, ungrouped: list<array<string, mixed>>}
+     */
+    private function groupVirtualware(Collection $virtualwareReports): array
+    {
+        $byExternalId = [];
+        $ungrouped = [];
+
+        foreach ($virtualwareReports as $device) {
+            $provider = VirtualwareProvider::tryFrom((string) ($device['provider'] ?? ''));
+            $externalId = $device['cloudTenantExternalId'] ?? null;
+
+            if ($provider?->isCloudProvider() && filled($externalId)) {
+                $key = (string) $externalId;
+
+                if (! isset($byExternalId[$key])) {
+                    $byExternalId[$key] = [
+                        'externalId' => $key,
+                        'provider' => $provider->value,
+                        'cloudTenantId' => $device['cloudTenantId'] ?? null,
+                        'cloudTenantName' => $device['cloudTenantName'] ?? null,
+                        'devices' => [],
+                    ];
+                }
+
+                $byExternalId[$key]['devices'][] = $device;
+
+                continue;
+            }
+
+            $ungrouped[] = $device;
+        }
+
+        ksort($byExternalId);
+
+        return [
+            'byCloudTenant' => array_values($byExternalId),
+            'ungrouped' => $ungrouped,
         ];
     }
 

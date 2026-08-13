@@ -20,4 +20,12 @@ enum VirtualwareProvider: string
             self::Other => __('Other'),
         };
     }
+
+    public function isCloudProvider(): bool
+    {
+        return match ($this) {
+            self::Aws, self::Azure, self::Gcp => true,
+            default => false,
+        };
+    }
 }
