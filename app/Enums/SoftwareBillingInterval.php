@@ -16,4 +16,13 @@ enum SoftwareBillingInterval: string
             self::Yearly => __('Yearly'),
         };
     }
+
+    public function monthsPerPeriod(): int
+    {
+        return match ($this) {
+            self::Monthly => 1,
+            self::Quarterly => 3,
+            self::Yearly => 12,
+        };
+    }
 }

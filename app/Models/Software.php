@@ -153,4 +153,20 @@ class Software extends Model
 
         return strtoupper($this->currency).' '.number_format((float) $this->billing_amount, 2);
     }
+
+    public function monthlyCost(): ?float
+    {
+        if (! $this->is_recurring || $this->billing_amount === null || $this->billing_interval === null) {
+            return null;
+        }
+
+        return round((float) $this->billing_amount / $this->billing_interval->monthsPerPeriod(), 2);
+    }
+
+    public function annualCost(): ?float
+    {
+        $monthly = $this->monthlyCost();
+
+        return $monthly === null ? null : round($monthly * 12, 2);
+    }
 }

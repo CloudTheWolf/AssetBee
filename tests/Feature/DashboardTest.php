@@ -21,5 +21,6 @@ test('authenticated organization members can visit the dashboard', function () {
     $this->get(route('dashboard'))
         ->assertOk()
         ->assertSee(__('Userware'))
-        ->assertSee(__('Hardware'));
+        ->assertSee(__('Hardware'))
+        ->assertSee(__('Est. monthly software spend'));
 });
