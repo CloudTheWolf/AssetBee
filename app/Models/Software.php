@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Enums\SoftwareBillingInterval;
 use App\Enums\SoftwareLicenseType;
+use App\Enums\SoftwareSeatManagerType;
 use App\Enums\SoftwareStatus;
 use Database\Factories\SoftwareFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
@@ -22,6 +23,9 @@ use Illuminate\Support\Carbon;
  * @property string|null $vendor
  * @property SoftwareLicenseType $license_type
  * @property int|null $total_seats
+ * @property SoftwareSeatManagerType|null $seat_manager_type
+ * @property int|null $seat_manager_userware_id
+ * @property string|null $seat_manager_department
  * @property SoftwareStatus $status
  * @property Carbon|null $expires_at
  * @property bool $is_recurring
@@ -40,6 +44,9 @@ use Illuminate\Support\Carbon;
     'vendor',
     'license_type',
     'total_seats',
+    'seat_manager_type',
+    'seat_manager_userware_id',
+    'seat_manager_department',
     'status',
     'expires_at',
     'is_recurring',
@@ -63,6 +70,7 @@ class Software extends Model
     {
         return [
             'license_type' => SoftwareLicenseType::class,
+            'seat_manager_type' => SoftwareSeatManagerType::class,
             'status' => SoftwareStatus::class,
             'expires_at' => 'date',
             'is_recurring' => 'boolean',
@@ -82,6 +90,14 @@ class Software extends Model
     }
 
     /**
+     * @return BelongsTo<Userware, $this>
+     */
+    public function seatManagerUserware(): BelongsTo
+    {
+        return $this->belongsTo(Userware::class, 'seat_manager_userware_id');
+    }
+
+    /**
      * @return HasMany<SoftwareAssignment, $this>
      */
     public function assignments(): HasMany
@@ -95,6 +111,15 @@ class Software extends Model
     public function documents(): MorphMany
     {
         return $this->morphMany(AssetDocument::class, 'documentable');
+    }
+
+    public function seatManagerLabel(): ?string
+    {
+        return match ($this->seat_manager_type) {
+            SoftwareSeatManagerType::Userware => $this->seatManagerUserware?->name,
+            SoftwareSeatManagerType::Department => $this->seat_manager_department,
+            default => null,
+        };
     }
 
     public function seatsUsed(): int

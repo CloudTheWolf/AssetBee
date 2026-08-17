@@ -2,6 +2,7 @@
 
 namespace App\Actions\Assets;
 
+use App\Actions\Assets\Concerns\NormalizesSoftwareSeatManager;
 use App\Enums\SoftwareBillingInterval;
 use App\Enums\SoftwareLicenseType;
 use App\Enums\SoftwareStatus;
@@ -12,6 +13,8 @@ use Illuminate\Validation\ValidationException;
 
 class UpdateSoftware
 {
+    use NormalizesSoftwareSeatManager;
+
     /**
      * @param  array<string, mixed>  $input
      *
@@ -19,11 +22,14 @@ class UpdateSoftware
      */
     public function handle(Software $software, array $input): Software
     {
+        $organization = $software->organization;
+
         $validated = Validator::make($input, [
             'name' => ['required', 'string', 'max:255'],
             'vendor' => ['nullable', 'string', 'max:255'],
             'license_type' => ['required', Rule::enum(SoftwareLicenseType::class)],
             'total_seats' => ['nullable', 'integer', 'min:1'],
+            ...$this->seatManagerRules($organization),
             'status' => ['required', Rule::enum(SoftwareStatus::class)],
             'expires_at' => ['nullable', 'date'],
             'is_recurring' => ['sometimes', 'boolean'],
@@ -58,6 +64,8 @@ class UpdateSoftware
                 'billing_interval' => ['required', Rule::enum(SoftwareBillingInterval::class)],
             ])->validate();
         }
+
+        $validated = $this->normalizeSeatManager($validated, $organization);
 
         $software->update($validated);
 
