@@ -2,6 +2,7 @@
 
 use App\Actions\Assets\CreateUserware;
 use App\Actions\Assets\DeleteUserware;
+use App\Actions\Assets\ImportUserwareFromCsv;
 use App\Enums\UserwareStatus;
 use App\Models\Userware;
 use App\Support\CurrentOrganization;
@@ -10,10 +11,13 @@ use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Title;
 use Livewire\Component;
+use Livewire\Features\SupportFileUploads\TemporaryUploadedFile;
+use Livewire\WithFileUploads;
 use Livewire\WithPagination;
 
 new #[Title('Userware')] class extends Component {
     use AuthorizesRequests;
+    use WithFileUploads;
     use WithPagination;
 
     public string $search = '';
@@ -35,6 +39,8 @@ new #[Title('Userware')] class extends Component {
     public string $createStatus = 'active';
 
     public string $notes = '';
+
+    public ?TemporaryUploadedFile $importFile = null;
 
     public function mount(): void
     {
@@ -81,6 +87,28 @@ new #[Title('Userware')] class extends Component {
         Flux::toast(variant: 'success', text: __('Identity created.'));
     }
 
+    public function import(ImportUserwareFromCsv $importUserwareFromCsv): void
+    {
+        $this->authorize('create', Userware::class);
+
+        $this->validate([
+            'importFile' => ['required', 'file', 'extensions:csv,txt', 'max:10240'],
+        ]);
+
+        $result = $importUserwareFromCsv->handle(CurrentOrganization::require(), $this->importFile);
+
+        $this->reset('importFile');
+
+        Flux::modal('import-userware')->close();
+        Flux::toast(
+            variant: 'success',
+            text: __('Imported :created identities (:skipped skipped).', [
+                'created' => $result['created'],
+                'skipped' => $result['skipped'],
+            ]),
+        );
+    }
+
     public function delete(Userware $userware, DeleteUserware $deleteUserware): void
     {
         $this->authorize('delete', $userware);
@@ -119,9 +147,14 @@ new #[Title('Userware')] class extends Component {
         </div>
 
         @can('create', App\Models\Userware::class)
-            <flux:modal.trigger name="create-userware">
-                <flux:button variant="primary" icon="plus" data-test="create-userware">{{ __('Add identity') }}</flux:button>
-            </flux:modal.trigger>
+            <div class="flex flex-wrap gap-2">
+                <flux:modal.trigger name="import-userware">
+                    <flux:button variant="ghost" icon="arrow-up-tray" data-test="import-userware">{{ __('Import CSV') }}</flux:button>
+                </flux:modal.trigger>
+                <flux:modal.trigger name="create-userware">
+                    <flux:button variant="primary" icon="plus" data-test="create-userware">{{ __('Add identity') }}</flux:button>
+                </flux:modal.trigger>
+            </div>
         @endcan
     </div>
 
@@ -213,6 +246,24 @@ new #[Title('Userware')] class extends Component {
                         <flux:button variant="ghost">{{ __('Cancel') }}</flux:button>
                     </flux:modal.close>
                     <flux:button variant="primary" type="submit">{{ __('Create') }}</flux:button>
+                </div>
+            </form>
+        </flux:modal>
+
+        <flux:modal name="import-userware" class="max-w-lg">
+            <form wire:submit="import" class="space-y-6">
+                <div>
+                    <flux:heading size="lg">{{ __('Import identities') }}</flux:heading>
+                    <flux:text>{{ __('Upload a CSV with First Name, Last Name, and Email Address columns. Existing emails are skipped.') }}</flux:text>
+                </div>
+
+                <flux:input type="file" wire:model="importFile" accept=".csv,text/csv" :label="__('CSV file')" required />
+
+                <div class="flex justify-end gap-2">
+                    <flux:modal.close>
+                        <flux:button variant="ghost">{{ __('Cancel') }}</flux:button>
+                    </flux:modal.close>
+                    <flux:button variant="primary" type="submit" data-test="confirm-import-userware">{{ __('Import') }}</flux:button>
                 </div>
             </form>
         </flux:modal>
