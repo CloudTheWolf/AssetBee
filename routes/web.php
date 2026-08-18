@@ -3,6 +3,7 @@
 use App\Http\Controllers\Auth\GoogleAuthController;
 use App\Http\Controllers\HomeController;
 use App\Http\Controllers\OrganizationBillingController;
+use App\Http\Controllers\Reports\DownloadInventoryReportController;
 use App\Http\Controllers\SwitchOrganizationController;
 use Illuminate\Support\Facades\Route;
 
@@ -39,6 +40,7 @@ Route::middleware(['auth', 'verified', 'system'])->group(function () {
 
 Route::middleware(['auth', 'verified', 'organization'])->group(function () {
     Route::livewire('dashboard', 'pages::dashboard')->name('dashboard');
+    Route::get('reports/{report}/pdf', DownloadInventoryReportController::class)->name('reports.pdf');
     Route::livewire('reports', 'pages::reports.index')->name('reports.index');
     Route::livewire('reports/{report}', 'pages::reports.show')->name('reports.show');
     Route::livewire('organizations/manage', 'pages::organizations.manage')->name('organizations.manage');

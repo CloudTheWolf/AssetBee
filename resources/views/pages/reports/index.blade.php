@@ -34,12 +34,12 @@ new #[Title('Reports')] class extends Component
 
     <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         @foreach ($this->catalog as $item)
-            <a
-                href="{{ route('reports.show', $item['report']->value) }}"
-                wire:navigate
-                class="rounded-xl border border-zinc-200 p-5 transition hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-900"
-            >
-                <div class="flex items-start justify-between gap-3">
+            <div class="rounded-xl border border-zinc-200 p-5 dark:border-zinc-700">
+                <a
+                    href="{{ route('reports.show', $item['report']->value) }}"
+                    wire:navigate
+                    class="flex items-start justify-between gap-3 rounded-lg transition hover:bg-zinc-50 dark:hover:bg-zinc-900"
+                >
                     <div class="min-w-0">
                         <flux:heading size="lg">{{ $item['report']->title() }}</flux:heading>
                         <flux:text class="mt-1">{{ $item['report']->description() }}</flux:text>
@@ -47,8 +47,18 @@ new #[Title('Reports')] class extends Component
                     <flux:badge :color="$item['count'] > 0 ? 'amber' : 'zinc'">
                         {{ $item['count'] }}
                     </flux:badge>
+                </a>
+                <div class="mt-4">
+                    <flux:button
+                        :href="route('reports.pdf', $item['report']->value)"
+                        size="sm"
+                        variant="ghost"
+                        icon="arrow-down-tray"
+                    >
+                        {{ __('Download PDF') }}
+                    </flux:button>
                 </div>
-            </a>
+            </div>
         @endforeach
     </div>
 </div>

@@ -267,3 +267,88 @@ test('reports index shows matching counts', function () {
         ->assertSee(__('Pending updates'))
         ->assertSee('1');
 });
+
+test('members can download a branded report pdf', function () {
+    [, $organization] = actingAsOrganizationMember();
+
+    Hardware::factory()->create([
+        'organization_id' => $organization->id,
+        'name' => 'Needs Patching',
+        'inventory_collected_at' => now(),
+        'inventory_payload' => inventoryPayload([
+            'updates' => [
+                'status' => 'available',
+                'value' => [
+                    'available' => [
+                        [
+                            'id' => 'KB999',
+                            'title' => 'Critical Patch KB999',
+                            'category' => 'Security Updates',
+                            'installedAtUtc' => null,
+                            'kbArticle' => 'KB999',
+                        ],
+                    ],
+                ],
+            ],
+        ]),
+    ]);
+
+    $response = $this->get(route('reports.pdf', InventoryReport::PendingUpdates->value))
+        ->assertOk();
+
+    $contents = $response->streamedContent();
+
+    expect($response->headers->get('content-type'))->toStartWith('application/pdf')
+        ->and($response->headers->get('content-disposition'))->toContain('pending-updates-'.$organization->slug)
+        ->and($contents)->toStartWith('%PDF-1.4')
+        ->and($contents)->toContain('/DCTDecode')
+        ->and($contents)->toContain('/Im1')
+        ->and($contents)->toContain('Needs Patching')
+        ->and($contents)->toContain('Critical Patch KB999')
+        ->and($contents)->not->toContain('016148-202037');
+});
+
+test('report pdf downloads do not include other organization devices', function () {
+    actingAsOrganizationMember();
+
+    Hardware::factory()->create([
+        'organization_id' => Organization::factory(),
+        'name' => 'Foreign Patch Device',
+        'inventory_collected_at' => now(),
+        'inventory_payload' => inventoryPayload([
+            'updates' => [
+                'status' => 'available',
+                'value' => [
+                    'available' => [
+                        [
+                            'id' => 'KB111',
+                            'title' => 'Foreign Patch',
+                            'category' => 'Security Updates',
+                            'installedAtUtc' => null,
+                            'kbArticle' => 'KB111',
+                        ],
+                    ],
+                ],
+            ],
+        ]),
+    ]);
+
+    $contents = $this->get(route('reports.pdf', InventoryReport::PendingUpdates->value))
+        ->assertOk()
+        ->streamedContent();
+
+    expect($contents)->not->toContain('Foreign Patch Device')
+        ->and($contents)->toContain('No devices match this report.');
+});
+
+test('guests cannot download report pdfs', function () {
+    $this->get(route('reports.pdf', InventoryReport::PendingUpdates->value))
+        ->assertRedirect(route('login'));
+});
+
+test('unknown report pdfs return not found', function () {
+    actingAsOrganizationMember();
+
+    $this->get(route('reports.pdf', 'not-a-report'))
+        ->assertNotFound();
+});

@@ -2,6 +2,7 @@
 paths:
   - app/Support/SystemAuditRecorder.php
   - app/Support/OrganizationInventoryReports.php
+  - app/Support/SimplePdf.php
 ---
 
 # Support
@@ -11,3 +12,6 @@ Audit rows are metadata only (action, actor snapshot, target type/id, summary na
 
 ## Inventory reports filter decrypted payloads in PHP
 Inventory reports (pending updates, missing AV, encryption, stale inventory, recovery keys, unassigned) are computed in PHP from decrypted inventory payloads. Do not query encrypted inventory_payload in SQL. Keep findings metadata-only: no recovery keys or inventory blobs in the UI.
+
+## PDFs use branded SimplePdf headers
+PDFs use SimplePdf with a black header containing public/img/logo.png. Inventory report PDFs are metadata-only: names, types, assignment, and finding summaries; never recovery keys or inventory payloads.

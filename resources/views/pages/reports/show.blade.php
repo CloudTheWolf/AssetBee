@@ -75,9 +75,14 @@ new #[Title('Report')] class extends Component
             <flux:heading size="xl">{{ $reportType->title() }}</flux:heading>
             <flux:text>{{ $reportType->description() }}</flux:text>
         </div>
-        <flux:button :href="route('reports.index')" wire:navigate icon="arrow-left" variant="ghost">
-            {{ __('All reports') }}
-        </flux:button>
+        <div class="flex flex-wrap items-center gap-2">
+            <flux:button :href="route('reports.pdf', $reportType->value)" icon="arrow-down-tray">
+                {{ __('Download PDF') }}
+            </flux:button>
+            <flux:button :href="route('reports.index')" wire:navigate icon="arrow-left" variant="ghost">
+                {{ __('All reports') }}
+            </flux:button>
+        </div>
     </div>
 
     <flux:input

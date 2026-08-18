@@ -43,6 +43,47 @@ class OrganizationInventoryReports
     }
 
     /**
+     * @return list<string>
+     */
+    public function pdfLines(Organization $organization, InventoryReport $report): array
+    {
+        $rows = $this->rows($organization, $report);
+
+        $lines = [
+            $report->description(),
+            '',
+            __('Organization').': '.$organization->name,
+            __('Generated').': '.now()->timezone((string) config('app.timezone'))->toDayDateTimeString(),
+            __('Devices').': '.$rows->count(),
+            '',
+        ];
+
+        if ($rows->isEmpty()) {
+            $lines[] = __('No devices match this report.');
+
+            return $lines;
+        }
+
+        $lines[] = __('Device').' | '.__('Type').' | '.__('Assigned to').' | '.$report->detailHeading();
+        $lines[] = '';
+
+        foreach ($rows as $row) {
+            $type = $row['asset_type'] === 'hardware' ? __('Hardware') : __('Virtualware');
+            $assigned = is_string($row['assigned_to']) && $row['assigned_to'] !== ''
+                ? $row['assigned_to']
+                : '—';
+
+            $lines[] = $row['name'].' | '.$type.' | '.$assigned.' | '.$row['detail'];
+
+            if (is_string($row['serial_number']) && $row['serial_number'] !== '') {
+                $lines[] = '  '.$row['serial_number'];
+            }
+        }
+
+        return $lines;
+    }
+
+    /**
      * @return Collection<int, array<string, mixed>>
      */
     private function devices(Organization $organization): Collection
