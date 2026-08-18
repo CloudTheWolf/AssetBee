@@ -56,6 +56,11 @@ class OrganizationPolicy
         return $this->update($user, $organization);
     }
 
+    public function viewReports(User $user, Organization $organization): bool
+    {
+        return $this->view($user, $organization);
+    }
+
     public function viewAuditLog(User $user, Organization $organization): bool
     {
         return $this->manage($user, $organization);

@@ -4,4 +4,4 @@ Before planning or editing, find the row whose globs match the file's path and r
 
 | Applies to | Rule file |
 | --- | --- |
-| app/Support/SystemAuditRecorder.php | .ai/rules/support.md |
+| app/Support/SystemAuditRecorder.php, app/Support/OrganizationInventoryReports.php | .ai/rules/support.md |

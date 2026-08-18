@@ -24,6 +24,11 @@
                         <flux:sidebar.item icon="home" :href="route('dashboard')" :current="request()->routeIs('dashboard')" wire:navigate>
                             {{ __('Dashboard') }}
                         </flux:sidebar.item>
+                        @can('viewReports', $currentOrganization)
+                            <flux:sidebar.item icon="chart-bar" :href="route('reports.index')" :current="request()->routeIs('reports.*')" wire:navigate>
+                                {{ __('Reports') }}
+                            </flux:sidebar.item>
+                        @endcan
                     @endif
                     @if ($hasSystemAccess)
                         <flux:sidebar.item icon="building-office" :href="route('system.customers')" :current="request()->routeIs('system.customers')" wire:navigate>

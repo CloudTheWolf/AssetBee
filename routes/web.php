@@ -39,6 +39,8 @@ Route::middleware(['auth', 'verified', 'system'])->group(function () {
 
 Route::middleware(['auth', 'verified', 'organization'])->group(function () {
     Route::livewire('dashboard', 'pages::dashboard')->name('dashboard');
+    Route::livewire('reports', 'pages::reports.index')->name('reports.index');
+    Route::livewire('reports/{report}', 'pages::reports.show')->name('reports.show');
     Route::livewire('organizations/manage', 'pages::organizations.manage')->name('organizations.manage');
     Route::livewire('organizations/audit-log', 'pages::organizations.audit-log')->name('organizations.audit-log');
     Route::livewire('organizations/billing', 'pages::organizations.billing')->name('organizations.billing');
