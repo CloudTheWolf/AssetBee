@@ -1,0 +1,187 @@
+name: assetbee
+
+x-app: &app
+  image: cloudthewolf/assetbee-site:${APP_VERSION:-latest}
+  restart: always
+  env_file:
+    - path: ${APP_ENV_FILE:-.env.production}
+      required: true
+  volumes:
+    - app_storage:/app/storage/app
+    - app_logs:/app/storage/logs
+    - ./drone:/app/public/drone
+  networks:
+    - assetbee
+
+services:
+  app:
+    <<: *app
+    environment:
+      CONTAINER_ROLE: app
+      RUN_MIGRATIONS: ${RUN_MIGRATIONS:-true}
+    depends_on:
+      mariadb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    labels:
+      traefik.enable: "true"
+      traefik.docker.network: assetbee
+      traefik.http.routers.assetbee.rule: Host(`${DOMAIN:?DOMAIN is required}`)
+      traefik.http.routers.assetbee.entrypoints: websecure
+      traefik.http.routers.assetbee.tls.certresolver: myresolver
+      traefik.http.routers.assetbee.middlewares: security-headers@file,compress@file
+      traefik.http.services.assetbee.loadbalancer.server.port: "8000"
+
+  queue:
+    <<: *app
+    environment:
+      CONTAINER_ROLE: queue
+      RUN_MIGRATIONS: "false"
+    depends_on:
+      app:
+        condition: service_started
+
+  scheduler:
+    <<: *app
+    environment:
+      CONTAINER_ROLE: scheduler
+      RUN_MIGRATIONS: "false"
+    depends_on:
+      app:
+        condition: service_started
+
+  mariadb:
+    image: mariadb:11
+    restart: always
+    environment:
+      MYSQL_DATABASE: ${DB_DATABASE:-assetbee}
+      MYSQL_USER: ${DB_USERNAME:-assetbee}
+      MYSQL_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:?DB_ROOT_PASSWORD is required}
+    volumes:
+      - mariadb_data:/var/lib/mysql
+    networks:
+      - assetbee
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "healthcheck.sh",
+          "--connect",
+          "--innodb_initialized",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  redis:
+    image: redis:7-alpine
+    restart: always
+    command:
+      - redis-server
+      - --appendonly
+      - "yes"
+      - --maxmemory
+      - ${REDIS_MAXMEMORY:-256mb}
+      - --maxmemory-policy
+      - allkeys-lru
+    volumes:
+      - redis_data:/data
+    networks:
+      - assetbee
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "redis-cli",
+          "ping"
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  traefik:
+    image: traefik:v3
+    profiles:
+      - with-traefik
+    restart: always
+    command:
+      - --providers.docker=true
+      - --providers.docker.exposedbydefault=false
+      - --providers.docker.network=assetbee
+      - --providers.file.filename=/etc/traefik/dynamic.yml
+      - --providers.file.watch=true
+      - --entrypoints.web.address=:80
+      - --entrypoints.web.http.redirections.entrypoint.to=websecure
+      - --entrypoints.web.http.redirections.entrypoint.scheme=https
+      - --entrypoints.websecure.address=:443
+      - --certificatesresolvers.myresolver.acme.httpchallenge=true
+      - --certificatesresolvers.myresolver.acme.httpchallenge.entrypoint=web
+      - --certificatesresolvers.myresolver.acme.email=${TRAEFIK_ACME_EMAIL:-admin@example.com}
+      - --certificatesresolvers.myresolver.acme.storage=/letsencrypt/acme.json
+      - --ping=true
+    ports:
+      - "${HTTP_PORT:-80}:80"
+      - "${HTTPS_PORT:-443}:443"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./docker/production/traefik/dynamic.yml:/etc/traefik/dynamic.yml:ro
+      - traefik_letsencrypt:/letsencrypt
+    networks:
+      - assetbee
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "traefik",
+          "healthcheck",
+          "--ping"
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  nginx:
+    image: nginx:1-alpine
+    profiles:
+      - with-nginx
+    restart: always
+    environment:
+      DOMAIN: ${DOMAIN:?DOMAIN is required}
+      NGINX_ENVSUBST_FILTER: ^DOMAIN$
+    ports:
+      - "${HTTP_PORT:-80}:80"
+    volumes:
+      - ./docker/production/nginx/default.conf.template:/etc/nginx/templates/default.conf.template:ro
+    networks:
+      - assetbee
+    depends_on:
+      app:
+        condition: service_started
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "wget",
+          "--quiet",
+          "--tries=1",
+          "--spider",
+          "http://127.0.0.1/up"
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+networks:
+  assetbee:
+    name: assetbee
+    driver: bridge
+
+volumes:
+  app_storage:
+  app_logs:
+  mariadb_data:
+  redis_data:
+  traefik_letsencrypt:

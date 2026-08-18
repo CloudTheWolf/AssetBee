@@ -9,7 +9,7 @@
 .zed
 .cursor
 .DS_Store
-
+site
 .env
 .env.*
 !.env.example

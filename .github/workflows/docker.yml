@@ -67,6 +67,16 @@ jobs:
           provenance: true
           sbom: true
 
+      - name: Update Docker Hub description
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: peter-evans/dockerhub-description@1b9a80c056b620d92cedb9d9b5a223409c68ddfa # v5
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          repository: ${{ env.IMAGE_NAME }}
+          short-description: Self-hosted IT asset, software licence, and device inventory management.
+          enable-url-completion: true
+
 #      - name: Generate artifact attestation
 #        if: github.event_name != 'pull_request'
 #        uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a # v3.0.0
