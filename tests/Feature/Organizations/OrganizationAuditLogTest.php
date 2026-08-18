@@ -103,6 +103,26 @@ test('audit entries record the client ip forwarded by traefik', function () {
     ]);
 });
 
+test('audit entries record the visitor ip forwarded by cloudflare', function () {
+    $user = User::factory()->create();
+
+    $this->withServerVariables([
+        'REMOTE_ADDR' => '172.18.0.2',
+        'HTTP_X_FORWARDED_FOR' => '172.68.205.102',
+        'HTTP_CF_CONNECTING_IP' => '198.51.100.25',
+        'HTTP_X_FORWARDED_PROTO' => 'https',
+    ])->post(route('login.store'), [
+        'email' => $user->email,
+        'password' => 'password',
+    ])->assertSessionHasNoErrors();
+
+    $this->assertDatabaseHas('system_audits', [
+        'action' => 'auth.login',
+        'actor_id' => $user->id,
+        'ip_address' => '198.51.100.25',
+    ]);
+});
+
 test('unauthenticated model changes are not audited', function () {
     Hardware::factory()->create(['name' => 'Orphan Device']);
 

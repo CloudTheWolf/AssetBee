@@ -24,6 +24,8 @@ class SystemAuditRecorder
      */
     private const USER_PROFILE_ATTRIBUTES = ['name', 'email', 'google_id'];
 
+    public function __construct(private ClientIpAddressResolver $clientIpAddressResolver) {}
+
     public function recordModelEvent(string $event, Model $target): void
     {
         if (! $this->shouldRecordModel($target)) {
@@ -76,7 +78,7 @@ class SystemAuditRecorder
             'target_type' => $target::class,
             'target_id' => is_numeric($targetId) ? (int) $targetId : null,
             'summary' => $this->summaryFor($target),
-            'ip_address' => request()->ip(),
+            'ip_address' => $this->clientIpAddressResolver->resolve(request()),
             'occurred_at' => now(),
         ]);
     }
