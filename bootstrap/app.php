@@ -16,11 +16,10 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
-        // Prefer process env so this works under `config:cache` and before the
-        // config repository is available (e.g. early Artisan kernel resolve).
-        $trustedProxies = $_ENV['TRUSTED_PROXIES']
-            ?? $_SERVER['TRUSTED_PROXIES']
-            ?? '*';
+        // Read the process environment directly because this callback runs
+        // before Laravel loads its environment and configuration repository.
+        $trustedProxies = getenv('TRUSTED_PROXIES');
+        $trustedProxies = $trustedProxies === false ? '*' : $trustedProxies;
 
         $middleware->trustProxies(
             at: $trustedProxies === '*' || $trustedProxies === ''

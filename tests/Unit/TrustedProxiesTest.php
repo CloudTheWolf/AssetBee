@@ -18,6 +18,40 @@ test('application configures the traefik forwarded header bitfield', function ()
         );
 });
 
+test('application reads trusted proxies from the process environment', function () {
+    $originalTrustedProxies = getenv('TRUSTED_PROXIES');
+
+    try {
+        putenv('TRUSTED_PROXIES=172.18.0.2');
+        TrustProxies::flushState();
+        $this->refreshApplication();
+
+        $request = Request::create(
+            'http://assetbee.example.com/login',
+            'GET',
+            server: [
+                'REMOTE_ADDR' => '172.18.0.3',
+                'HTTP_X_FORWARDED_FOR' => '203.0.113.10',
+            ],
+        );
+
+        $middleware = new TrustProxies(app());
+
+        $middleware->handle($request, function (Request $untrusted) {
+            expect($untrusted->getClientIp())->toBe('172.18.0.3');
+
+            return response()->make('ok');
+        });
+    } finally {
+        $originalTrustedProxies === false
+            ? putenv('TRUSTED_PROXIES')
+            : putenv("TRUSTED_PROXIES={$originalTrustedProxies}");
+
+        TrustProxies::flushState();
+        $this->refreshApplication();
+    }
+});
+
 test('traefik forwarded headers make the request secure behind a trusted proxy', function () {
     TrustProxies::at('*');
     TrustProxies::withHeaders(Request::HEADER_X_FORWARDED_TRAEFIK);

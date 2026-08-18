@@ -45,7 +45,7 @@ RUN bun run build
 # -----------------------------------------------------------------------------
 FROM dunglas/frankenphp:1-php8.4-bookworm AS production
 
-# Stop Inheriting image vendor 
+# Stop Inheriting image vendor
 LABEL org.opencontainers.image.vendor="CloudTheWolf"
 
 WORKDIR /app

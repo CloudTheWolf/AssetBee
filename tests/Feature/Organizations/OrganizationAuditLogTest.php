@@ -84,6 +84,25 @@ test('inventory api changes are audited as the api key', function () {
         ->and($audit->getAttributes())->not->toContain('016148-202037');
 });
 
+test('audit entries record the client ip forwarded by traefik', function () {
+    $user = User::factory()->create();
+
+    $this->withServerVariables([
+        'REMOTE_ADDR' => '172.18.0.2',
+        'HTTP_X_FORWARDED_FOR' => '203.0.113.10',
+        'HTTP_X_FORWARDED_PROTO' => 'https',
+    ])->post(route('login.store'), [
+        'email' => $user->email,
+        'password' => 'password',
+    ])->assertSessionHasNoErrors();
+
+    $this->assertDatabaseHas('system_audits', [
+        'action' => 'auth.login',
+        'actor_id' => $user->id,
+        'ip_address' => '203.0.113.10',
+    ]);
+});
+
 test('unauthenticated model changes are not audited', function () {
     Hardware::factory()->create(['name' => 'Orphan Device']);
 
