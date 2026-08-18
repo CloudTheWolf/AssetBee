@@ -94,6 +94,14 @@ class Organization extends Model
     }
 
     /**
+     * @return HasMany<SystemAudit, $this>
+     */
+    public function audits(): HasMany
+    {
+        return $this->hasMany(SystemAudit::class);
+    }
+
+    /**
      * @return HasMany<Userware, $this>
      */
     public function userwares(): HasMany

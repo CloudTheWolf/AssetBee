@@ -39,6 +39,11 @@
                                 {{ __('Organization') }}
                             </flux:sidebar.item>
                         @endcan
+                        @can('viewAuditLog', $currentOrganization)
+                            <flux:sidebar.item icon="clipboard-document-list" :href="route('organizations.audit-log')" :current="request()->routeIs('organizations.audit-log')" wire:navigate>
+                                {{ __('Audit log') }}
+                            </flux:sidebar.item>
+                        @endcan
                         @can('manageBilling', $currentOrganization)
                             <flux:sidebar.item icon="credit-card" :href="route('organizations.billing')" :current="request()->routeIs('organizations.billing*')" wire:navigate>
                                 {{ __('Billing') }}

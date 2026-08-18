@@ -56,6 +56,11 @@ class OrganizationPolicy
         return $this->update($user, $organization);
     }
 
+    public function viewAuditLog(User $user, Organization $organization): bool
+    {
+        return $this->manage($user, $organization);
+    }
+
     public function manageApiKeys(User $user, Organization $organization): bool
     {
         if ($user->isSystem()) {

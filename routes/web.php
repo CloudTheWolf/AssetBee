@@ -40,6 +40,7 @@ Route::middleware(['auth', 'verified', 'system'])->group(function () {
 Route::middleware(['auth', 'verified', 'organization'])->group(function () {
     Route::livewire('dashboard', 'pages::dashboard')->name('dashboard');
     Route::livewire('organizations/manage', 'pages::organizations.manage')->name('organizations.manage');
+    Route::livewire('organizations/audit-log', 'pages::organizations.audit-log')->name('organizations.audit-log');
     Route::livewire('organizations/billing', 'pages::organizations.billing')->name('organizations.billing');
     Route::post('organizations/billing/packages/{package}/checkout', [OrganizationBillingController::class, 'checkout'])
         ->name('organizations.billing.checkout');

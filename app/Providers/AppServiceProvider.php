@@ -5,6 +5,7 @@ namespace App\Providers;
 use App\Contracts\Cloud\DiscoversCloudVirtualMachines;
 use App\Contracts\DomainDnsLookup;
 use App\Models\Organization;
+use App\Models\User;
 use App\Services\Cloud\AwsEc2DiscoveryService;
 use App\Services\Cloud\CloudVirtualMachineDiscoveryManager;
 use App\Services\PhpDomainDnsLookup;
@@ -12,6 +13,11 @@ use App\Support\OrganizationSubscriptionLimits;
 use App\Support\SailRuntime;
 use App\Support\SystemAuditRecorder;
 use Carbon\CarbonImmutable;
+use Illuminate\Auth\Events\Failed;
+use Illuminate\Auth\Events\Login;
+use Illuminate\Auth\Events\Logout;
+use Illuminate\Auth\Events\PasswordReset;
+use Illuminate\Auth\Events\Verified;
 use Illuminate\Auth\Notifications\VerifyEmail;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Notifications\Messages\MailMessage;
@@ -53,7 +59,7 @@ class AppServiceProvider extends ServiceProvider
         $this->configureSailRuntime();
         $this->configureEmailVerification();
         $this->registerOrganizationSubscriptionLimits();
-        $this->registerSystemAuditListeners();
+        $this->registerAuditListeners();
 
         // Keep Livewire single-file components ASCII-only in filenames.
         config(['livewire.make_command.emoji' => false]);
@@ -100,7 +106,7 @@ class AppServiceProvider extends ServiceProvider
         });
     }
 
-    private function registerSystemAuditListeners(): void
+    private function registerAuditListeners(): void
     {
         foreach (['created', 'updated', 'deleted'] as $event) {
             Event::listen("eloquent.{$event}: *", function (string $eventName, array $models) use ($event): void {
@@ -111,6 +117,25 @@ class AppServiceProvider extends ServiceProvider
                 }
             });
         }
+
+        Event::listen(Login::class, fn (Login $event) => $this->recordAuthEvent('auth.login', $event->user));
+        Event::listen(Logout::class, fn (Logout $event) => $this->recordAuthEvent('auth.logout', $event->user));
+        Event::listen(PasswordReset::class, fn (PasswordReset $event) => $this->recordAuthEvent('auth.password_reset', $event->user));
+        Event::listen(Verified::class, fn (Verified $event) => $this->recordAuthEvent('auth.email_verified', $event->user));
+        Event::listen(Failed::class, function (Failed $event): void {
+            if ($event->user instanceof User) {
+                $this->recordAuthEvent('auth.failed', $event->user);
+            }
+        });
+    }
+
+    private function recordAuthEvent(string $action, mixed $user): void
+    {
+        if (! $user instanceof User) {
+            return;
+        }
+
+        app(SystemAuditRecorder::class)->record($action, $user, actor: $user);
     }
 
     /**
