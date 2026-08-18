@@ -30,6 +30,22 @@ test('authenticated users can start linking a google account', function () {
     expect(session('google_oauth_intent'))->toBe('link');
 });
 
+test('demo mode prevents starting google account linking', function () {
+    config(['app.demo_mode' => true]);
+
+    $user = User::factory()->create([
+        'email' => 'ada@acme.com',
+        'google_id' => null,
+    ]);
+
+    $this->actingAs($user)
+        ->withSession(['auth.password_confirmed_at' => time()])
+        ->get(route('auth.google.link'))
+        ->assertForbidden();
+
+    expect(session('google_oauth_intent'))->toBeNull();
+});
+
 test('linking google requires password confirmation', function () {
     $user = User::factory()->create([
         'email' => 'ada@acme.com',
@@ -66,6 +82,34 @@ test('authenticated users can link a matching google account', function () {
 
     expect($user->fresh()->google_id)->toBe('google-link-123')
         ->and(auth()->id())->toBe($user->id);
+});
+
+test('demo mode prevents google account linking callbacks', function () {
+    config(['app.demo_mode' => true]);
+
+    $user = User::factory()->create([
+        'email' => 'ada@acme.com',
+        'google_id' => null,
+        'email_verified_at' => now(),
+    ]);
+
+    Socialite::fake('google', SocialiteUser::fake([
+        'id' => 'google-link-123',
+        'name' => 'Ada Lovelace',
+        'email' => 'ada@acme.com',
+        'hd' => 'acme.com',
+    ]));
+
+    $this->actingAs($user)
+        ->withSession([
+            'auth.password_confirmed_at' => time(),
+            'google_oauth_intent' => 'link',
+        ])
+        ->get(route('auth.google.callback'))
+        ->assertRedirect(route('security.edit'))
+        ->assertSessionHasErrors('google');
+
+    expect($user->fresh()->google_id)->toBeNull();
 });
 
 test('users cannot link a google account with a different email', function () {
@@ -165,4 +209,21 @@ test('users can unlink their google account from security settings', function ()
         ->assertSet('googleLinked', false);
 
     expect($user->fresh()->google_id)->toBeNull();
+});
+
+test('demo mode prevents unlinking google accounts', function () {
+    config(['app.demo_mode' => true]);
+
+    $user = User::factory()->create([
+        'google_id' => 'google-123',
+    ]);
+
+    $this->actingAs($user);
+
+    Livewire::test('pages::settings.security')
+        ->assertSet('googleLinked', true)
+        ->call('unlinkGoogle')
+        ->assertHasErrors(['google']);
+
+    expect($user->fresh()->google_id)->toBe('google-123');
 });

@@ -19,6 +19,12 @@ class LinkGoogleAccount
      */
     public function handle(User $user, GoogleUser $googleUser): User
     {
+        if (config('app.demo_mode')) {
+            throw ValidationException::withMessages([
+                'google' => __('Google account linking is disabled in demo mode.'),
+            ]);
+        }
+
         $this->ensureAllowedWorkspaceDomain($googleUser);
 
         $googleId = (string) $googleUser->getId();

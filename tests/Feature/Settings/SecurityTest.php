@@ -98,6 +98,33 @@ test('password can be updated', function () {
     expect(Hash::check('new-password', $user->refresh()->password))->toBeTrue();
 });
 
+test('demo mode hides fixed account controls and prevents password changes', function () {
+    config(['app.demo_mode' => true]);
+
+    $user = User::factory()->create([
+        'password' => Hash::make('password'),
+    ]);
+
+    $this->actingAs($user)
+        ->withSession(['auth.password_confirmed_at' => time()])
+        ->get(route('security.edit'))
+        ->assertOk()
+        ->assertSee(__('Demo account settings are read-only'))
+        ->assertDontSee(__('Current password'))
+        ->assertDontSee(__('Connected accounts'))
+        ->assertDontSee(__('Connect Google'));
+
+    Livewire::test('pages::settings.security')
+        ->assertSet('demoMode', true)
+        ->set('current_password', 'password')
+        ->set('password', 'new-password')
+        ->set('password_confirmation', 'new-password')
+        ->call('updatePassword')
+        ->assertHasErrors(['password']);
+
+    expect(Hash::check('password', $user->refresh()->password))->toBeTrue();
+});
+
 test('correct password must be provided to update password', function () {
     $user = User::factory()->create([
         'password' => Hash::make('password'),

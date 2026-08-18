@@ -12,6 +12,10 @@ new class extends Component
 
     public function mount(): void
     {
+        if (config('app.demo_mode')) {
+            return;
+        }
+
         $user = Auth::user();
 
         if ($user === null) {

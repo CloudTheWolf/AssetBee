@@ -44,11 +44,15 @@ new #[Title('Security settings')] class extends Component {
     #[Locked]
     public bool $googleLinked = false;
 
+    #[Locked]
+    public bool $demoMode = false;
+
     /**
      * Mount the component.
      */
     public function mount(DisableTwoFactorAuthentication $disableTwoFactorAuthentication): void
     {
+        $this->demoMode = (bool) config('app.demo_mode');
         $this->canManageTwoFactor = Features::canManageTwoFactorAuthentication();
 
         if ($this->canManageTwoFactor) {
@@ -78,6 +82,12 @@ new #[Title('Security settings')] class extends Component {
      */
     public function unlinkGoogle(UnlinkGoogleAccount $unlinkGoogleAccount): void
     {
+        if ($this->demoMode) {
+            throw ValidationException::withMessages([
+                'google' => __('Connected accounts cannot be changed in demo mode.'),
+            ]);
+        }
+
         $unlinkGoogleAccount->handle(Auth::user());
 
         $this->googleLinked = false;
@@ -90,6 +100,12 @@ new #[Title('Security settings')] class extends Component {
      */
     public function updatePassword(): void
     {
+        if ($this->demoMode) {
+            throw ValidationException::withMessages([
+                'password' => __('The demo account password cannot be changed.'),
+            ]);
+        }
+
         try {
             $validated = $this->validate([
                 'current_password' => $this->currentPasswordRules(),
@@ -193,8 +209,21 @@ new #[Title('Security settings')] class extends Component {
 
     <flux:heading class="sr-only">{{ __('Security settings') }}</flux:heading>
 
-    <x-pages::settings.layout :heading="__('Update password')" :subheading="__('Ensure your account is using a long, random password to stay secure')">
-        <form method="POST" wire:submit="updatePassword" class="mt-6 space-y-6">
+    <x-pages::settings.layout
+        :heading="$demoMode ? __('Demo account') : __('Update password')"
+        :subheading="$demoMode ? __('Account credentials are fixed in demo mode') : __('Ensure your account is using a long, random password to stay secure')"
+    >
+        @if ($demoMode)
+            <flux:callout
+                class="mt-6"
+                variant="info"
+                icon="information-circle"
+                :heading="__('Demo account settings are read-only')"
+            >
+                {{ __('The password and connected accounts cannot be changed in demo mode.') }}
+            </flux:callout>
+        @else
+            <form method="POST" wire:submit="updatePassword" class="mt-6 space-y-6">
             <flux:input
                 wire:model="current_password"
                 :label="__('Current password')"
@@ -227,7 +256,8 @@ new #[Title('Security settings')] class extends Component {
                     {{ __('Save') }}
                 </flux:button>
             </div>
-        </form>
+            </form>
+        @endif
 
         @if ($canManageTwoFactor)
             <section class="mt-12">
@@ -329,7 +359,8 @@ new #[Title('Security settings')] class extends Component {
             </section>
         @endif
 
-        <section class="mt-12">
+        @unless ($demoMode)
+            <section class="mt-12">
             <flux:heading>{{ __('Connected accounts') }}</flux:heading>
             <flux:subheading>{{ __('Link Google to sign in with your Workspace account') }}</flux:subheading>
 
@@ -382,7 +413,8 @@ new #[Title('Security settings')] class extends Component {
                     @endif
                 </div>
             </div>
-        </section>
+            </section>
+        @endunless
     </x-pages::settings.layout>
 
     <flux:modal

@@ -18,6 +18,21 @@ test('users without two-factor or passkeys are prompted to set up security', fun
         ->assertSee(__('Set up security'));
 });
 
+test('security setup prompt is disabled in demo mode', function () {
+    config(['app.demo_mode' => true]);
+
+    [$user] = createOrganizationMember();
+
+    $this->actingAs($user);
+
+    Livewire::test('security-setup-prompt')
+        ->assertSet('show', false);
+
+    $this->get(route('dashboard'))
+        ->assertOk()
+        ->assertDontSee(__('Secure your account'));
+});
+
 test('security setup prompt is deferred until the user has an organization', function () {
     $user = User::factory()->create();
 

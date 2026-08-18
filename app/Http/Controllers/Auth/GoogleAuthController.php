@@ -39,6 +39,12 @@ class GoogleAuthController extends Controller
      */
     public function linkRedirect(): SymfonyRedirectResponse
     {
+        abort_if(
+            config('app.demo_mode'),
+            403,
+            __('Google account linking is disabled in demo mode.'),
+        );
+
         Session::put(self::INTENT_SESSION_KEY, self::INTENT_LINK);
 
         /** @var GoogleProvider $driver */
