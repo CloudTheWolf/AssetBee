@@ -4,9 +4,29 @@ use App\Models\User;
 use Livewire\Livewire;
 
 test('profile page is displayed', function () {
-    $this->actingAs($user = User::factory()->create());
+    $user = User::factory()->create([
+        'name' => 'Profile User',
+        'email' => 'profile@example.com',
+    ]);
+
+    $this->actingAs($user);
 
     $this->get(route('profile.edit'))->assertOk();
+
+    Livewire::test('pages::settings.profile')
+        ->assertSet('name', 'Profile User')
+        ->assertSet('email', 'profile@example.com');
+});
+
+test('profile links use a full page visit', function () {
+    $this->actingAs(User::factory()->create());
+
+    $response = $this->get(route('profile.edit'))->assertOk();
+    $profileUrl = preg_quote(route('profile.edit'), '~');
+
+    expect($response->getContent())
+        ->toContain(route('profile.edit'))
+        ->not->toMatch("~<a\\b(?=[^>]*href=\"{$profileUrl}\")(?=[^>]*wire:navigate)[^>]*>~");
 });
 
 test('profile information can be updated', function () {
