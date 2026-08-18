@@ -2,6 +2,9 @@
 
 use App\Models\User;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Validation\ValidationException;
+use Laravel\Fortify\Actions\ConfirmTwoFactorAuthentication;
+use Laravel\Fortify\Actions\EnableTwoFactorAuthentication;
 use Laravel\Fortify\Features;
 use Livewire\Livewire;
 
@@ -112,7 +115,9 @@ test('demo mode hides fixed account controls and prevents password changes', fun
         ->assertSee(__('Demo account settings are read-only'))
         ->assertDontSee(__('Current password'))
         ->assertDontSee(__('Connected accounts'))
-        ->assertDontSee(__('Connect Google'));
+        ->assertDontSee(__('Connect Google'))
+        ->assertDontSee(__('Two-factor authentication'))
+        ->assertDontSee(__('Enable 2FA'));
 
     Livewire::test('pages::settings.security')
         ->assertSet('demoMode', true)
@@ -123,6 +128,45 @@ test('demo mode hides fixed account controls and prevents password changes', fun
         ->assertHasErrors(['password']);
 
     expect(Hash::check('password', $user->refresh()->password))->toBeTrue();
+});
+
+test('demo mode prevents enabling two factor authentication', function () {
+    config(['app.demo_mode' => true]);
+
+    $user = User::factory()->create();
+
+    $this->actingAs($user)
+        ->withSession(['auth.password_confirmed_at' => time()])
+        ->post(route('two-factor.enable'))
+        ->assertSessionHasErrors('two_factor');
+
+    expect($user->refresh()->two_factor_secret)->toBeNull()
+        ->and($user->two_factor_recovery_codes)->toBeNull();
+});
+
+test('two factor authentication can still be enabled outside demo mode', function () {
+    $user = User::factory()->create();
+
+    app(EnableTwoFactorAuthentication::class)($user);
+
+    expect($user->refresh()->two_factor_secret)->not->toBeNull()
+        ->and($user->two_factor_recovery_codes)->not->toBeNull();
+});
+
+test('demo mode prevents confirming pending two factor authentication', function () {
+    config(['app.demo_mode' => true]);
+
+    $user = User::factory()->create();
+    $user->forceFill([
+        'two_factor_secret' => encrypt('pending-secret'),
+        'two_factor_recovery_codes' => encrypt(json_encode(['recovery-code'])),
+        'two_factor_confirmed_at' => null,
+    ])->save();
+
+    expect(fn () => app(ConfirmTwoFactorAuthentication::class)($user, '123456'))
+        ->toThrow(ValidationException::class);
+
+    expect($user->refresh()->two_factor_confirmed_at)->toBeNull();
 });
 
 test('correct password must be provided to update password', function () {

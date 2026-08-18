@@ -259,7 +259,7 @@ new #[Title('Security settings')] class extends Component {
             </form>
         @endif
 
-        @if ($canManageTwoFactor)
+        @if ($canManageTwoFactor && (! $demoMode || $twoFactorEnabled))
             <section class="mt-12">
                 <flux:heading>{{ __('Two-factor authentication') }}</flux:heading>
                 <flux:subheading>{{ __('Manage your two-factor authentication settings') }}</flux:subheading>

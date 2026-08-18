@@ -2,7 +2,9 @@
 
 namespace App\Providers;
 
+use App\Actions\Fortify\ConfirmTwoFactorAuthentication as DemoConfirmTwoFactorAuthentication;
 use App\Actions\Fortify\CreateNewUser;
+use App\Actions\Fortify\EnableTwoFactorAuthentication as DemoEnableTwoFactorAuthentication;
 use App\Actions\Fortify\ResetUserPassword;
 use App\Support\Registration;
 use Illuminate\Cache\RateLimiting\Limit;
@@ -10,6 +12,8 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Support\Str;
+use Laravel\Fortify\Actions\ConfirmTwoFactorAuthentication;
+use Laravel\Fortify\Actions\EnableTwoFactorAuthentication;
 use Laravel\Fortify\Fortify;
 
 class FortifyServiceProvider extends ServiceProvider
@@ -19,7 +23,8 @@ class FortifyServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        //
+        $this->app->bind(EnableTwoFactorAuthentication::class, DemoEnableTwoFactorAuthentication::class);
+        $this->app->bind(ConfirmTwoFactorAuthentication::class, DemoConfirmTwoFactorAuthentication::class);
     }
 
     /**
