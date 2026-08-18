@@ -70,7 +70,7 @@ class SystemAuditRecorder
 
         SystemAudit::query()->create([
             'actor_id' => $actor?->id,
-            'actor_name' => $actor?->name ?? $apiKey?->name,
+            'actor_name' => $actor->name ?? $apiKey?->name,
             'organization_id' => $organizationId,
             'action' => $action,
             'target_type' => $target::class,
@@ -109,8 +109,7 @@ class SystemAuditRecorder
 
     private function shouldRecordModel(Model $target): bool
     {
-        return $target instanceof Model
-            && ! $target instanceof SystemAudit
+        return ! $target instanceof SystemAudit
             && str_starts_with($target::class, 'App\\Models\\');
     }
 

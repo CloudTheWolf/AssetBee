@@ -98,7 +98,7 @@ class SystemAudit extends Model
     public function actorLabel(): string
     {
         return $this->actor_name
-            ?? $this->actor?->name
+            ?? $this->actor->name
             ?? ($this->actor_id === null ? __('API') : __('Deleted user'));
     }
 

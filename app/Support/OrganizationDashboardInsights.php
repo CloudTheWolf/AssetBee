@@ -115,7 +115,7 @@ class OrganizationDashboardInsights
      */
     private function otherCurrencyTotals(Collection $recurring, string $primaryCurrency): array
     {
-        return $recurring
+        return array_values($recurring
             ->groupBy(fn (Software $software): string => strtoupper($software->currency ?: 'GBP'))
             ->reject(fn (Collection $group, string $currency): bool => $currency === $primaryCurrency)
             ->map(function (Collection $group, string $currency): array {
@@ -129,7 +129,7 @@ class OrganizationDashboardInsights
             })
             ->sortBy('currency')
             ->values()
-            ->all();
+            ->all());
     }
 
     /**
@@ -166,7 +166,7 @@ class OrganizationDashboardInsights
 
         $max = collect($months)->max('total') ?: 0.0;
 
-        return collect($months)
+        return array_values(collect($months)
             ->map(function (array $month) use ($currency, $max): array {
                 $total = round($month['total'], 2);
 
@@ -179,7 +179,7 @@ class OrganizationDashboardInsights
                 ];
             })
             ->values()
-            ->all();
+            ->all());
     }
 
     /**
@@ -260,13 +260,13 @@ class OrganizationDashboardInsights
 
         $max = $rows->max('monthly') ?: 0.0;
 
-        return $rows
+        return array_values($rows
             ->map(function (array $row) use ($max): array {
                 $row['percent'] = $max > 0 ? round(($row['monthly'] / $max) * 100, 1) : 0.0;
 
                 return $row;
             })
-            ->all();
+            ->all());
     }
 
     /**
@@ -277,7 +277,7 @@ class OrganizationDashboardInsights
     {
         $limit = now()->addDays(60)->endOfDay();
 
-        return $recurring
+        return array_values($recurring
             ->filter(fn (Software $software): bool => $software->next_billing_at !== null
                 && $software->next_billing_at->lte($limit))
             ->sortBy('next_billing_at')
@@ -296,7 +296,7 @@ class OrganizationDashboardInsights
                 ];
             })
             ->values()
-            ->all();
+            ->all());
     }
 
     /**
@@ -304,7 +304,7 @@ class OrganizationDashboardInsights
      */
     private function expiringLicenses(Organization $organization): array
     {
-        return Software::query()
+        return array_values(Software::query()
             ->where('organization_id', $organization->id)
             ->where('status', SoftwareStatus::Active)
             ->whereNotNull('expires_at')
@@ -317,7 +317,7 @@ class OrganizationDashboardInsights
                 'name' => $software->name,
                 'expires_at' => $software->expires_at->toDateString(),
             ])
-            ->all();
+            ->all());
     }
 
     /**
@@ -326,7 +326,7 @@ class OrganizationDashboardInsights
      */
     private function underutilizedSeats(Collection $seatLicenses): array
     {
-        return $seatLicenses
+        return array_values($seatLicenses
             ->filter(function (Software $software): bool {
                 $total = (int) $software->total_seats;
                 $used = (int) $software->assignments_count;
@@ -343,7 +343,7 @@ class OrganizationDashboardInsights
                 'unused' => (int) $software->total_seats - (int) $software->assignments_count,
             ])
             ->values()
-            ->all();
+            ->all());
     }
 
     private function formatMoney(string $currency, float $amount): string

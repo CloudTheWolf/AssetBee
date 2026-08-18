@@ -40,8 +40,11 @@ class BulkAssignSoftwareSeats
             ],
         )->validate();
 
+        /** @var list<int|string> $validatedUserwareIds */
+        $validatedUserwareIds = $validated['userware_ids'];
+
         /** @var list<int> $uniqueIds */
-        $uniqueIds = collect($validated['userware_ids'])
+        $uniqueIds = collect($validatedUserwareIds)
             ->map(fn (mixed $id): int => (int) $id)
             ->unique()
             ->values()

@@ -126,7 +126,7 @@ class ImportUserwareFromCsv
 
     /**
      * @param  list<string>  $headers
-     * @return array{First Name: int, Last Name: int, Email Address: int}
+     * @return array{'First Name': int, 'Last Name': int, 'Email Address': int}
      *
      * @throws ValidationException
      */
