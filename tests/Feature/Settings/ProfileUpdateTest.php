@@ -18,7 +18,7 @@ test('profile page is displayed', function () {
         ->assertSet('email', 'profile@example.com');
 });
 
-test('profile links use a full page visit', function () {
+test('profile links use Livewire navigation', function () {
     $this->actingAs(User::factory()->create());
 
     $response = $this->get(route('profile.edit'))->assertOk();
@@ -26,7 +26,7 @@ test('profile links use a full page visit', function () {
 
     expect($response->getContent())
         ->toContain(route('profile.edit'))
-        ->not->toMatch("~<a\\b(?=[^>]*href=\"{$profileUrl}\")(?=[^>]*wire:navigate)[^>]*>~");
+        ->toMatch("~<a\\b(?=[^>]*href=\"{$profileUrl}\")(?=[^>]*wire:navigate)[^>]*>~");
 });
 
 test('profile information can be updated', function () {

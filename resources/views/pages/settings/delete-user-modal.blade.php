@@ -21,7 +21,7 @@ new class extends Component {
 
         tap(Auth::user(), $logout(...))->delete();
 
-        $this->redirect('/');
+        $this->redirect('/', navigate: true);
     }
 }; ?>
 

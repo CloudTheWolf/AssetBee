@@ -148,7 +148,7 @@ new #[Title('Cloud Tenants')] class extends Component {
             @forelse ($this->cloudTenants as $tenant)
                 <flux:table.row :key="$tenant->id">
                     <flux:table.cell>
-                        <a href="{{ route('assets.cloud-tenants.show', $tenant) }}" class="font-medium text-accent">{{ $tenant->name }}</a>
+                        <a href="{{ route('assets.cloud-tenants.show', $tenant) }}" class="font-medium text-accent" wire:navigate>{{ $tenant->name }}</a>
                         @if ($tenant->external_id)
                             <div class="text-xs text-zinc-500">{{ $tenant->external_id }}</div>
                         @endif
@@ -164,7 +164,7 @@ new #[Title('Cloud Tenants')] class extends Component {
                             <flux:dropdown>
                                 <flux:button variant="ghost" size="sm" icon="ellipsis-horizontal" />
                                 <flux:menu>
-                                    <flux:menu.item :href="route('assets.cloud-tenants.show', $tenant)" icon="eye">{{ __('View') }}</flux:menu.item>
+                                    <flux:menu.item :href="route('assets.cloud-tenants.show', $tenant)" wire:navigate icon="eye">{{ __('View') }}</flux:menu.item>
                                     @can('delete', $tenant)
                                         <flux:menu.separator />
                                         <flux:menu.item variant="danger" icon="trash" wire:click="delete({{ $tenant->id }})" wire:confirm="{{ __('Delete this cloud tenant?') }}">

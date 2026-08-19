@@ -42,7 +42,7 @@
                 />
 
                 @if (Route::has('password.request'))
-                    <flux:link class="absolute top-0 end-0 text-sm" :href="route('password.request')">
+                    <flux:link class="absolute top-0 end-0 text-sm" :href="route('password.request')" wire:navigate>
                         {{ __('Forgot password?') }}
                     </flux:link>
                 @endif
@@ -58,7 +58,7 @@
         <div class="pt-1 text-center text-sm text-zinc-500">
             @if (\App\Support\Registration::isOpen(\App\Support\Registration::pendingInvitation()))
                 <span>{{ __("Don't have an account?") }}</span>
-                <flux:link :href="route('register')">{{ __('Sign up') }}</flux:link>
+                <flux:link :href="route('register')" wire:navigate>{{ __('Sign up') }}</flux:link>
             @else
                 <span>{{ __('Need access? Ask an organization owner for an invite.') }}</span>
             @endif

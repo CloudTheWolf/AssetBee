@@ -72,7 +72,7 @@ new class extends Component
                         variant="primary"
                         :href="route('security.edit')"
                         wire:click="dismiss"
-
+                        wire:navigate
                         data-test="setup-security"
                     >
                         {{ __('Set up security') }}

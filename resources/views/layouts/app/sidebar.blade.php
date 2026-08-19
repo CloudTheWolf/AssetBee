@@ -6,7 +6,7 @@
     <body class="min-h-screen bg-white dark:bg-zinc-800">
         <flux:sidebar sticky collapsible="mobile" class="border-e border-zinc-200 bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900">
             <flux:sidebar.header>
-                <x-app-logo :sidebar="true" href="{{ auth()->user()->hasSystemAccess() && ! \App\Support\CurrentOrganization::get() ? route('system.customers') : route('dashboard') }}" />
+                <x-app-logo :sidebar="true" href="{{ auth()->user()->hasSystemAccess() && ! \App\Support\CurrentOrganization::get() ? route('system.customers') : route('dashboard') }}" wire:navigate />
                 <flux:sidebar.collapse class="lg:hidden" />
             </flux:sidebar.header>
 
@@ -21,36 +21,36 @@
             <flux:sidebar.nav>
                 <flux:sidebar.group :heading="__('Platform')" class="grid">
                     @if ($currentOrganization)
-                        <flux:sidebar.item icon="home" :href="route('dashboard')" :current="request()->routeIs('dashboard')">
+                        <flux:sidebar.item icon="home" :href="route('dashboard')" :current="request()->routeIs('dashboard')" wire:navigate>
                             {{ __('Dashboard') }}
                         </flux:sidebar.item>
                         @can('viewReports', $currentOrganization)
-                            <flux:sidebar.item icon="chart-bar" :href="route('reports.index')" :current="request()->routeIs('reports.*')">
+                            <flux:sidebar.item icon="chart-bar" :href="route('reports.index')" :current="request()->routeIs('reports.*')" wire:navigate>
                                 {{ __('Reports') }}
                             </flux:sidebar.item>
                         @endcan
                     @endif
                     @if ($hasSystemAccess)
-                        <flux:sidebar.item icon="building-office" :href="route('system.customers')" :current="request()->routeIs('system.customers')">
+                        <flux:sidebar.item icon="building-office" :href="route('system.customers')" :current="request()->routeIs('system.customers')" wire:navigate>
                             {{ __('Customers') }}
                         </flux:sidebar.item>
-                        <flux:sidebar.item icon="rectangle-stack" :href="route('system.packages')" :current="request()->routeIs('system.packages')">
+                        <flux:sidebar.item icon="rectangle-stack" :href="route('system.packages')" :current="request()->routeIs('system.packages')" wire:navigate>
                             {{ __('Packages') }}
                         </flux:sidebar.item>
                     @endif
                     @if ($currentOrganization)
                         @can('manage', $currentOrganization)
-                            <flux:sidebar.item icon="building-office-2" :href="route('organizations.manage')" :current="request()->routeIs('organizations.manage')">
+                            <flux:sidebar.item icon="building-office-2" :href="route('organizations.manage')" :current="request()->routeIs('organizations.manage')" wire:navigate>
                                 {{ __('Organization') }}
                             </flux:sidebar.item>
                         @endcan
                         @can('viewAuditLog', $currentOrganization)
-                            <flux:sidebar.item icon="clipboard-document-list" :href="route('organizations.audit-log')" :current="request()->routeIs('organizations.audit-log')">
+                            <flux:sidebar.item icon="clipboard-document-list" :href="route('organizations.audit-log')" :current="request()->routeIs('organizations.audit-log')" wire:navigate>
                                 {{ __('Audit log') }}
                             </flux:sidebar.item>
                         @endcan
                         @can('manageBilling', $currentOrganization)
-                            <flux:sidebar.item icon="credit-card" :href="route('organizations.billing')" :current="request()->routeIs('organizations.billing*')">
+                            <flux:sidebar.item icon="credit-card" :href="route('organizations.billing')" :current="request()->routeIs('organizations.billing*')" wire:navigate>
                                 {{ __('Billing') }}
                             </flux:sidebar.item>
                         @endcan
@@ -59,19 +59,19 @@
 
                 @if ($currentOrganization)
                     <flux:sidebar.group :heading="__('Assets')" class="grid">
-                        <flux:sidebar.item icon="users" :href="route('assets.userware.index')" :current="request()->routeIs('assets.userware.*')">
+                        <flux:sidebar.item icon="users" :href="route('assets.userware.index')" :current="request()->routeIs('assets.userware.*')" wire:navigate>
                             {{ __('Userware') }}
                         </flux:sidebar.item>
-                        <flux:sidebar.item icon="computer-desktop" :href="route('assets.hardware.index')" :current="request()->routeIs('assets.hardware.*')">
+                        <flux:sidebar.item icon="computer-desktop" :href="route('assets.hardware.index')" :current="request()->routeIs('assets.hardware.*')" wire:navigate>
                             {{ __('Hardware') }}
                         </flux:sidebar.item>
-                        <flux:sidebar.item icon="building-library" :href="route('assets.cloud-tenants.index')" :current="request()->routeIs('assets.cloud-tenants.*')">
+                        <flux:sidebar.item icon="building-library" :href="route('assets.cloud-tenants.index')" :current="request()->routeIs('assets.cloud-tenants.*')" wire:navigate>
                             {{ __('Cloud Tenants') }}
                         </flux:sidebar.item>
-                        <flux:sidebar.item icon="cloud" :href="route('assets.virtualware.index')" :current="request()->routeIs('assets.virtualware.*')">
+                        <flux:sidebar.item icon="cloud" :href="route('assets.virtualware.index')" :current="request()->routeIs('assets.virtualware.*')" wire:navigate>
                             {{ __('Virtualware') }}
                         </flux:sidebar.item>
-                        <flux:sidebar.item icon="cube" :href="route('assets.software.index')" :current="request()->routeIs('assets.software.*')">
+                        <flux:sidebar.item icon="cube" :href="route('assets.software.index')" :current="request()->routeIs('assets.software.*')" wire:navigate>
                             {{ __('Software') }}
                         </flux:sidebar.item>
                     </flux:sidebar.group>
@@ -95,7 +95,7 @@
                                 </form>
                             @endforeach
                             <flux:menu.separator />
-                            <flux:menu.item :href="route('organizations.create')" icon="plus">
+                            <flux:menu.item :href="route('organizations.create')" icon="plus" wire:navigate>
                                 {{ __('Create organization') }}
                             </flux:menu.item>
                         </flux:menu>
@@ -166,7 +166,7 @@
                     <flux:menu.separator />
 
                     <flux:menu.radio.group>
-                        <flux:menu.item :href="route('profile.edit')" icon="cog">
+                        <flux:menu.item :href="route('profile.edit')" icon="cog" wire:navigate>
                             {{ __('Settings') }}
                         </flux:menu.item>
                     </flux:menu.radio.group>

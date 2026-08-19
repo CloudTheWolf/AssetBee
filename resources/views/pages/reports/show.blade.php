@@ -79,7 +79,7 @@ new #[Title('Report')] class extends Component
             <flux:button :href="route('reports.pdf', $reportType->value)" icon="arrow-down-tray">
                 {{ __('Download PDF') }}
             </flux:button>
-            <flux:button :href="route('reports.index')" icon="arrow-left" variant="ghost">
+            <flux:button :href="route('reports.index')" wire:navigate icon="arrow-left" variant="ghost">
                 {{ __('All reports') }}
             </flux:button>
         </div>
@@ -103,7 +103,7 @@ new #[Title('Report')] class extends Component
             @forelse ($this->rows as $row)
                 <flux:table.row :key="$row['asset_type'].'-'.$row['id']">
                     <flux:table.cell>
-                        <a href="{{ $row['url'] }}" class="font-medium text-accent">{{ $row['name'] }}</a>
+                        <a href="{{ $row['url'] }}" class="font-medium text-accent" wire:navigate>{{ $row['name'] }}</a>
                         @if ($row['serial_number'])
                             <flux:text>{{ $row['serial_number'] }}</flux:text>
                         @endif

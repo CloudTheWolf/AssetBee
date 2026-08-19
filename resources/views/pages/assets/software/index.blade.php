@@ -169,7 +169,7 @@ new #[Title('Software')] class extends Component {
             @forelse ($this->softwares as $software)
                 <flux:table.row :key="$software->id">
                     <flux:table.cell>
-                        <a href="{{ route('assets.software.show', $software) }}" class="font-medium text-accent">{{ $software->name }}</a>
+                        <a href="{{ route('assets.software.show', $software) }}" class="font-medium text-accent" wire:navigate>{{ $software->name }}</a>
                         @if ($software->is_recurring && $software->next_billing_at)
                             <div class="text-xs text-zinc-500">{{ __('Next billing') }} {{ $software->next_billing_at->format('M j, Y') }}</div>
                         @endif
@@ -196,7 +196,7 @@ new #[Title('Software')] class extends Component {
                             <flux:dropdown>
                                 <flux:button variant="ghost" size="sm" icon="ellipsis-horizontal" />
                                 <flux:menu>
-                                    <flux:menu.item :href="route('assets.software.show', $software)" icon="eye">{{ __('View') }}</flux:menu.item>
+                                    <flux:menu.item :href="route('assets.software.show', $software)" wire:navigate icon="eye">{{ __('View') }}</flux:menu.item>
                                     @can('delete', $software)
                                         <flux:menu.separator />
                                         <flux:menu.item variant="danger" icon="trash" wire:click="delete({{ $software->id }})" wire:confirm="{{ __('Delete this software?') }}">

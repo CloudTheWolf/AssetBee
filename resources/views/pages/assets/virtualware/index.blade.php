@@ -217,7 +217,7 @@ new #[Title('Virtualware')] class extends Component {
             @forelse ($this->virtualwares as $virtualware)
                 <flux:table.row :key="$virtualware->id">
                     <flux:table.cell>
-                        <a href="{{ route('assets.virtualware.show', $virtualware) }}" class="font-medium text-accent">{{ $virtualware->name }}</a>
+                        <a href="{{ route('assets.virtualware.show', $virtualware) }}" class="font-medium text-accent" wire:navigate>{{ $virtualware->name }}</a>
                         @if ($virtualware->external_id)
                             <div class="text-xs text-zinc-500">{{ $virtualware->external_id }}</div>
                         @endif
@@ -247,7 +247,7 @@ new #[Title('Virtualware')] class extends Component {
                             <flux:dropdown>
                                 <flux:button variant="ghost" size="sm" icon="ellipsis-horizontal" />
                                 <flux:menu>
-                                    <flux:menu.item :href="route('assets.virtualware.show', $virtualware)" icon="eye">{{ __('View') }}</flux:menu.item>
+                                    <flux:menu.item :href="route('assets.virtualware.show', $virtualware)" wire:navigate icon="eye">{{ __('View') }}</flux:menu.item>
                                     @can('delete', $virtualware)
                                         <flux:menu.separator />
                                         <flux:menu.item variant="danger" icon="trash" wire:click="delete({{ $virtualware->id }})" wire:confirm="{{ __('Delete this virtualware?') }}">

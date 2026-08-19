@@ -39,7 +39,7 @@ new #[Layout('layouts::auth')] #[Title('Organization invitation')] class extends
         if (Auth::check() && strtolower(Auth::user()->email) === strtolower($invitation->email)) {
             app(AcceptOrganizationInvitation::class)->handle($invitation, Auth::user());
 
-            $this->redirect(route('dashboard', absolute: false));
+            $this->redirect(route('dashboard', absolute: false), navigate: true);
         }
     }
 
@@ -50,7 +50,7 @@ new #[Layout('layouts::auth')] #[Title('Organization invitation')] class extends
         }
 
         if (! Auth::check()) {
-            $this->redirect(route('register', absolute: false));
+            $this->redirect(route('register', absolute: false), navigate: true);
 
             return;
         }
@@ -61,7 +61,7 @@ new #[Layout('layouts::auth')] #[Title('Organization invitation')] class extends
             'organization' => $this->invitation->organization->name,
         ]));
 
-        $this->redirect(route('dashboard', absolute: false));
+        $this->redirect(route('dashboard', absolute: false), navigate: true);
     }
 }; ?>
 
@@ -71,7 +71,7 @@ new #[Layout('layouts::auth')] #[Title('Organization invitation')] class extends
             <flux:heading size="lg">{{ __('Invitation unavailable') }}</flux:heading>
             <flux:text class="mt-2">{{ $error }}</flux:text>
             <div class="mt-6">
-                <flux:button :href="route('login')">{{ __('Back to login') }}</flux:button>
+                <flux:button :href="route('login')" wire:navigate>{{ __('Back to login') }}</flux:button>
             </div>
         </div>
     @elseif ($invitation)
@@ -87,10 +87,10 @@ new #[Layout('layouts::auth')] #[Title('Organization invitation')] class extends
 
             <div class="mt-6 flex flex-col gap-3">
                 @guest
-                    <flux:button variant="primary" :href="route('register')">
+                    <flux:button variant="primary" :href="route('register')" wire:navigate>
                         {{ __('Create account to accept') }}
                     </flux:button>
-                    <flux:button :href="route('login')">
+                    <flux:button :href="route('login')" wire:navigate>
                         {{ __('Log in to accept') }}
                     </flux:button>
                     <x-google-auth-button :label="__('Continue with Google')" />

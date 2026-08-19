@@ -173,7 +173,7 @@ new #[Title('Software')] class extends Component {
     {
         $this->authorize('delete', $this->software);
         $deleteSoftware->handle($this->software);
-        $this->redirect(route('assets.software.index', absolute: false));
+        $this->redirect(route('assets.software.index', absolute: false), navigate: true);
     }
 
     #[Computed]
@@ -212,7 +212,7 @@ new #[Title('Software')] class extends Component {
 
 <div class="mx-auto flex w-full max-w-3xl flex-col gap-6">
     <div class="flex items-center gap-3">
-        <flux:button size="sm" :href="route('assets.software.index')" icon="arrow-left">{{ __('Back') }}</flux:button>
+        <flux:button size="sm" :href="route('assets.software.index')" wire:navigate icon="arrow-left">{{ __('Back') }}</flux:button>
         <div>
             <flux:heading size="xl">{{ $software->name }}</flux:heading>
             <flux:text>

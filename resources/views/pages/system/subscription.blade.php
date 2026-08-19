@@ -109,7 +109,7 @@ new #[Title('Customer subscription')] class extends Component
             <flux:heading size="xl">{{ __('Subscription') }}</flux:heading>
             <flux:text>{{ __('Manage pricing and usage limits for :customer.', ['customer' => $organization->name]) }}</flux:text>
         </div>
-        <flux:button :href="route('system.customers')">{{ __('Back to customers') }}</flux:button>
+        <flux:button :href="route('system.customers')" wire:navigate>{{ __('Back to customers') }}</flux:button>
     </div>
 
     <form wire:submit="save" class="flex flex-col gap-8">

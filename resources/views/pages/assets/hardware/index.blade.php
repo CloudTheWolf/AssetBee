@@ -240,7 +240,7 @@ new #[Title('Hardware')] class extends Component {
             @forelse ($this->hardwares as $hardware)
                 <flux:table.row :key="$hardware->id">
                     <flux:table.cell>
-                        <a href="{{ route('assets.hardware.show', $hardware) }}" class="font-medium text-accent">{{ $hardware->name }}</a>
+                        <a href="{{ route('assets.hardware.show', $hardware) }}" class="font-medium text-accent" wire:navigate>{{ $hardware->name }}</a>
                         <div class="text-xs text-zinc-500">
                             {{ collect([
                                 $hardware->manufacturer,
@@ -264,7 +264,7 @@ new #[Title('Hardware')] class extends Component {
                             <flux:dropdown>
                                 <flux:button variant="ghost" size="sm" icon="ellipsis-horizontal" />
                                 <flux:menu>
-                                    <flux:menu.item :href="route('assets.hardware.show', $hardware)" icon="eye">{{ __('View') }}</flux:menu.item>
+                                    <flux:menu.item :href="route('assets.hardware.show', $hardware)" wire:navigate icon="eye">{{ __('View') }}</flux:menu.item>
                                     @can('delete', $hardware)
                                         <flux:menu.separator />
                                         <flux:menu.item variant="danger" icon="trash" wire:click="delete({{ $hardware->id }})" wire:confirm="{{ __('Delete this hardware?') }}">

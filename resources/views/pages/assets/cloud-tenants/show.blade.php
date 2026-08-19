@@ -210,7 +210,7 @@ new #[Title('Cloud Tenant')] class extends Component {
     {
         $this->authorize('delete', $this->cloudTenant);
         $deleteCloudTenant->handle($this->cloudTenant);
-        $this->redirect(route('assets.cloud-tenants.index', absolute: false));
+        $this->redirect(route('assets.cloud-tenants.index', absolute: false), navigate: true);
     }
 
     /**
@@ -274,7 +274,7 @@ new #[Title('Cloud Tenant')] class extends Component {
 
 <div class="mx-auto flex w-full max-w-3xl flex-col gap-6">
     <div class="flex items-center gap-3">
-        <flux:button size="sm" :href="route('assets.cloud-tenants.index')" icon="arrow-left">{{ __('Back') }}</flux:button>
+        <flux:button size="sm" :href="route('assets.cloud-tenants.index')" wire:navigate icon="arrow-left">{{ __('Back') }}</flux:button>
         <div>
             <flux:heading size="xl">{{ $cloudTenant->name }}</flux:heading>
             <flux:text>{{ $cloudTenant->provider->label() }} · {{ $cloudTenant->status->label() }}</flux:text>
@@ -513,7 +513,7 @@ new #[Title('Cloud Tenant')] class extends Component {
             @forelse ($cloudTenant->virtualwares as $virtualware)
                 <li class="flex items-center justify-between py-3">
                     <div>
-                        <a href="{{ route('assets.virtualware.show', $virtualware) }}" class="font-medium text-accent">{{ $virtualware->name }}</a>
+                        <a href="{{ route('assets.virtualware.show', $virtualware) }}" class="font-medium text-accent" wire:navigate>{{ $virtualware->name }}</a>
                         <flux:text>
                             {{ $virtualware->provider->label() }}
                             · {{ $virtualware->status->label() }}
@@ -522,7 +522,7 @@ new #[Title('Cloud Tenant')] class extends Component {
                             @endif
                         </flux:text>
                     </div>
-                    <flux:button size="sm" :href="route('assets.virtualware.show', $virtualware)">{{ __('View') }}</flux:button>
+                    <flux:button size="sm" :href="route('assets.virtualware.show', $virtualware)" wire:navigate>{{ __('View') }}</flux:button>
                 </li>
             @empty
                 <li class="py-3"><flux:text>{{ __('No virtualware linked to this tenant.') }}</flux:text></li>

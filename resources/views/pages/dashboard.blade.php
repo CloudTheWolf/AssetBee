@@ -27,23 +27,23 @@ new #[Title('Dashboard')] class extends Component {
     </div>
 
     <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
-        <a href="{{ route('assets.userware.index') }}" class="rounded-xl border border-zinc-200 p-5 transition hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-900">
+        <a href="{{ route('assets.userware.index') }}" wire:navigate class="rounded-xl border border-zinc-200 p-5 transition hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-900">
             <flux:text>{{ __('Userware') }}</flux:text>
             <flux:heading size="xl" class="mt-2">{{ $inventory['userware'] }}</flux:heading>
         </a>
-        <a href="{{ route('assets.hardware.index') }}" class="rounded-xl border border-zinc-200 p-5 transition hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-900">
+        <a href="{{ route('assets.hardware.index') }}" wire:navigate class="rounded-xl border border-zinc-200 p-5 transition hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-900">
             <flux:text>{{ __('Hardware') }}</flux:text>
             <flux:heading size="xl" class="mt-2">{{ $inventory['hardware'] }}</flux:heading>
         </a>
-        <a href="{{ route('assets.cloud-tenants.index') }}" class="rounded-xl border border-zinc-200 p-5 transition hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-900">
+        <a href="{{ route('assets.cloud-tenants.index') }}" wire:navigate class="rounded-xl border border-zinc-200 p-5 transition hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-900">
             <flux:text>{{ __('Cloud Tenants') }}</flux:text>
             <flux:heading size="xl" class="mt-2">{{ $inventory['cloud_tenants'] }}</flux:heading>
         </a>
-        <a href="{{ route('assets.virtualware.index') }}" class="rounded-xl border border-zinc-200 p-5 transition hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-900">
+        <a href="{{ route('assets.virtualware.index') }}" wire:navigate class="rounded-xl border border-zinc-200 p-5 transition hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-900">
             <flux:text>{{ __('Virtualware') }}</flux:text>
             <flux:heading size="xl" class="mt-2">{{ $inventory['virtualware'] }}</flux:heading>
         </a>
-        <a href="{{ route('assets.software.index') }}" class="rounded-xl border border-zinc-200 p-5 transition hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-900">
+        <a href="{{ route('assets.software.index') }}" wire:navigate class="rounded-xl border border-zinc-200 p-5 transition hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-900">
             <flux:text>{{ __('Software') }}</flux:text>
             <flux:heading size="xl" class="mt-2">{{ $inventory['software'] }}</flux:heading>
         </a>
@@ -100,7 +100,7 @@ new #[Title('Dashboard')] class extends Component {
             </div>
 
             @forelse ($insights['top_software_costs'] as $softwareCost)
-                <a href="{{ route('assets.software.show', $softwareCost['id']) }}" class="mb-3 block last:mb-0">
+                <a href="{{ route('assets.software.show', $softwareCost['id']) }}" wire:navigate class="mb-3 block last:mb-0">
                     <div class="mb-1 flex items-center justify-between gap-3">
                         <div class="min-w-0">
                             <div class="truncate font-medium">{{ $softwareCost['name'] }}</div>
@@ -128,7 +128,7 @@ new #[Title('Dashboard')] class extends Component {
                 @forelse ($insights['upcoming_renewals'] as $renewal)
                     <li class="flex items-center justify-between gap-3 py-3">
                         <div class="min-w-0">
-                            <a href="{{ route('assets.software.show', $renewal['id']) }}" class="font-medium text-accent">
+                            <a href="{{ route('assets.software.show', $renewal['id']) }}" wire:navigate class="font-medium text-accent">
                                 {{ $renewal['name'] }}
                             </a>
                             <flux:text>{{ \Illuminate\Support\Carbon::parse($renewal['next_billing_at'])->format('M j, Y') }}</flux:text>
@@ -147,7 +147,7 @@ new #[Title('Dashboard')] class extends Component {
             <ul class="divide-y divide-zinc-200 dark:divide-zinc-700">
                 @forelse ($insights['expiring_licenses'] as $license)
                     <li class="flex items-center justify-between gap-3 py-3">
-                        <a href="{{ route('assets.software.show', $license['id']) }}" class="font-medium text-accent">
+                        <a href="{{ route('assets.software.show', $license['id']) }}" wire:navigate class="font-medium text-accent">
                             {{ $license['name'] }}
                         </a>
                         <flux:text class="shrink-0">{{ \Illuminate\Support\Carbon::parse($license['expires_at'])->format('M j, Y') }}</flux:text>
@@ -163,13 +163,13 @@ new #[Title('Dashboard')] class extends Component {
             <flux:text class="mb-4">{{ __('Inventory that may need action') }}</flux:text>
             <ul class="divide-y divide-zinc-200 dark:divide-zinc-700">
                 <li class="flex items-center justify-between gap-3 py-3">
-                    <a href="{{ route('assets.hardware.index') }}" class="font-medium text-accent">{{ __('Unassigned hardware') }}</a>
+                    <a href="{{ route('assets.hardware.index') }}" wire:navigate class="font-medium text-accent">{{ __('Unassigned hardware') }}</a>
                     <flux:heading size="lg">{{ $insights['unassigned_hardware'] }}</flux:heading>
                 </li>
                 @forelse ($insights['underutilized_seats'] as $seat)
                     <li class="flex items-center justify-between gap-3 py-3">
                         <div class="min-w-0">
-                            <a href="{{ route('assets.software.show', $seat['id']) }}" class="font-medium text-accent">
+                            <a href="{{ route('assets.software.show', $seat['id']) }}" wire:navigate class="font-medium text-accent">
                                 {{ $seat['name'] }}
                             </a>
                             <flux:text>{{ __(':unused unused seats', ['unused' => $seat['unused']]) }}</flux:text>
