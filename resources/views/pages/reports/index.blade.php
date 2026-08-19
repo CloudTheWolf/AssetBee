@@ -37,7 +37,7 @@ new #[Title('Reports')] class extends Component
             <div class="rounded-xl border border-zinc-200 p-5 dark:border-zinc-700">
                 <a
                     href="{{ route('reports.show', $item['report']->value) }}"
-                    wire:navigate
+
                     class="flex items-start justify-between gap-3 rounded-lg transition hover:bg-zinc-50 dark:hover:bg-zinc-900"
                 >
                     <div class="min-w-0">

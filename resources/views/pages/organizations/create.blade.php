@@ -30,7 +30,7 @@ new #[Title('Create organization')] class extends Component {
 
         Flux::toast(variant: 'success', text: __('Organization created.'));
 
-        $this->redirect(route('dashboard', absolute: false), navigate: true);
+        $this->redirect(route('dashboard', absolute: false));
     }
 }; ?>
 

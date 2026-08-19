@@ -77,7 +77,7 @@ $invitation = $invitation ?? null;
 
         <div class="text-center text-sm text-zinc-400">
             <span>{{ __('Already have an account?') }}</span>
-            <flux:link :href="route('login')" wire:navigate>{{ __('Log in') }}</flux:link>
+            <flux:link :href="route('login')">{{ __('Log in') }}</flux:link>
         </div>
     </div>
 </x-layouts::auth>

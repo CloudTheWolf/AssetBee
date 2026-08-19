@@ -150,7 +150,7 @@ new #[Title('Userware')] class extends Component {
 
         $deleteUserware->handle($this->userware);
 
-        $this->redirect(route('assets.userware.index', absolute: false), navigate: true);
+        $this->redirect(route('assets.userware.index', absolute: false));
     }
 
     #[Computed]
@@ -165,7 +165,7 @@ new #[Title('Userware')] class extends Component {
 
 <div class="mx-auto flex w-full max-w-3xl flex-col gap-6">
     <div class="flex items-center gap-3">
-        <flux:button size="sm" :href="route('assets.userware.index')" wire:navigate icon="arrow-left">
+        <flux:button size="sm" :href="route('assets.userware.index')" icon="arrow-left">
             {{ __('Back') }}
         </flux:button>
         <div>
@@ -202,7 +202,7 @@ new #[Title('Userware')] class extends Component {
             <ul class="mt-3 space-y-2">
                 @forelse ($userware->hardwares as $hardware)
                     <li>
-                        <a href="{{ route('assets.hardware.show', $hardware) }}" class="text-accent" wire:navigate>{{ $hardware->name }}</a>
+                        <a href="{{ route('assets.hardware.show', $hardware) }}" class="text-accent">{{ $hardware->name }}</a>
                     </li>
                 @empty
                     <li><flux:text>{{ __('None') }}</flux:text></li>
@@ -214,7 +214,7 @@ new #[Title('Userware')] class extends Component {
             <ul class="mt-3 space-y-2">
                 @forelse ($userware->virtualwares as $virtualware)
                     <li>
-                        <a href="{{ route('assets.virtualware.show', $virtualware) }}" class="text-accent" wire:navigate>{{ $virtualware->name }}</a>
+                        <a href="{{ route('assets.virtualware.show', $virtualware) }}" class="text-accent">{{ $virtualware->name }}</a>
                     </li>
                 @empty
                     <li><flux:text>{{ __('None') }}</flux:text></li>
@@ -231,7 +231,7 @@ new #[Title('Userware')] class extends Component {
             @forelse ($userware->softwareAssignments as $assignment)
                 <li class="flex items-center justify-between gap-3 py-3">
                     <div class="min-w-0">
-                        <a href="{{ route('assets.software.show', $assignment->software) }}" class="font-medium text-accent" wire:navigate>
+                        <a href="{{ route('assets.software.show', $assignment->software) }}" class="font-medium text-accent">
                             {{ $assignment->software->name }}
                         </a>
                         <flux:text>
@@ -239,7 +239,7 @@ new #[Title('Userware')] class extends Component {
                             · {{ __('Assigned') }} {{ $assignment->assigned_at->format('M j, Y') }}
                         </flux:text>
                     </div>
-                    <flux:button size="sm" :href="route('assets.software.show', $assignment->software)" wire:navigate>
+                    <flux:button size="sm" :href="route('assets.software.show', $assignment->software)">
                         {{ __('View') }}
                     </flux:button>
                 </li>
@@ -267,7 +267,7 @@ new #[Title('Userware')] class extends Component {
                 <li class="flex items-start justify-between gap-3 py-3">
                     <div class="min-w-0">
                         @if ($account->isLinkedToSoftware())
-                            <a href="{{ route('assets.software.show', $account->software) }}" class="font-medium text-accent" wire:navigate>
+                            <a href="{{ route('assets.software.show', $account->software) }}" class="font-medium text-accent">
                                 {{ $account->displayName() }}
                             </a>
                             <flux:text>{{ __('Linked software') }}</flux:text>

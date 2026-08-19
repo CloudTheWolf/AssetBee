@@ -151,7 +151,7 @@ new #[Title('Hardware')] class extends Component {
     {
         $this->authorize('delete', $this->hardware);
         $deleteHardware->handle($this->hardware);
-        $this->redirect(route('assets.hardware.index', absolute: false), navigate: true);
+        $this->redirect(route('assets.hardware.index', absolute: false));
     }
 
     protected function selectedCategory(): ?HardwareCategory
@@ -187,7 +187,7 @@ new #[Title('Hardware')] class extends Component {
 
 <div class="mx-auto flex w-full max-w-3xl flex-col gap-6">
     <div class="flex items-center gap-3">
-        <flux:button size="sm" :href="route('assets.hardware.index')" wire:navigate icon="arrow-left">{{ __('Back') }}</flux:button>
+        <flux:button size="sm" :href="route('assets.hardware.index')" icon="arrow-left">{{ __('Back') }}</flux:button>
         <div>
             <flux:heading size="xl">{{ $hardware->name }}</flux:heading>
             <flux:text>
@@ -296,10 +296,10 @@ new #[Title('Hardware')] class extends Component {
                 @forelse ($hardware->virtualwares as $virtualware)
                     <li class="flex items-center justify-between py-3">
                         <div>
-                            <a href="{{ route('assets.virtualware.show', $virtualware) }}" class="font-medium text-accent" wire:navigate>{{ $virtualware->name }}</a>
+                            <a href="{{ route('assets.virtualware.show', $virtualware) }}" class="font-medium text-accent">{{ $virtualware->name }}</a>
                             <flux:text>{{ $virtualware->status->label() }}</flux:text>
                         </div>
-                        <flux:button size="sm" :href="route('assets.virtualware.show', $virtualware)" wire:navigate>{{ __('View') }}</flux:button>
+                        <flux:button size="sm" :href="route('assets.virtualware.show', $virtualware)">{{ __('View') }}</flux:button>
                     </li>
                 @empty
                     <li class="py-3"><flux:text>{{ __('No virtualware hosted on this server.') }}</flux:text></li>

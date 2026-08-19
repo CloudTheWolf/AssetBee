@@ -180,7 +180,7 @@ new #[Title('Userware')] class extends Component {
             @forelse ($this->userwares as $userware)
                 <flux:table.row :key="$userware->id">
                     <flux:table.cell>
-                        <a href="{{ route('assets.userware.show', $userware) }}" class="font-medium text-accent" wire:navigate>
+                        <a href="{{ route('assets.userware.show', $userware) }}" class="font-medium text-accent">
                             {{ $userware->name }}
                         </a>
                         @if ($userware->employee_id)
@@ -197,7 +197,7 @@ new #[Title('Userware')] class extends Component {
                             <flux:dropdown>
                                 <flux:button variant="ghost" size="sm" icon="ellipsis-horizontal" />
                                 <flux:menu>
-                                    <flux:menu.item :href="route('assets.userware.show', $userware)" wire:navigate icon="eye">{{ __('View') }}</flux:menu.item>
+                                    <flux:menu.item :href="route('assets.userware.show', $userware)" icon="eye">{{ __('View') }}</flux:menu.item>
                                     @can('delete', $userware)
                                         <flux:menu.separator />
                                         <flux:menu.item variant="danger" icon="trash" wire:click="delete({{ $userware->id }})" wire:confirm="{{ __('Delete this identity?') }}">

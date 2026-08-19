@@ -14,7 +14,7 @@
         <div class="relative z-10 grid min-h-dvh lg:grid-cols-[1.2fr_minmax(22rem,30rem)]">
             <section class="auth-brand relative flex min-h-[42vh] flex-col justify-center px-6 py-10 sm:px-10 lg:min-h-dvh lg:px-16 xl:px-20">
                 <div class="flex max-w-xl flex-col gap-8">
-                    <a href="{{ route('home') }}" class="inline-flex w-fit" wire:navigate>
+                    <a href="{{ route('home') }}" class="inline-flex w-fit">
                         <img
                             src="{{ asset('img/logo.png') }}"
                             alt="{{ config('app.name') }}"

@@ -182,7 +182,7 @@ new #[Title('Virtualware')] class extends Component {
     {
         $this->authorize('delete', $this->virtualware);
         $deleteVirtualware->handle($this->virtualware);
-        $this->redirect(route('assets.virtualware.index', absolute: false), navigate: true);
+        $this->redirect(route('assets.virtualware.index', absolute: false));
     }
 
     #[Computed]
@@ -221,7 +221,7 @@ new #[Title('Virtualware')] class extends Component {
 
 <div class="mx-auto flex w-full max-w-3xl flex-col gap-6">
     <div class="flex items-center gap-3">
-        <flux:button size="sm" :href="route('assets.virtualware.index')" wire:navigate icon="arrow-left">{{ __('Back') }}</flux:button>
+        <flux:button size="sm" :href="route('assets.virtualware.index')" icon="arrow-left">{{ __('Back') }}</flux:button>
         <div>
             <flux:heading size="xl">{{ $virtualware->name }}</flux:heading>
             <flux:text>
