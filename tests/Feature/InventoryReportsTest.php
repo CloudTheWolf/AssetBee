@@ -131,6 +131,57 @@ test('the missing antivirus report lists unprotected devices', function () {
         ->assertDontSee('Protected Laptop');
 });
 
+test('the missing antivirus report does not treat unknown linux freshness as out of date', function () {
+    [, $organization] = actingAsOrganizationMember();
+
+    Hardware::factory()->create([
+        'organization_id' => $organization->id,
+        'name' => 'Linux EDR',
+        'operating_system' => HardwareOperatingSystem::Linux,
+        'inventory_collected_at' => now(),
+        'inventory_payload' => inventoryPayload([
+            'platform' => 'linux',
+            'antivirus' => [
+                'status' => 'available',
+                'value' => [
+                    [
+                        'name' => 'CrowdStrike Falcon',
+                        'state' => 'active',
+                        'enabled' => true,
+                        'upToDate' => null,
+                        'detail' => 'falcon-sensor.service',
+                    ],
+                ],
+            ],
+        ]),
+    ]);
+    Hardware::factory()->create([
+        'organization_id' => $organization->id,
+        'name' => 'Stale Definitions',
+        'inventory_collected_at' => now(),
+        'inventory_payload' => inventoryPayload([
+            'antivirus' => [
+                'status' => 'available',
+                'value' => [
+                    [
+                        'name' => 'WatchGuard EPDR',
+                        'state' => 'enabled',
+                        'enabled' => true,
+                        'upToDate' => false,
+                        'detail' => 'definitions expired',
+                    ],
+                ],
+            ],
+        ]),
+    ]);
+
+    $this->get(route('reports.show', InventoryReport::MissingAntivirus->value))
+        ->assertOk()
+        ->assertSee('Stale Definitions')
+        ->assertSee(__('Antivirus is out of date.'))
+        ->assertDontSee('Linux EDR');
+});
+
 test('the unencrypted disks report includes bitlocker disabled hardware', function () {
     [, $organization] = actingAsOrganizationMember();
 

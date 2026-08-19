@@ -274,8 +274,8 @@ class OrganizationInventoryReports
 
         $products = InventoryProbe::list($device['payload'], 'antivirus');
         $protected = collect($products)->contains(
-            fn (array $product): bool => ($product['enabled'] ?? null) === true
-                && ($product['upToDate'] ?? null) === true,
+            fn (array $product): bool => $this->isEnabledAntivirus($product)
+                && ($product['upToDate'] ?? null) !== false,
         );
 
         return ! $protected;
@@ -297,7 +297,7 @@ class OrganizationInventoryReports
         }
 
         $enabled = collect($products)->first(
-            fn (array $product): bool => ($product['enabled'] ?? null) === true,
+            fn (array $product): bool => $this->isEnabledAntivirus($product),
         );
 
         if ($enabled === null) {
@@ -305,6 +305,14 @@ class OrganizationInventoryReports
         }
 
         return __('Antivirus is out of date.');
+    }
+
+    /**
+     * @param  array<string, mixed>  $product
+     */
+    private function isEnabledAntivirus(array $product): bool
+    {
+        return ($product['enabled'] ?? null) === true;
     }
 
     /**

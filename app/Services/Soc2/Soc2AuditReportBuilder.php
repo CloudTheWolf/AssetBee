@@ -267,7 +267,7 @@ class Soc2AuditReportBuilder
 
         $antivirus = $this->probeList($payload, 'antivirus');
         $enabledAntivirus = collect($antivirus)->filter(fn (array $product): bool => ($product['enabled'] ?? null) === true);
-        $upToDateAntivirus = $enabledAntivirus->filter(fn (array $product): bool => ($product['upToDate'] ?? null) === true);
+        $upToDateAntivirus = $enabledAntivirus->filter(fn (array $product): bool => ($product['upToDate'] ?? null) !== false);
 
         $updates = $this->probeValue($payload, 'updates');
         $availableUpdates = is_array(data_get($updates, 'available')) ? data_get($updates, 'available') : [];
