@@ -72,34 +72,112 @@ class ProxmoxGuestDiscoveryService
      */
     protected function resolveNode(ProxmoxApiClient $client, Hardware $hardware, array $credentials): string
     {
-        $configured = trim((string) ($credentials['node'] ?? ''));
+        $nodes = $client->nodes();
 
-        if ($configured !== '') {
-            return $configured;
+        if ($nodes === []) {
+            throw new RuntimeException(__('No Proxmox nodes were returned by the API.'));
         }
 
-        $nodes = $client->nodes();
-        $names = collect($nodes)
+        $available = collect($nodes)
             ->map(fn (array $node): string => trim((string) ($node['node'] ?? '')))
             ->filter()
             ->values();
 
-        if ($names->isEmpty()) {
-            throw new RuntimeException(__('No Proxmox nodes were returned by the API.'));
+        $configured = trim((string) ($credentials['node'] ?? ''));
+
+        foreach ([$configured, trim($hardware->name)] as $candidate) {
+            if ($candidate === '') {
+                continue;
+            }
+
+            $matched = $this->matchNodeRow($nodes, $candidate);
+
+            if ($matched === null) {
+                continue;
+            }
+
+            $this->assertNodeReachable($matched, $available->all());
+
+            return (string) $matched['node'];
         }
 
-        $hardwareName = strtolower(trim($hardware->name));
-        $match = $names->first(fn (string $name): bool => strtolower($name) === $hardwareName);
-
-        if ($match !== null) {
-            return $match;
+        if ($configured !== '') {
+            throw new RuntimeException(__('Proxmox node ":node" was not found. Available nodes: :nodes', [
+                'node' => $configured,
+                'nodes' => $available->implode(', '),
+            ]));
         }
 
-        if ($names->count() === 1) {
-            return (string) $names->first();
+        $online = collect($nodes)->filter(
+            fn (array $node): bool => $this->nodeIsOnline($node),
+        )->values();
+
+        if ($online->count() === 1) {
+            return (string) $online->first()['node'];
         }
 
-        throw new RuntimeException(__('Set the Proxmox node name on this host so guests can be discovered.'));
+        if ($available->count() === 1) {
+            $this->assertNodeReachable($nodes[0], $available->all());
+
+            return (string) $available->first();
+        }
+
+        throw new RuntimeException(__('Set the Proxmox node name on this host so guests can be discovered. Available nodes: :nodes', [
+            'nodes' => $available->implode(', '),
+        ]));
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $nodes
+     * @return array<string, mixed>|null
+     */
+    protected function matchNodeRow(array $nodes, string $candidate): ?array
+    {
+        $candidate = strtolower(trim($candidate));
+
+        if ($candidate === '') {
+            return null;
+        }
+
+        foreach ($nodes as $node) {
+            $name = strtolower(trim((string) ($node['node'] ?? '')));
+
+            if ($name === '') {
+                continue;
+            }
+
+            if ($name === $candidate || str_starts_with($candidate, $name.'.')) {
+                return $node;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * @param  array<string, mixed>  $node
+     * @param  array<int, string>  $available
+     */
+    protected function assertNodeReachable(array $node, array $available): void
+    {
+        if ($this->nodeIsOnline($node)) {
+            return;
+        }
+
+        throw new RuntimeException(__('Proxmox node ":node" is not online. Available nodes: :nodes', [
+            'node' => (string) ($node['node'] ?? ''),
+            'nodes' => implode(', ', $available),
+        ]));
+    }
+
+    /**
+     * @param  array<string, mixed>  $node
+     */
+    protected function nodeIsOnline(array $node): bool
+    {
+        $status = strtolower(trim((string) ($node['status'] ?? 'online')));
+
+        return $status === '' || $status === 'online';
     }
 
     /**

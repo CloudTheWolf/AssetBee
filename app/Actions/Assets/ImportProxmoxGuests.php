@@ -63,11 +63,7 @@ class ImportProxmoxGuests
             $guest = $discovered->get($externalId);
             $host = $this->resolveProxmoxHostHardware->handle($hardware, $guest);
 
-            $virtualware = Virtualware::query()
-                ->where('organization_id', $hardware->organization_id)
-                ->where('provider', VirtualwareProvider::Proxmox)
-                ->where('external_id', $guest->externalId)
-                ->first();
+            $virtualware = $this->findExistingVirtualware($hardware, $guest);
 
             $attributes = [
                 'provider' => VirtualwareProvider::Proxmox,
@@ -92,5 +88,24 @@ class ImportProxmoxGuests
             'updated' => $updated,
             'virtualwares' => $virtualwares,
         ];
+    }
+
+    protected function findExistingVirtualware(Hardware $hardware, DiscoveredProxmoxGuest $guest): ?Virtualware
+    {
+        $byExternalId = Virtualware::query()
+            ->where('organization_id', $hardware->organization_id)
+            ->where('provider', VirtualwareProvider::Proxmox)
+            ->where('external_id', $guest->externalId)
+            ->first();
+
+        if ($byExternalId !== null) {
+            return $byExternalId;
+        }
+
+        return Virtualware::query()
+            ->where('organization_id', $hardware->organization_id)
+            ->where('name', $guest->name)
+            ->orderBy('id')
+            ->first();
     }
 }

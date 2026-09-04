@@ -471,8 +471,8 @@ new #[Title('Hardware')] class extends Component {
                 :required="! $hardware->hasProxmoxCredentials()"
                 :disabled="! auth()->user()->can('update', $hardware)"
             />
-            <flux:input wire:model="proxmox_node" :label="__('Node name')" :description="__('Optional. Required when the API exposes more than one node.')" :disabled="! auth()->user()->can('update', $hardware)" />
-            <flux:checkbox wire:model="proxmox_verify_tls" :label="__('Verify TLS certificate')" :disabled="! auth()->user()->can('update', $hardware)" />
+            <flux:input wire:model="proxmox_node" :label="__('Node name')" :description="__('Short Proxmox node name from the UI (for example pve1), not an FQDN. Required when the API exposes more than one node.')" :disabled="! auth()->user()->can('update', $hardware)" />
+            <flux:checkbox wire:model="proxmox_verify_tls" :label="__('Verify TLS certificate')" :description="__('Turn off for the default Proxmox self-signed certificate.')" :disabled="! auth()->user()->can('update', $hardware)" />
 
             @can('update', $hardware)
                 <div class="flex justify-between gap-3">

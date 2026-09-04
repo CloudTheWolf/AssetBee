@@ -2,6 +2,7 @@
 
 namespace App\Services\Proxmox;
 
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Http;
@@ -93,15 +94,16 @@ class ProxmoxApiClient
     {
         try {
             $response = $this->request()->get($this->url($path))->throw();
-        } catch (RequestException $exception) {
-            $errors = $exception->response->json('errors');
-
+        } catch (ConnectionException $exception) {
             throw new RuntimeException(
-                __('Unable to reach Proxmox API: :message', [
-                    'message' => $errors
-                        ? json_encode($errors)
-                        : $exception->getMessage(),
+                __('Unable to connect to Proxmox at :url. Check the API URL, network reachability from AssetBee, and TLS settings.', [
+                    'url' => rtrim((string) ($this->credentials['api_url'] ?? ''), '/'),
                 ]),
+                previous: $exception,
+            );
+        } catch (RequestException $exception) {
+            throw new RuntimeException(
+                $this->formatRequestException($exception, $path),
                 previous: $exception,
             );
         } catch (Throwable $exception) {
@@ -115,6 +117,58 @@ class ProxmoxApiClient
         $json = $response->json() ?? [];
 
         return $json;
+    }
+
+    protected function formatRequestException(RequestException $exception, string $path): string
+    {
+        $status = $exception->response->status();
+        $detail = $this->responseDetail($exception);
+
+        if ($status === 595) {
+            $node = $this->nodeFromPath($path);
+
+            return __('Proxmox returned HTTP 595 for node ":node" — pveproxy could not reach that node. Use the short node name from the Proxmox UI (not an FQDN), confirm the node is online, and check /etc/hosts on the cluster.', [
+                'node' => $node ?? __('(unknown)'),
+            ]).($detail !== null ? ' '.$detail : '');
+        }
+
+        if ($status === 401 || $status === 403) {
+            return __('Proxmox rejected the API token (HTTP :status). Check the token ID and secret.', [
+                'status' => $status,
+            ]);
+        }
+
+        return __('Unable to reach Proxmox API: :message', [
+            'message' => $detail ?? $exception->getMessage(),
+        ]);
+    }
+
+    protected function responseDetail(RequestException $exception): ?string
+    {
+        $errors = $exception->response->json('errors');
+
+        if (is_array($errors) && $errors !== []) {
+            $encoded = json_encode($errors);
+
+            return is_string($encoded) ? $encoded : null;
+        }
+
+        if (is_string($errors) && $errors !== '') {
+            return $errors;
+        }
+
+        $body = trim($exception->response->body());
+
+        return $body !== '' && $body !== '{}' ? $body : null;
+    }
+
+    protected function nodeFromPath(string $path): ?string
+    {
+        if (preg_match('#^/nodes/([^/]+)#', $path, $matches) !== 1) {
+            return null;
+        }
+
+        return rawurldecode($matches[1]);
     }
 
     protected function request(): PendingRequest

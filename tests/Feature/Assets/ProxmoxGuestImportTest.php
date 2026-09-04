@@ -179,6 +179,42 @@ test('reimporting a migrated guest updates the host hardware', function () {
         ->and($virtualware->cloud_tenant_id)->toBeNull();
 });
 
+test('importing updates an existing virtualware with the same name', function () {
+    [, $organization] = actingAsOrganizationMember();
+
+    $hardware = Hardware::factory()->withProxmoxCredentials([
+        'node' => 'pve1',
+    ])->create([
+        'organization_id' => $organization->id,
+        'name' => 'pve1',
+    ]);
+
+    $existing = Virtualware::factory()->create([
+        'organization_id' => $organization->id,
+        'name' => 'web-1',
+        'provider' => VirtualwareProvider::Other,
+        'external_id' => null,
+        'host_hardware_id' => null,
+        'status' => VirtualwareStatus::Stopped,
+    ]);
+
+    fakeProxmoxApi('pve1');
+
+    $result = app(ImportProxmoxGuests::class)->handle($hardware, ['qemu/100']);
+
+    expect($result['created'])->toBe(0)
+        ->and($result['updated'])->toBe(1)
+        ->and(Virtualware::query()->where('name', 'web-1')->count())->toBe(1);
+
+    $existing->refresh();
+
+    expect($existing->provider)->toBe(VirtualwareProvider::Proxmox)
+        ->and($existing->external_id)->toBe('qemu/100')
+        ->and($existing->host_hardware_id)->toBe($hardware->id)
+        ->and($existing->status)->toBe(VirtualwareStatus::Running)
+        ->and($existing->cloud_tenant_id)->toBeNull();
+});
+
 test('discover proxmox guests action rejects non vm hosts', function () {
     [, $organization] = actingAsOrganizationMember();
 
@@ -189,3 +225,43 @@ test('discover proxmox guests action rejects non vm hosts', function () {
 
     app(DiscoverProxmoxGuests::class)->handle($hardware);
 })->throws(RuntimeException::class);
+
+test('fqdn node credentials resolve to the short proxmox node name', function () {
+    [, $organization] = actingAsOrganizationMember();
+
+    $hardware = Hardware::factory()->withProxmoxCredentials([
+        'node' => 'pve1.lab.local',
+    ])->create([
+        'organization_id' => $organization->id,
+        'name' => 'cluster-vip',
+    ]);
+
+    fakeProxmoxApi('pve1');
+
+    $guests = app(DiscoverProxmoxGuests::class)->handle($hardware);
+
+    expect($guests)->not->toBeEmpty()
+        ->and($guests[0]->node)->toBe('pve1');
+});
+
+test('http 595 explains unreachable proxmox nodes', function () {
+    [, $organization] = actingAsOrganizationMember();
+
+    $hardware = Hardware::factory()->withProxmoxCredentials([
+        'node' => 'pve1',
+    ])->create([
+        'organization_id' => $organization->id,
+    ]);
+
+    Http::fake([
+        'https://pve.example:8006/api2/json/nodes' => Http::response([
+            'data' => [
+                ['node' => 'pve1', 'status' => 'online'],
+            ],
+        ]),
+        'https://pve.example:8006/api2/json/nodes/pve1/qemu' => Http::response('No route to host', 595),
+    ]);
+
+    expect(fn () => app(DiscoverProxmoxGuests::class)->handle($hardware))
+        ->toThrow(RuntimeException::class, 'HTTP 595');
+});
