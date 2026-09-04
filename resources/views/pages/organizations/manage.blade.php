@@ -28,6 +28,8 @@ new #[Title('Organization settings')] class extends Component
 
     public string $google_hosted_domains = '';
 
+    public bool $virtualware_sync_enabled = false;
+
     public string $invite_email = '';
 
     public string $invite_role = 'member';
@@ -43,6 +45,7 @@ new #[Title('Organization settings')] class extends Component
 
         $this->name = $organization->name;
         $this->google_hosted_domains = $organization->googleDomains()->pluck('domain')->implode("\n");
+        $this->virtualware_sync_enabled = (bool) $organization->virtualware_sync_enabled;
     }
 
     public function save(UpdateOrganization $updateOrganization): void
@@ -53,6 +56,7 @@ new #[Title('Organization settings')] class extends Component
         $updateOrganization->handle($organization, [
             'name' => $this->name,
             'google_hosted_domains' => $this->google_hosted_domains,
+            'virtualware_sync_enabled' => $this->virtualware_sync_enabled,
         ]);
 
         unset($this->organization);
@@ -221,6 +225,11 @@ new #[Title('Organization settings')] class extends Component
     <form wire:submit="save" class="flex flex-col gap-6 rounded-xl border border-zinc-200 p-6 dark:border-zinc-700">
         <flux:heading size="lg">{{ __('Settings') }}</flux:heading>
         <flux:input wire:model="name" :label="__('Name')" required />
+        <flux:checkbox
+            wire:model="virtualware_sync_enabled"
+            :label="__('Automatic virtualware sync')"
+            :description="__('Every 15 minutes, refresh imported AWS EC2 instances and sync guests from Proxmox hosts.')"
+        />
         <flux:textarea
             wire:model="google_hosted_domains"
             :label="__('Google Workspace domains')"

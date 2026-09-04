@@ -4,6 +4,7 @@ use App\Models\Organization;
 use App\Models\OrganizationApiKey;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Schedule;
 
 Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
@@ -40,3 +41,8 @@ Artisan::command('organization:api-key {organization} {--name=Inventory collecto
 
     return 0;
 })->purpose('Issue an inventory API key for an organization');
+
+Schedule::command('virtualware:sync')
+    ->everyFifteenMinutes()
+    ->withoutOverlapping()
+    ->name('virtualware-sync');

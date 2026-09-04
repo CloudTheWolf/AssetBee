@@ -19,6 +19,7 @@ use Laravel\Cashier\Billable;
  * @property int $id
  * @property string $name
  * @property string $slug
+ * @property bool $virtualware_sync_enabled
  * @property int|null $subscription_package_id
  * @property string|null $stripe_id
  * @property string|null $pm_type
@@ -30,11 +31,21 @@ use Laravel\Cashier\Billable;
  * @property-read OrganizationSubscription|null $plan
  * @property-read SubscriptionPackage|null $package
  */
-#[Fillable(['name', 'slug'])]
+#[Fillable(['name', 'slug', 'virtualware_sync_enabled'])]
 class Organization extends Model
 {
     /** @use HasFactory<OrganizationFactory> */
     use Billable, HasFactory;
+
+    /**
+     * @return array<string, string>
+     */
+    protected function casts(): array
+    {
+        return [
+            'virtualware_sync_enabled' => 'boolean',
+        ];
+    }
 
     /**
      * @return BelongsToMany<User, $this, OrganizationUser>

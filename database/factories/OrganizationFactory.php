@@ -22,7 +22,15 @@ class OrganizationFactory extends Factory
         return [
             'name' => $name,
             'slug' => Str::slug($name).'-'.Str::lower(Str::random(4)),
+            'virtualware_sync_enabled' => false,
         ];
+    }
+
+    public function withVirtualwareSync(): static
+    {
+        return $this->state(fn (): array => [
+            'virtualware_sync_enabled' => true,
+        ]);
     }
 
     /**

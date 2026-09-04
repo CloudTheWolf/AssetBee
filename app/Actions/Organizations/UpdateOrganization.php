@@ -24,6 +24,7 @@ class UpdateOrganization
         $validated = Validator::make($input, [
             'name' => ['required', 'string', 'max:255'],
             'google_hosted_domains' => ['nullable'],
+            'virtualware_sync_enabled' => ['sometimes', 'boolean'],
         ])->validate();
 
         return DB::transaction(function () use ($organization, $validated, $input) {
@@ -32,6 +33,9 @@ class UpdateOrganization
                 'slug' => $organization->slug === Str::slug($organization->name)
                     ? $this->uniqueSlug($validated['name'], $organization->id)
                     : $organization->slug,
+                ...array_key_exists('virtualware_sync_enabled', $validated)
+                    ? ['virtualware_sync_enabled' => (bool) $validated['virtualware_sync_enabled']]
+                    : [],
             ]);
 
             $this->syncOrganizationGoogleDomains->handle(

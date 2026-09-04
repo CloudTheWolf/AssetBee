@@ -27,10 +27,12 @@ test('owners can update organization settings', function () {
     Livewire::test('pages::organizations.manage')
         ->set('name', 'Renamed Org')
         ->set('google_hosted_domains', "one.test\ntwo.test")
+        ->set('virtualware_sync_enabled', true)
         ->call('save')
         ->assertHasNoErrors();
 
     expect($organization->fresh()->name)->toBe('Renamed Org')
+        ->and($organization->fresh()->virtualware_sync_enabled)->toBeTrue()
         ->and($organization->googleDomains()->pluck('domain')->sort()->values()->all())
         ->toBe(['one.test', 'two.test']);
 });
