@@ -1,12 +1,10 @@
 name: docker
 
 on:
+  workflow_call:
   push:
-    branches:
-      - main
     tags:
       - 'v*'
-  pull_request:
   workflow_dispatch:
 
 concurrency:
@@ -18,6 +16,7 @@ env:
 
 jobs:
   build-and-push:
+    if: ${{ !contains(github.event.head_commit.message || '', '[-noci]') }}
     runs-on: ubuntu-latest
     permissions:
       contents: read

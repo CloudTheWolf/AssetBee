@@ -15,6 +15,7 @@ permissions:
 
 jobs:
   ci:
+    if: ${{ !contains(github.event.head_commit.message || '', '[-noci]') && !contains(github.event.pull_request.title || '', '[-noci]') }}
     runs-on: ubuntu-latest
 
     env:
@@ -71,3 +72,13 @@ jobs:
 
       - name: Run CI checks
         run: composer ci:check
+
+  docker:
+    needs: ci
+    if: ${{ !contains(github.event.head_commit.message || '', '[-noci]') && !contains(github.event.pull_request.title || '', '[-noci]') }}
+    permissions:
+      contents: read
+      attestations: write
+      id-token: write
+    uses: ./.github/workflows/docker.yml
+    secrets: inherit
