@@ -40,13 +40,13 @@ class SyncVirtualwareCommand extends Command
         }
 
         if ($aws['failed'] > 0 || $proxmox['failed'] > 0) {
-            $this->components->warn('Virtualware sync finished with failures.');
-
-            return self::FAILURE;
+            $this->components->warn('Virtualware sync finished with some host or tenant failures. See warnings above.');
+        } else {
+            $this->components->info('Virtualware sync completed.');
         }
 
-        $this->components->info('Virtualware sync completed.');
-
+        // Partial provider failures are logged as warnings; exiting non-zero
+        // makes the scheduler report an ERROR even when sync otherwise ran.
         return self::SUCCESS;
     }
 }

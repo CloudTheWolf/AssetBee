@@ -1,12 +1,34 @@
 <?php
 
 use App\Actions\Assets\AssignHardware;
+use App\Enums\HardwareCategory;
 use App\Enums\HardwareStatus;
 use App\Models\Hardware;
 use App\Models\Organization;
 use App\Models\Userware;
 use Illuminate\Validation\ValidationException;
 use Livewire\Livewire;
+
+test('hardware list can be filtered by type', function () {
+    [, $organization] = actingAsOrganizationMember();
+
+    Hardware::factory()->create([
+        'organization_id' => $organization->id,
+        'name' => 'filter-match-laptop',
+        'category' => HardwareCategory::Laptop,
+    ]);
+
+    Hardware::factory()->create([
+        'organization_id' => $organization->id,
+        'name' => 'filter-other-server',
+        'category' => HardwareCategory::Server,
+    ]);
+
+    Livewire::test('pages::assets.hardware.index')
+        ->set('type', HardwareCategory::Laptop->value)
+        ->assertSee('filter-match-laptop')
+        ->assertDontSee('filter-other-server');
+});
 
 test('owners can create hardware', function () {
     [, $organization] = actingAsOrganizationMember();

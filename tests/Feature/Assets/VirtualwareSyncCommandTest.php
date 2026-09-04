@@ -210,7 +210,31 @@ test('virtualware sync command runs aws and proxmox sync', function () {
         ]);
     });
 
-    Artisan::call('virtualware:sync');
+    expect(Artisan::call('virtualware:sync'))->toBe(0)
+        ->and(Artisan::output())->toContain('Virtualware sync completed.');
+});
 
-    expect(Artisan::output())->toContain('Virtualware sync completed.');
+test('virtualware sync command succeeds when some hosts fail', function () {
+    $this->mock(SyncImportedAwsEc2Instances::class, function ($mock): void {
+        $mock->shouldReceive('handle')->once()->andReturn([
+            'tenants' => 1,
+            'updated' => 0,
+            'created' => 0,
+            'failed' => 1,
+            'errors' => ['AWS tenant Example (#1): Access denied'],
+        ]);
+    });
+
+    $this->mock(SyncAllProxmoxVirtualware::class, function ($mock): void {
+        $mock->shouldReceive('handle')->once()->andReturn([
+            'hosts' => 1,
+            'created' => 2,
+            'updated' => 1,
+            'failed' => 0,
+            'errors' => [],
+        ]);
+    });
+
+    expect(Artisan::call('virtualware:sync'))->toBe(0)
+        ->and(Artisan::output())->toContain('finished with some host or tenant failures');
 });

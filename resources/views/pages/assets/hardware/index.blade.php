@@ -21,6 +21,8 @@ new #[Title('Hardware')] class extends Component {
 
     public string $search = '';
 
+    public string $type = '';
+
     public string $status = '';
 
     public string $sortBy = 'name';
@@ -61,6 +63,11 @@ new #[Title('Hardware')] class extends Component {
     }
 
     public function updatingSearch(): void
+    {
+        $this->resetPage();
+    }
+
+    public function updatingType(): void
     {
         $this->resetPage();
     }
@@ -198,6 +205,7 @@ new #[Title('Hardware')] class extends Component {
                         ->orWhere('serial_number', 'like', '%'.$this->search.'%');
                 });
             })
+            ->when($this->type !== '', fn ($query) => $query->where('category', $this->type))
             ->when($this->status !== '', fn ($query) => $query->where('status', $this->status))
             ->orderBy($sortBy, $this->sortDirection === 'desc' ? 'desc' : 'asc')
             ->paginate(10);
@@ -219,6 +227,12 @@ new #[Title('Hardware')] class extends Component {
 
     <div class="flex flex-col gap-3 sm:flex-row">
         <flux:input wire:model.live.debounce.300ms="search" :placeholder="__('Search name, asset tag, serial...')" class="flex-1" />
+        <flux:select wire:model.live="type" class="sm:w-48">
+            <option value="">{{ __('All types') }}</option>
+            @foreach (App\Enums\HardwareCategory::cases() as $typeOption)
+                <option value="{{ $typeOption->value }}">{{ $typeOption->label() }}</option>
+            @endforeach
+        </flux:select>
         <flux:select wire:model.live="status" class="sm:w-48">
             <option value="">{{ __('All statuses') }}</option>
             @foreach (App\Enums\HardwareStatus::cases() as $statusOption)
