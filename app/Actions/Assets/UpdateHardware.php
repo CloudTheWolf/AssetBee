@@ -50,6 +50,10 @@ class UpdateHardware
 
         if ($wasVmHost && ! $hardware->fresh()->is_vm_host) {
             $hardware->virtualwares()->update(['host_hardware_id' => null]);
+            $hardware->forceFill([
+                'proxmox_credentials' => null,
+                'proxmox_credentials_verified_at' => null,
+            ])->save();
         }
 
         return $hardware->refresh();

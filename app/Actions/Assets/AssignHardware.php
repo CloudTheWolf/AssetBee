@@ -28,11 +28,22 @@ class AssignHardware
 
         $hardware->forceFill([
             'assigned_userware_id' => $userware?->id,
-            'status' => $userware === null
-                ? ($hardware->status === HardwareStatus::Retired ? HardwareStatus::Retired : HardwareStatus::Available)
-                : HardwareStatus::Assigned,
+            'status' => $this->statusAfterAssignment($hardware, $userware),
         ])->save();
 
         return $hardware->refresh();
+    }
+
+    protected function statusAfterAssignment(Hardware $hardware, ?Userware $userware): HardwareStatus
+    {
+        if ($userware !== null) {
+            return HardwareStatus::Assigned;
+        }
+
+        return match ($hardware->status) {
+            HardwareStatus::Assigned => HardwareStatus::Available,
+            HardwareStatus::InUse, HardwareStatus::Maintenance, HardwareStatus::Retired => $hardware->status,
+            default => HardwareStatus::Available,
+        };
     }
 }

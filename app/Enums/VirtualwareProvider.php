@@ -8,6 +8,7 @@ enum VirtualwareProvider: string
     case Azure = 'azure';
     case Gcp = 'gcp';
     case Vmware = 'vmware';
+    case Proxmox = 'proxmox';
     case Other = 'other';
 
     public function label(): string
@@ -17,6 +18,7 @@ enum VirtualwareProvider: string
             self::Azure => __('Azure'),
             self::Gcp => __('GCP'),
             self::Vmware => __('VMware'),
+            self::Proxmox => __('Proxmox'),
             self::Other => __('Other'),
         };
     }

@@ -1,18 +1,25 @@
 <?php
 
 use App\Actions\Assets\AssignHardware;
+use App\Actions\Assets\ClearHardwareProxmoxCredentials;
 use App\Actions\Assets\DeleteHardware;
+use App\Actions\Assets\DiscoverProxmoxGuests;
+use App\Actions\Assets\ImportProxmoxGuests;
 use App\Actions\Assets\UpdateHardware;
+use App\Actions\Assets\UpdateHardwareProxmoxCredentials;
 use App\Enums\BitLockerStatus;
 use App\Enums\HardwareCategory;
 use App\Enums\HardwareOperatingSystem;
 use App\Enums\HardwareStatus;
+use App\Enums\VirtualwareProvider;
 use App\Livewire\Concerns\DisplaysCollectedInventory;
 use App\Models\Hardware;
 use App\Models\Userware;
 use App\Support\CurrentOrganization;
 use Flux\Flux;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
+use Illuminate\Support\Arr;
+use Illuminate\Support\Facades\Cache;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Title;
 use Livewire\Component;
@@ -58,6 +65,21 @@ new #[Title('Hardware')] class extends Component {
 
     public string $sbomSearch = '';
 
+    public string $proxmox_api_url = '';
+
+    public string $proxmox_token_id = '';
+
+    public string $proxmox_token_secret = '';
+
+    public bool $proxmox_verify_tls = true;
+
+    public string $proxmox_node = '';
+
+    /** @var list<string> */
+    public array $selectedExternalIds = [];
+
+    public ?string $discoveryError = null;
+
     public function mount(Hardware $hardware): void
     {
         $this->authorize('view', $hardware);
@@ -65,6 +87,7 @@ new #[Title('Hardware')] class extends Component {
 
         $this->hardware = $hardware->load(['assignedUserware', 'virtualwares']);
         $this->fillForm();
+        $this->fillProxmoxCredentialForm();
     }
 
     public function updatedCategory(): void
@@ -103,6 +126,17 @@ new #[Title('Hardware')] class extends Component {
         $this->assigned_userware_id = (string) ($this->hardware->assigned_userware_id ?? '');
     }
 
+    public function fillProxmoxCredentialForm(): void
+    {
+        $defaults = $this->hardware->proxmoxCredentialFormDefaults();
+
+        $this->proxmox_api_url = $defaults['api_url'];
+        $this->proxmox_token_id = $defaults['token_id'];
+        $this->proxmox_token_secret = $defaults['token_secret'];
+        $this->proxmox_verify_tls = $defaults['verify_tls'];
+        $this->proxmox_node = $defaults['node'];
+    }
+
     public function save(UpdateHardware $updateHardware): void
     {
         $this->authorize('update', $this->hardware);
@@ -127,8 +161,102 @@ new #[Title('Hardware')] class extends Component {
         ])->load(['assignedUserware', 'virtualwares']);
 
         $this->fillForm();
+        $this->fillProxmoxCredentialForm();
+
+        if (! $this->hardware->is_vm_host) {
+            $this->resetDiscovery();
+        }
 
         Flux::toast(variant: 'success', text: __('Hardware updated.'));
+    }
+
+    public function saveProxmoxCredentials(UpdateHardwareProxmoxCredentials $updateHardwareProxmoxCredentials): void
+    {
+        $this->authorize('update', $this->hardware);
+
+        $this->hardware = $updateHardwareProxmoxCredentials->handle($this->hardware, [
+            'api_url' => $this->proxmox_api_url,
+            'token_id' => $this->proxmox_token_id,
+            'token_secret' => $this->proxmox_token_secret !== '' ? $this->proxmox_token_secret : null,
+            'verify_tls' => $this->proxmox_verify_tls,
+            'node' => $this->proxmox_node !== '' ? $this->proxmox_node : null,
+        ])->load(['assignedUserware', 'virtualwares']);
+
+        $this->fillProxmoxCredentialForm();
+        $this->resetDiscovery();
+
+        Flux::toast(variant: 'success', text: __('Proxmox credentials saved.'));
+    }
+
+    public function clearProxmoxCredentials(ClearHardwareProxmoxCredentials $clearHardwareProxmoxCredentials): void
+    {
+        $this->authorize('update', $this->hardware);
+
+        $this->hardware = $clearHardwareProxmoxCredentials->handle($this->hardware)->load(['assignedUserware', 'virtualwares']);
+        $this->fillProxmoxCredentialForm();
+        $this->resetDiscovery();
+
+        Flux::toast(variant: 'success', text: __('Proxmox credentials removed.'));
+    }
+
+    public function discoverProxmoxGuests(DiscoverProxmoxGuests $discoverProxmoxGuests): void
+    {
+        $this->authorize('update', $this->hardware);
+        $this->discoveryError = null;
+
+        try {
+            $discovered = $discoverProxmoxGuests->handle($this->hardware);
+        } catch (\Throwable $exception) {
+            $this->resetDiscovery();
+            $this->discoveryError = $exception->getMessage();
+
+            return;
+        }
+
+        $importedIds = $this->hardware->organization->virtualwares()
+            ->where('provider', VirtualwareProvider::Proxmox)
+            ->whereNotNull('external_id')
+            ->pluck('external_id')
+            ->all();
+
+        $this->hardware->refresh();
+        $guests = collect($discovered)
+            ->map(fn ($guest): array => [
+                ...Arr::except($guest->toArray(), 'notes'),
+                'already_imported' => in_array($guest->externalId, $importedIds, true),
+            ])
+            ->values()
+            ->all();
+
+        Cache::put($this->discoveryCacheKey(), $guests, now()->addMinutes(30));
+        unset($this->discoveredGuests);
+
+        $this->selectedExternalIds = collect($guests)
+            ->pluck('external_id')
+            ->values()
+            ->all();
+
+        if ($guests === []) {
+            Flux::toast(text: __('No guests were found on this Proxmox node.'));
+        }
+    }
+
+    public function importProxmoxGuests(ImportProxmoxGuests $importProxmoxGuests): void
+    {
+        $this->authorize('update', $this->hardware);
+
+        $result = $importProxmoxGuests->handle($this->hardware, $this->selectedExternalIds);
+
+        $this->hardware = $this->hardware->fresh()->load(['assignedUserware', 'virtualwares']);
+        $this->resetDiscovery();
+
+        Flux::toast(
+            variant: 'success',
+            text: __('Imported :created new and updated :updated virtual machines.', [
+                'created' => $result['created'],
+                'updated' => $result['updated'],
+            ]),
+        );
     }
 
     public function assign(AssignHardware $assignHardware): void
@@ -152,6 +280,35 @@ new #[Title('Hardware')] class extends Component {
         $this->authorize('delete', $this->hardware);
         $deleteHardware->handle($this->hardware);
         $this->redirect(route('assets.hardware.index', absolute: false), navigate: true);
+    }
+
+    /**
+     * @return list<array<string, mixed>>
+     */
+    #[Computed]
+    public function discoveredGuests(): array
+    {
+        return Cache::get($this->discoveryCacheKey(), []);
+    }
+
+    /** @return list<string> */
+    public function discoveredExternalIds(): array
+    {
+        return collect($this->discoveredGuests)->pluck('external_id')->values()->all();
+    }
+
+    protected function discoveryCacheKey(): string
+    {
+        return sprintf('hardware:%s:proxmox-discovery:%s', $this->hardware->id, auth()->id());
+    }
+
+    protected function resetDiscovery(): void
+    {
+        Cache::forget($this->discoveryCacheKey());
+        unset($this->discoveredGuests);
+
+        $this->selectedExternalIds = [];
+        $this->discoveryError = null;
     }
 
     protected function selectedCategory(): ?HardwareCategory
@@ -290,6 +447,138 @@ new #[Title('Hardware')] class extends Component {
     @endcan
 
     @if ($hardware->is_vm_host)
+        <form wire:submit="saveProxmoxCredentials" class="flex flex-col gap-6 rounded-xl border border-zinc-200 p-6 dark:border-zinc-700">
+            <div>
+                <flux:heading size="lg">{{ __('Proxmox connection') }}</flux:heading>
+                <flux:text>
+                    {{ __('Store encrypted API credentials used to discover and import guests as virtualware.') }}
+                    @if ($hardware->hasProxmoxCredentials())
+                        · {{ __('Credentials are saved.') }}
+                        @if ($hardware->proxmox_credentials_verified_at)
+                            {{ __('Last verified :time.', ['time' => $hardware->proxmox_credentials_verified_at->diffForHumans()]) }}
+                        @endif
+                    @endif
+                </flux:text>
+            </div>
+
+            <flux:input wire:model="proxmox_api_url" :label="__('API URL')" :description="__('Example: https://pve.example:8006')" required :disabled="! auth()->user()->can('update', $hardware)" />
+            <flux:input wire:model="proxmox_token_id" :label="__('API token ID')" :description="__('Format: user@realm!tokenid')" required :disabled="! auth()->user()->can('update', $hardware)" />
+            <flux:input
+                wire:model="proxmox_token_secret"
+                type="password"
+                :label="__('API token secret')"
+                :description="$hardware->hasProxmoxCredentials() ? __('Leave blank to keep the existing secret.') : null"
+                :required="! $hardware->hasProxmoxCredentials()"
+                :disabled="! auth()->user()->can('update', $hardware)"
+            />
+            <flux:input wire:model="proxmox_node" :label="__('Node name')" :description="__('Optional. Required when the API exposes more than one node.')" :disabled="! auth()->user()->can('update', $hardware)" />
+            <flux:checkbox wire:model="proxmox_verify_tls" :label="__('Verify TLS certificate')" :disabled="! auth()->user()->can('update', $hardware)" />
+
+            @can('update', $hardware)
+                <div class="flex justify-between gap-3">
+                    @if ($hardware->hasProxmoxCredentials())
+                        <flux:button
+                            variant="danger"
+                            type="button"
+                            wire:click="clearProxmoxCredentials"
+                            wire:confirm="{{ __('Remove stored Proxmox credentials for this host?') }}"
+                        >
+                            {{ __('Remove credentials') }}
+                        </flux:button>
+                    @else
+                        <div></div>
+                    @endif
+                    <flux:button variant="primary" type="submit">{{ __('Save credentials') }}</flux:button>
+                </div>
+            @endcan
+        </form>
+
+        <div class="flex flex-col gap-4 rounded-xl border border-zinc-200 p-6 dark:border-zinc-700">
+            <div>
+                <flux:heading size="lg">{{ __('Sync from Proxmox') }}</flux:heading>
+                <flux:text>{{ __('Discover QEMU VMs and LXC containers, then import them as virtualware on the matching host.') }}</flux:text>
+            </div>
+
+            @unless ($hardware->hasProxmoxCredentials())
+                <flux:text>{{ __('Add Proxmox credentials above before discovering guests.') }}</flux:text>
+            @endunless
+
+            @can('update', $hardware)
+                <div>
+                    <flux:button
+                        type="button"
+                        wire:click="discoverProxmoxGuests"
+                        wire:loading.attr="disabled"
+                        :disabled="! $hardware->hasProxmoxCredentials()"
+                    >
+                        {{ __('Discover guests') }}
+                    </flux:button>
+                </div>
+            @endcan
+
+            @if ($discoveryError)
+                <div class="rounded-lg border border-red-300 bg-red-50 p-4 text-sm text-red-800 dark:border-red-700 dark:bg-red-950/30 dark:text-red-200">
+                    {{ $discoveryError }}
+                </div>
+            @endif
+
+            @if ($this->discoveredGuests !== [])
+                <form
+                    wire:submit="importProxmoxGuests"
+                    class="flex flex-col gap-4"
+                    x-data="{
+                        allIds: @js($this->discoveredExternalIds()),
+                        selectAll: @js($selectedExternalIds === $this->discoveredExternalIds()),
+                    }"
+                    x-init="
+                        $watch('selectAll', (value) => $wire.selectedExternalIds = value ? allIds.slice() : []);
+                        $watch('$wire.selectedExternalIds', (ids) => selectAll = allIds.length !== 0 && ids.length === allIds.length);
+                    "
+                >
+                    <div class="flex items-center justify-between gap-3">
+                        <flux:heading size="sm">{{ __('Select guests to import') }}</flux:heading>
+                        <flux:switch x-model="selectAll" :label="__('Select all')" />
+                    </div>
+
+                    <flux:checkbox.group wire:model="selectedExternalIds">
+                        @foreach ($this->discoveredGuests as $guest)
+                            <flux:field variant="inline" wire:key="discovered-{{ $guest['external_id'] }}">
+                                <flux:checkbox value="{{ $guest['external_id'] }}" />
+                                <div>
+                                    <flux:label>{{ $guest['name'] }}</flux:label>
+                                    <flux:description>
+                                        {{ $guest['external_id'] }}
+                                        · {{ $guest['node'] }}
+                                        · {{ $guest['category'] }}
+                                        @if ($guest['instance_type'])
+                                            · {{ $guest['instance_type'] }}
+                                        @endif
+                                        · {{ $guest['status'] }}
+                                        @if ($guest['private_ip'])
+                                            · {{ $guest['private_ip'] }}
+                                        @endif
+                                        @if (! empty($guest['disks']))
+                                            · {{ trans_choice(':count disk|:count disks', count($guest['disks']), ['count' => count($guest['disks'])]) }}
+                                        @endif
+                                        @if ($guest['already_imported'])
+                                            · {{ __('Already imported') }}
+                                        @endif
+                                    </flux:description>
+                                </div>
+                            </flux:field>
+                        @endforeach
+                    </flux:checkbox.group>
+
+                    <div class="flex items-center justify-between gap-3">
+                        <flux:text x-text="`${$wire.selectedExternalIds.length} {{ __('selected') }}`">{{ __(':count selected', ['count' => count($selectedExternalIds)]) }}</flux:text>
+                        <flux:button variant="primary" type="submit" x-bind:disabled="$wire.selectedExternalIds.length === 0">
+                            {{ __('Import selected') }}
+                        </flux:button>
+                    </div>
+                </form>
+            @endif
+        </div>
+
         <div class="flex flex-col gap-4 rounded-xl border border-zinc-200 p-6 dark:border-zinc-700">
             <flux:heading size="lg">{{ __('Hosted virtualware') }}</flux:heading>
             <ul class="divide-y divide-zinc-200 dark:divide-zinc-700">
@@ -297,7 +586,12 @@ new #[Title('Hardware')] class extends Component {
                     <li class="flex items-center justify-between py-3">
                         <div>
                             <a href="{{ route('assets.virtualware.show', $virtualware) }}" class="font-medium text-accent" wire:navigate>{{ $virtualware->name }}</a>
-                            <flux:text>{{ $virtualware->status->label() }}</flux:text>
+                            <flux:text>
+                                {{ $virtualware->status->label() }}
+                                @if ($virtualware->external_id)
+                                    · {{ $virtualware->external_id }}
+                                @endif
+                            </flux:text>
                         </div>
                         <flux:button size="sm" :href="route('assets.virtualware.show', $virtualware)" wire:navigate>{{ __('View') }}</flux:button>
                     </li>

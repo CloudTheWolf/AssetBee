@@ -32,6 +32,8 @@ use Illuminate\Support\Carbon;
  * @property BitLockerStatus|null $bitlocker_status
  * @property string|null $bitlocker_recovery_key
  * @property bool $is_vm_host
+ * @property array<string, mixed>|null $proxmox_credentials
+ * @property Carbon|null $proxmox_credentials_verified_at
  * @property Carbon|null $inventory_collected_at
  * @property array<string, mixed>|null $inventory_payload
  * @property HardwareCategory $category
@@ -57,6 +59,8 @@ use Illuminate\Support\Carbon;
     'bitlocker_status',
     'bitlocker_recovery_key',
     'is_vm_host',
+    'proxmox_credentials',
+    'proxmox_credentials_verified_at',
     'inventory_collected_at',
     'inventory_payload',
     'category',
@@ -72,6 +76,11 @@ class Hardware extends Model
 
     protected $table = 'hardwares';
 
+    /** @var list<string> */
+    protected $hidden = [
+        'proxmox_credentials',
+    ];
+
     /**
      * @return array<string, string>
      */
@@ -84,12 +93,46 @@ class Hardware extends Model
             'bitlocker_status' => BitLockerStatus::class,
             'bitlocker_recovery_key' => 'encrypted',
             'is_vm_host' => 'boolean',
+            'proxmox_credentials' => 'encrypted:array',
+            'proxmox_credentials_verified_at' => 'datetime',
             'inventory_collected_at' => 'datetime',
             'inventory_payload' => 'encrypted:array',
             'ram_gb' => 'integer',
             'storage_gb' => 'integer',
             'purchased_at' => 'date',
         ];
+    }
+
+    public function hasProxmoxCredentials(): bool
+    {
+        return filled($this->proxmox_credentials);
+    }
+
+    /**
+     * Non-secret Proxmox credential fields safe to display in forms.
+     *
+     * @return array{api_url: string, token_id: string, token_secret: string, verify_tls: bool, node: string}
+     */
+    public function proxmoxCredentialFormDefaults(): array
+    {
+        $credentials = $this->proxmox_credentials ?? [];
+
+        return [
+            'api_url' => (string) ($credentials['api_url'] ?? ''),
+            'token_id' => (string) ($credentials['token_id'] ?? ''),
+            'token_secret' => '',
+            'verify_tls' => array_key_exists('verify_tls', $credentials)
+                ? (bool) $credentials['verify_tls']
+                : true,
+            'node' => (string) ($credentials['node'] ?? ''),
+        ];
+    }
+
+    public function proxmoxNodeName(): ?string
+    {
+        $node = trim((string) ($this->proxmox_credentials['node'] ?? ''));
+
+        return $node !== '' ? $node : null;
     }
 
     /**

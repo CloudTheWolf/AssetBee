@@ -53,4 +53,22 @@ class HardwareFactory extends Factory
     {
         return $this->server(vmHost: true);
     }
+
+    /**
+     * @param  array<string, mixed>  $credentials
+     */
+    public function withProxmoxCredentials(array $credentials = []): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'category' => HardwareCategory::Server,
+            'is_vm_host' => true,
+            'proxmox_credentials' => [
+                'api_url' => $credentials['api_url'] ?? 'https://pve.example:8006',
+                'token_id' => $credentials['token_id'] ?? 'assetbee@pve!inventory',
+                'token_secret' => $credentials['token_secret'] ?? 'secret-token',
+                'verify_tls' => $credentials['verify_tls'] ?? true,
+                'node' => array_key_exists('node', $credentials) ? $credentials['node'] : 'pve1',
+            ],
+        ]);
+    }
 }
