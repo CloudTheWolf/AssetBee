@@ -94,10 +94,12 @@ class ProxmoxApiClient
         try {
             $response = $this->request()->get($this->url($path))->throw();
         } catch (RequestException $exception) {
+            $errors = $exception->response->json('errors');
+
             throw new RuntimeException(
                 __('Unable to reach Proxmox API: :message', [
-                    'message' => $exception->response?->json('errors')
-                        ? json_encode($exception->response->json('errors'))
+                    'message' => $errors
+                        ? json_encode($errors)
                         : $exception->getMessage(),
                 ]),
                 previous: $exception,

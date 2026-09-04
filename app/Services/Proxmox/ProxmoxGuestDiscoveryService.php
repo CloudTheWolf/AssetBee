@@ -91,7 +91,7 @@ class ProxmoxGuestDiscoveryService
         $hardwareName = strtolower(trim($hardware->name));
         $match = $names->first(fn (string $name): bool => strtolower($name) === $hardwareName);
 
-        if (is_string($match) && $match !== '') {
+        if ($match !== null) {
             return $match;
         }
 
@@ -192,7 +192,7 @@ class ProxmoxGuestDiscoveryService
     protected function extractPrivateIp(array $config): ?string
     {
         foreach ($config as $key => $value) {
-            if (! is_string($key) || ! str_starts_with($key, 'ipconfig') || ! is_string($value)) {
+            if (! str_starts_with($key, 'ipconfig') || ! is_string($value)) {
                 continue;
             }
 
@@ -219,7 +219,7 @@ class ProxmoxGuestDiscoveryService
         $disks = [];
 
         foreach ($config as $key => $value) {
-            if (! is_string($key) || ! is_string($value)) {
+            if (! is_string($value)) {
                 continue;
             }
 
