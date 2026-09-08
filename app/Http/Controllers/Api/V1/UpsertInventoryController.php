@@ -355,7 +355,7 @@ class UpsertInventoryController extends Controller
                     $recoveryKey = $protector['recoveryKey'];
                     $seenRecoveryKeys[$recoveryKey] = true;
                     $identifier = is_string($protector['keyProtectorId'] ?? null) && $protector['keyProtectorId'] !== ''
-                        ? $protector['keyProtectorId']
+                        ? trim($protector['keyProtectorId'], '{}')
                         : null;
 
                     $keys[] = $identifier === null

@@ -59,7 +59,8 @@ test('inventory endpoint creates encrypted organization-scoped hardware', functi
         ->and($hardware->cpu)->toBe('Intel(R) Core(TM) Ultra 7 155H')
         ->and($hardware->ram_gb)->toBe(48)
         ->and($hardware->bitlocker_status)->toBe(BitLockerStatus::Enabled)
-        ->and($hardware->bitlocker_recovery_key)->toContain('{A8414EAF-085F-4A35-AB76-D4F4B88B5607}')
+        ->and($hardware->bitlocker_recovery_key)->toContain('A8414EAF-085F-4A35-AB76-D4F4B88B5607')
+        ->and($hardware->bitlocker_recovery_key)->not->toContain('{A8414EAF-085F-4A35-AB76-D4F4B88B5607}')
         ->and($hardware->bitlocker_recovery_key)->toContain('016148-202037')
         ->and($hardware->inventory_payload)->toMatchArray([
             'schemaVersion' => '1.0',
@@ -273,8 +274,8 @@ test('hardware show page displays collected inventory details', function () {
         ->assertSee('pkg:generic/WatchGuard%20EPDR@8.1.0')
         ->assertSee(__('Search SBOM components…'))
         ->assertSee(__('Recovery key stored'))
-        ->assertSee(__('Reveal Recovery Key'))
-        ->assertSee(__('Identifier').': {A8414EAF-085F-4A35-AB76-D4F4B88B5607}')
+        ->assertSee(__('Identifier').': A8414EAF-085F-4A35-AB76-D4F4B88B5607')
+        ->assertDontSee('{A8414EAF-085F-4A35-AB76-D4F4B88B5607}')
         ->assertDontSee(__('BitLocker status'));
 });
 
@@ -289,11 +290,17 @@ test('hardware show page can reveal a disk recovery key', function () {
     $hardware = Hardware::query()->sole();
 
     Livewire::test('pages::assets.hardware.show', ['hardware' => $hardware])
-        ->assertSee(__('Identifier').': {A8414EAF-085F-4A35-AB76-D4F4B88B5607}')
+        ->assertSee(__('Identifier').': A8414EAF-085F-4A35-AB76-D4F4B88B5607')
         ->assertDontSee('016148-202037-546898-706926-484627-138688-405482-446105')
         ->call('revealRecoveryKey', 0)
         ->assertSet('showRecoveryKeyModal', true)
-        ->assertSee('{A8414EAF-085F-4A35-AB76-D4F4B88B5607}')
+        ->assertSet('revealedRecoveryKeys', [
+            [
+                'identifier' => 'A8414EAF-085F-4A35-AB76-D4F4B88B5607',
+                'key' => '016148-202037-546898-706926-484627-138688-405482-446105',
+            ],
+        ])
+        ->assertSee('A8414EAF-085F-4A35-AB76-D4F4B88B5607')
         ->assertSee('016148-202037-546898-706926-484627-138688-405482-446105')
         ->assertSee(__('Key'));
 });

@@ -30,6 +30,20 @@ test('hardware list can be filtered by type', function () {
         ->assertDontSee('filter-other-server');
 });
 
+test('hardware list filters persist in the session between visits', function () {
+    actingAsOrganizationMember();
+
+    Livewire::test('pages::assets.hardware.index')
+        ->set('search', 'MacBook')
+        ->set('type', HardwareCategory::Laptop->value)
+        ->set('status', HardwareStatus::Available->value);
+
+    Livewire::test('pages::assets.hardware.index')
+        ->assertSet('search', 'MacBook')
+        ->assertSet('type', HardwareCategory::Laptop->value)
+        ->assertSet('status', HardwareStatus::Available->value);
+});
+
 test('owners can create hardware', function () {
     [, $organization] = actingAsOrganizationMember();
 

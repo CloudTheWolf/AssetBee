@@ -16,7 +16,7 @@ trait DisplaysCollectedInventory
     public string $revealedRecoveryVolume = '';
 
     /**
-     * @var list<array{identifier: string|null, key: string}>
+     * @var list<array{identifier: string, key: string}>
      */
     public array $revealedRecoveryKeys = [];
 
@@ -84,7 +84,7 @@ trait DisplaysCollectedInventory
 
     /**
      * @param  array<string, mixed>  $volume
-     * @return list<array{identifier: string|null, key: string}>
+     * @return list<array{identifier: string, key: string}>
      */
     protected function recoveryKeysForVolume(array $volume): array
     {
@@ -96,31 +96,28 @@ trait DisplaysCollectedInventory
             }
 
             $recoveryKey = $protector['recoveryKey'] ?? null;
-
-            if (! is_string($recoveryKey) || $recoveryKey === '') {
-                continue;
-            }
-
             $identifier = $protector['keyProtectorId'] ?? null;
 
-            $keys[] = [
-                'identifier' => is_string($identifier) && $identifier !== '' ? $identifier : null,
-                'key' => $recoveryKey,
-            ];
-        }
-
-        foreach ($volume['recoveryKeys'] ?? [] as $recoveryKey) {
             if (! is_string($recoveryKey) || $recoveryKey === '') {
                 continue;
             }
 
+            if (! is_string($identifier) || $identifier === '') {
+                continue;
+            }
+
             $keys[] = [
-                'identifier' => null,
+                'identifier' => $this->formatBitLockerIdentifier($identifier),
                 'key' => $recoveryKey,
             ];
         }
 
         return $keys;
+    }
+
+    protected function formatBitLockerIdentifier(string $identifier): string
+    {
+        return trim($identifier, '{}');
     }
 
     protected function formatBytes(mixed $bytes): string

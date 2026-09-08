@@ -112,11 +112,12 @@
             <div class="font-medium">{{ __('Disk encryption') }}</div>
             @forelse ($encryption as $volume)
                 @php
-                    $hasRecoveryKey = collect($volume['recoveryKeys'] ?? [])->filter()->isNotEmpty()
-                        || collect($volume['keyProtectors'] ?? [])->contains(fn ($protector) => filled(data_get($protector, 'recoveryKey')));
+                    $hasRecoveryKey = collect($volume['keyProtectors'] ?? [])
+                        ->contains(fn ($protector) => filled(data_get($protector, 'recoveryKey')) && filled(data_get($protector, 'keyProtectorId')));
                     $keyProtectorIds = collect($volume['keyProtectors'] ?? [])
                         ->map(fn ($protector) => data_get($protector, 'keyProtectorId'))
                         ->filter(fn ($identifier) => is_string($identifier) && $identifier !== '')
+                        ->map(fn (string $identifier) => $this->formatBitLockerIdentifier($identifier))
                         ->unique()
                         ->values();
                 @endphp
@@ -131,15 +132,16 @@
                         @endforeach
                     </div>
                     @if ($hasRecoveryKey)
-                        <div class="flex flex-col items-end gap-2">
+                        <div class="flex items-center gap-2">
                             <flux:badge size="sm" color="green">{{ __('Recovery key stored') }}</flux:badge>
-                            <flux:button
-                                size="sm"
-                                variant="ghost"
-                                wire:click="revealRecoveryKey({{ $loop->index }})"
-                            >
-                                {{ __('Reveal Recovery Key') }}
-                            </flux:button>
+                            <flux:tooltip :content="__('Reveal Recovery Key')">
+                                <flux:button
+                                    size="sm"
+                                    variant="ghost"
+                                    icon="key"
+                                    wire:click="revealRecoveryKey({{ $loop->index }})"
+                                />
+                            </flux:tooltip>
                         </div>
                     @endif
                 </div>
@@ -334,7 +336,7 @@
                     <div class="space-y-3 rounded-lg border border-zinc-200 p-4 dark:border-zinc-700" wire:key="revealed-recovery-key-{{ $loop->index }}">
                         <div>
                             <flux:text class="font-medium">{{ __('Identifier') }}</flux:text>
-                            <div class="break-all font-mono text-sm">{{ $recoveryKey['identifier'] ?? '—' }}</div>
+                            <div class="break-all font-mono text-sm">{{ $recoveryKey['identifier'] }}</div>
                         </div>
                         <div>
                             <flux:text class="font-medium">{{ __('Key') }}</flux:text>

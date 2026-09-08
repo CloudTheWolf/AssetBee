@@ -11,6 +11,7 @@ use App\Support\CurrentOrganization;
 use Flux\Flux;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Livewire\Attributes\Computed;
+use Livewire\Attributes\Session;
 use Livewire\Attributes\Title;
 use Livewire\Component;
 use Livewire\WithPagination;
@@ -19,10 +20,13 @@ new #[Title('Hardware')] class extends Component {
     use AuthorizesRequests;
     use WithPagination;
 
+    #[Session]
     public string $search = '';
 
+    #[Session]
     public string $type = '';
 
+    #[Session]
     public string $status = '';
 
     public string $sortBy = 'name';
