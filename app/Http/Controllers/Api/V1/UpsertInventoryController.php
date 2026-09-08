@@ -332,6 +332,7 @@ class UpsertInventoryController extends Controller
     private function recoveryKeys(array $encryptedDisks): ?string
     {
         $keys = [];
+        $seenRecoveryKeys = [];
 
         foreach ($encryptedDisks as $disk) {
             if (! is_array($disk)) {
@@ -339,27 +340,40 @@ class UpsertInventoryController extends Controller
             }
 
             $volume = is_string($disk['volume'] ?? null) ? $disk['volume'] : 'Unknown volume';
-            $recoveryKeys = $disk['recoveryKeys'] ?? [];
-
-            if (is_array($recoveryKeys)) {
-                foreach ($recoveryKeys as $recoveryKey) {
-                    if (is_string($recoveryKey) && $recoveryKey !== '') {
-                        $keys[] = "{$volume}: {$recoveryKey}";
-                    }
-                }
-            }
-
             $keyProtectors = $disk['keyProtectors'] ?? [];
 
             if (is_array($keyProtectors)) {
                 foreach ($keyProtectors as $protector) {
                     if (
-                        is_array($protector)
-                        && is_string($protector['recoveryKey'] ?? null)
-                        && $protector['recoveryKey'] !== ''
+                        ! is_array($protector)
+                        || ! is_string($protector['recoveryKey'] ?? null)
+                        || $protector['recoveryKey'] === ''
                     ) {
-                        $keys[] = "{$volume}: {$protector['recoveryKey']}";
+                        continue;
                     }
+
+                    $recoveryKey = $protector['recoveryKey'];
+                    $seenRecoveryKeys[$recoveryKey] = true;
+                    $identifier = is_string($protector['keyProtectorId'] ?? null) && $protector['keyProtectorId'] !== ''
+                        ? $protector['keyProtectorId']
+                        : null;
+
+                    $keys[] = $identifier === null
+                        ? "{$volume}: {$recoveryKey}"
+                        : "{$volume} {$identifier}: {$recoveryKey}";
+                }
+            }
+
+            $recoveryKeys = $disk['recoveryKeys'] ?? [];
+
+            if (is_array($recoveryKeys)) {
+                foreach ($recoveryKeys as $recoveryKey) {
+                    if (! is_string($recoveryKey) || $recoveryKey === '' || isset($seenRecoveryKeys[$recoveryKey])) {
+                        continue;
+                    }
+
+                    $seenRecoveryKeys[$recoveryKey] = true;
+                    $keys[] = "{$volume}: {$recoveryKey}";
                 }
             }
         }

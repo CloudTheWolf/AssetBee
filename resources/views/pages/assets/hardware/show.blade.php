@@ -7,7 +7,6 @@ use App\Actions\Assets\DiscoverProxmoxGuests;
 use App\Actions\Assets\ImportProxmoxGuests;
 use App\Actions\Assets\UpdateHardware;
 use App\Actions\Assets\UpdateHardwareProxmoxCredentials;
-use App\Enums\BitLockerStatus;
 use App\Enums\HardwareCategory;
 use App\Enums\HardwareOperatingSystem;
 use App\Enums\HardwareStatus;
@@ -397,19 +396,6 @@ new #[Title('Hardware')] class extends Component {
                     <flux:input wire:model="storage_gb" type="number" min="1" :label="__('Storage (GB)')" :disabled="! auth()->user()->can('update', $hardware)" />
                 </div>
             </div>
-
-            @if ($this->selectedOperatingSystem()?->isWindows())
-                <div class="space-y-4 border-t border-zinc-200 pt-6 dark:border-zinc-700">
-                    <flux:heading size="lg">{{ __('BitLocker') }}</flux:heading>
-                    <flux:select wire:model="bitlocker_status" :label="__('BitLocker status')" :disabled="! auth()->user()->can('update', $hardware)">
-                        <option value="">{{ __('Select status') }}</option>
-                        @foreach (BitLockerStatus::cases() as $option)
-                            <option value="{{ $option->value }}">{{ $option->label() }}</option>
-                        @endforeach
-                    </flux:select>
-                    <flux:textarea wire:model="bitlocker_recovery_key" :label="__('Recovery key')" rows="3" :disabled="! auth()->user()->can('update', $hardware)" />
-                </div>
-            @endif
 
             @if ($this->selectedCategory()?->canBeVmHost())
                 <div class="space-y-4 border-t border-zinc-200 pt-6 dark:border-zinc-700">

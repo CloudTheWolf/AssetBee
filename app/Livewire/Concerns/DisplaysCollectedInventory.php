@@ -11,6 +11,15 @@ use Livewire\Attributes\Computed;
  */
 trait DisplaysCollectedInventory
 {
+    public bool $showRecoveryKeyModal = false;
+
+    public string $revealedRecoveryVolume = '';
+
+    /**
+     * @var list<array{identifier: string|null, key: string}>
+     */
+    public array $revealedRecoveryKeys = [];
+
     /**
      * @return array<string, mixed>|null
      */
@@ -45,6 +54,73 @@ trait DisplaysCollectedInventory
     public function filteredSbomTargets(): array
     {
         return SbomListing::filteredTargets($this->inventoryProbe('sbom'), $this->sbomSearch);
+    }
+
+    public function revealRecoveryKey(int $index): void
+    {
+        $volume = $this->inventoryList('diskEncryption')[$index] ?? null;
+
+        if (! is_array($volume)) {
+            return;
+        }
+
+        $keys = $this->recoveryKeysForVolume($volume);
+
+        if ($keys === []) {
+            return;
+        }
+
+        $this->revealedRecoveryKeys = $keys;
+        $this->revealedRecoveryVolume = is_string($volume['volume'] ?? null) ? $volume['volume'] : '';
+        $this->showRecoveryKeyModal = true;
+    }
+
+    public function closeRecoveryKeyModal(): void
+    {
+        $this->showRecoveryKeyModal = false;
+        $this->revealedRecoveryVolume = '';
+        $this->revealedRecoveryKeys = [];
+    }
+
+    /**
+     * @param  array<string, mixed>  $volume
+     * @return list<array{identifier: string|null, key: string}>
+     */
+    protected function recoveryKeysForVolume(array $volume): array
+    {
+        $keys = [];
+
+        foreach ($volume['keyProtectors'] ?? [] as $protector) {
+            if (! is_array($protector)) {
+                continue;
+            }
+
+            $recoveryKey = $protector['recoveryKey'] ?? null;
+
+            if (! is_string($recoveryKey) || $recoveryKey === '') {
+                continue;
+            }
+
+            $identifier = $protector['keyProtectorId'] ?? null;
+
+            $keys[] = [
+                'identifier' => is_string($identifier) && $identifier !== '' ? $identifier : null,
+                'key' => $recoveryKey,
+            ];
+        }
+
+        foreach ($volume['recoveryKeys'] ?? [] as $recoveryKey) {
+            if (! is_string($recoveryKey) || $recoveryKey === '') {
+                continue;
+            }
+
+            $keys[] = [
+                'identifier' => null,
+                'key' => $recoveryKey,
+            ];
+        }
+
+        return $keys;
     }
 
     protected function formatBytes(mixed $bytes): string

@@ -59,12 +59,15 @@ test('inventory endpoint creates encrypted organization-scoped hardware', functi
         ->and($hardware->cpu)->toBe('Intel(R) Core(TM) Ultra 7 155H')
         ->and($hardware->ram_gb)->toBe(48)
         ->and($hardware->bitlocker_status)->toBe(BitLockerStatus::Enabled)
+        ->and($hardware->bitlocker_recovery_key)->toContain('{A8414EAF-085F-4A35-AB76-D4F4B88B5607}')
         ->and($hardware->bitlocker_recovery_key)->toContain('016148-202037')
         ->and($hardware->inventory_payload)->toMatchArray([
             'schemaVersion' => '1.0',
             'platform' => 'windows',
             'type' => 'hardware',
         ])
+        ->and(data_get($hardware->inventory_payload, 'diskEncryption.value.0.keyProtectors.0.keyProtectorId'))
+        ->toBe('{A8414EAF-085F-4A35-AB76-D4F4B88B5607}')
         ->and(data_get($hardware->inventory_payload, 'sbom.value.format'))->toBe('CycloneDX');
 
     $storedPayload = DB::table('hardwares')->value('inventory_payload');
@@ -269,7 +272,30 @@ test('hardware show page displays collected inventory details', function () {
         ->assertSee('application')
         ->assertSee('pkg:generic/WatchGuard%20EPDR@8.1.0')
         ->assertSee(__('Search SBOM components…'))
-        ->assertSee(__('Recovery key stored'));
+        ->assertSee(__('Recovery key stored'))
+        ->assertSee(__('Reveal Recovery Key'))
+        ->assertSee(__('Identifier').': {A8414EAF-085F-4A35-AB76-D4F4B88B5607}')
+        ->assertDontSee(__('BitLocker status'));
+});
+
+test('hardware show page can reveal a disk recovery key', function () {
+    [, $organization] = actingAsOrganizationMember();
+    [, $plainTextKey] = OrganizationApiKey::issue($organization, 'Collector');
+
+    $this->withToken($plainTextKey)
+        ->postJson('/api/v1/inventory', inventoryPayload())
+        ->assertCreated();
+
+    $hardware = Hardware::query()->sole();
+
+    Livewire::test('pages::assets.hardware.show', ['hardware' => $hardware])
+        ->assertSee(__('Identifier').': {A8414EAF-085F-4A35-AB76-D4F4B88B5607}')
+        ->assertDontSee('016148-202037-546898-706926-484627-138688-405482-446105')
+        ->call('revealRecoveryKey', 0)
+        ->assertSet('showRecoveryKeyModal', true)
+        ->assertSee('{A8414EAF-085F-4A35-AB76-D4F4B88B5607}')
+        ->assertSee('016148-202037-546898-706926-484627-138688-405482-446105')
+        ->assertSee(__('Key'));
 });
 
 test('hardware show page sbom list is searchable', function () {

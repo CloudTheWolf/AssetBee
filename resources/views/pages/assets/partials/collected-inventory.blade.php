@@ -111,17 +111,36 @@
         <div class="space-y-3 border-t border-zinc-200 pt-6 dark:border-zinc-700">
             <div class="font-medium">{{ __('Disk encryption') }}</div>
             @forelse ($encryption as $volume)
+                @php
+                    $hasRecoveryKey = collect($volume['recoveryKeys'] ?? [])->filter()->isNotEmpty()
+                        || collect($volume['keyProtectors'] ?? [])->contains(fn ($protector) => filled(data_get($protector, 'recoveryKey')));
+                    $keyProtectorIds = collect($volume['keyProtectors'] ?? [])
+                        ->map(fn ($protector) => data_get($protector, 'keyProtectorId'))
+                        ->filter(fn ($identifier) => is_string($identifier) && $identifier !== '')
+                        ->unique()
+                        ->values();
+                @endphp
                 <div class="flex items-start justify-between gap-4 py-2" wire:key="encryption-{{ $loop->index }}">
-                    <div>
+                    <div class="space-y-1">
                         <div class="font-medium">{{ $volume['volume'] ?? '—' }}</div>
                         <flux:text>{{ ($volume['technology'] ?? '—').' · '.($volume['state'] ?? '—') }}</flux:text>
+                        @foreach ($keyProtectorIds as $keyProtectorId)
+                            <flux:text class="break-all font-mono text-sm">
+                                {{ __('Identifier') }}: {{ $keyProtectorId }}
+                            </flux:text>
+                        @endforeach
                     </div>
-                    @php
-                        $hasRecoveryKey = collect($volume['recoveryKeys'] ?? [])->filter()->isNotEmpty()
-                            || collect($volume['keyProtectors'] ?? [])->contains(fn ($protector) => filled(data_get($protector, 'recoveryKey')));
-                    @endphp
                     @if ($hasRecoveryKey)
-                        <flux:badge size="sm" color="green">{{ __('Recovery key stored') }}</flux:badge>
+                        <div class="flex flex-col items-end gap-2">
+                            <flux:badge size="sm" color="green">{{ __('Recovery key stored') }}</flux:badge>
+                            <flux:button
+                                size="sm"
+                                variant="ghost"
+                                wire:click="revealRecoveryKey({{ $loop->index }})"
+                            >
+                                {{ __('Reveal Recovery Key') }}
+                            </flux:button>
+                        </div>
                     @endif
                 </div>
             @empty
@@ -300,4 +319,34 @@
             @endif
         </div>
     </div>
+
+    <flux:modal wire:model="showRecoveryKeyModal" class="max-w-lg" @close="closeRecoveryKeyModal">
+        <div class="space-y-6">
+            <div class="space-y-2">
+                <flux:heading size="lg">{{ __('Recovery key') }}</flux:heading>
+                @if (filled($this->revealedRecoveryVolume))
+                    <flux:text>{{ __('Volume :volume', ['volume' => $this->revealedRecoveryVolume]) }}</flux:text>
+                @endif
+            </div>
+
+            <div class="space-y-4">
+                @foreach ($this->revealedRecoveryKeys as $recoveryKey)
+                    <div class="space-y-3 rounded-lg border border-zinc-200 p-4 dark:border-zinc-700" wire:key="revealed-recovery-key-{{ $loop->index }}">
+                        <div>
+                            <flux:text class="font-medium">{{ __('Identifier') }}</flux:text>
+                            <div class="break-all font-mono text-sm">{{ $recoveryKey['identifier'] ?? '—' }}</div>
+                        </div>
+                        <div>
+                            <flux:text class="font-medium">{{ __('Key') }}</flux:text>
+                            <div class="break-all font-mono text-sm">{{ $recoveryKey['key'] }}</div>
+                        </div>
+                    </div>
+                @endforeach
+            </div>
+
+            <div class="flex justify-end">
+                <flux:button variant="primary" wire:click="closeRecoveryKeyModal">{{ __('Close') }}</flux:button>
+            </div>
+        </div>
+    </flux:modal>
 @endif
