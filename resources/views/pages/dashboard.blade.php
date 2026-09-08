@@ -71,25 +71,58 @@ new #[Title('Dashboard')] class extends Component {
         <div class="rounded-xl border border-zinc-200 p-5 dark:border-zinc-700">
             <div class="mb-4">
                 <flux:heading size="lg">{{ __('Estimated spend (12 months)') }}</flux:heading>
-                <flux:text>{{ __('Past months from synced cost actuals; future months projected from billing.') }}</flux:text>
+                <flux:text>{{ __('Software and cloud costs. Actuals finalize after the 5th of the following month.') }}</flux:text>
             </div>
 
             @if (collect($insights['monthly_forecast'])->sum('total') > 0)
+                <div class="mb-3 flex flex-wrap items-center gap-4 text-xs text-zinc-500">
+                    <span class="inline-flex items-center gap-1.5">
+                        <span class="size-2.5 rounded-sm bg-accent/80 dark:bg-accent/70"></span>
+                        {{ __('Actual') }}
+                    </span>
+                    <span class="inline-flex items-center gap-1.5">
+                        <span class="size-2.5 rounded-sm bg-zinc-300 dark:bg-zinc-600"></span>
+                        {{ __('Estimated') }}
+                    </span>
+                </div>
                 <div class="flex h-48 items-end gap-2">
                     @foreach ($insights['monthly_forecast'] as $month)
-                        <div class="flex flex-1 flex-col items-center gap-2" title="{{ $month['formatted'] }}">
+                        @php
+                            $tooltip = match ($month['mode']) {
+                                'both' => __('Actual :actual · Est. :estimated', [
+                                    'actual' => $month['formatted_actual'],
+                                    'estimated' => $month['formatted_estimated'],
+                                ]),
+                                'actual' => __('Actual :amount', ['amount' => $month['formatted_actual']]),
+                                default => __('Est. :amount', ['amount' => $month['formatted_estimated']]),
+                            };
+                        @endphp
+                        <div class="flex flex-1 flex-col items-center gap-2" title="{{ $tooltip }}">
                             <div class="flex h-40 w-full items-end">
                                 <div
-                                    class="w-full rounded-t-md bg-accent/80 dark:bg-accent/70"
+                                    class="flex w-full flex-col justify-end overflow-hidden rounded-t-md"
                                     style="height: {{ max($month['percent'], $month['total'] > 0 ? 4 : 0) }}%"
-                                ></div>
+                                >
+                                    @if ($month['estimated_segment_percent'] > 0)
+                                        <div
+                                            class="w-full bg-zinc-300 dark:bg-zinc-600"
+                                            style="height: {{ $month['estimated_segment_percent'] }}%"
+                                        ></div>
+                                    @endif
+                                    @if ($month['actual_segment_percent'] > 0)
+                                        <div
+                                            class="w-full bg-accent/80 dark:bg-accent/70"
+                                            style="height: {{ $month['actual_segment_percent'] }}%"
+                                        ></div>
+                                    @endif
+                                </div>
                             </div>
                             <span class="text-xs text-zinc-500">{{ $month['label'] }}</span>
                         </div>
                     @endforeach
                 </div>
             @else
-                <flux:text>{{ __('Add recurring billing or sync licence costs to see a spend forecast.') }}</flux:text>
+                <flux:text>{{ __('Add recurring billing or sync licence and cloud costs to see a spend forecast.') }}</flux:text>
             @endif
         </div>
 

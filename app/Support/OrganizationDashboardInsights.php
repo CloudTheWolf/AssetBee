@@ -31,7 +31,20 @@ class OrganizationDashboardInsights
      *         formatted_upcoming_30_days: string,
      *         other_currencies: list<array{currency: string, estimated_monthly: float, formatted_monthly: string}>
      *     },
-     *     monthly_forecast: list<array{key: string, label: string, total: float, formatted: string, percent: float}>,
+     *     monthly_forecast: list<array{
+     *         key: string,
+     *         label: string,
+     *         mode: string,
+     *         actual: float|null,
+     *         estimated: float|null,
+     *         total: float,
+     *         formatted: string,
+     *         formatted_actual: string|null,
+     *         formatted_estimated: string|null,
+     *         percent: float,
+     *         actual_segment_percent: float,
+     *         estimated_segment_percent: float
+     *     }>,
      *     top_costs: list<array{id: int, type: string, name: string, vendor: string|null, monthly: float, formatted: string, percent: float}>,
      *     upcoming_renewals: list<array{id: int, name: string, amount: float, formatted_amount: string, currency: string, next_billing_at: string}>,
      *     expiring_licenses: list<array{id: int, name: string, expires_at: string}>,
@@ -76,7 +89,7 @@ class OrganizationDashboardInsights
         $estimatedMonthly = round($softwareMonthly + $cloudMonthly, 2);
         $estimatedAnnual = round($estimatedMonthly * 12, 2);
         $monthlyForecast = $this->monthlyForecast($organization, $primaryRecurring, $primaryCloudCosts, $primaryCurrency);
-        $upcoming30Days = $this->upcomingBillingTotal($primaryRecurring, 30);
+        $upcoming30Days = $this->upcomingBillingTotal($primaryRecurring, $primaryCloudCosts, 30);
 
         return [
             'inventory' => [
@@ -171,7 +184,20 @@ class OrganizationDashboardInsights
     /**
      * @param  Collection<int, Software>  $recurring
      * @param  Collection<int, CloudTenant>  $cloudCosts
-     * @return list<array{key: string, label: string, total: float, formatted: string, percent: float}>
+     * @return list<array{
+     *     key: string,
+     *     label: string,
+     *     mode: string,
+     *     actual: float|null,
+     *     estimated: float|null,
+     *     total: float,
+     *     formatted: string,
+     *     formatted_actual: string|null,
+     *     formatted_estimated: string|null,
+     *     percent: float,
+     *     actual_segment_percent: float,
+     *     estimated_segment_percent: float
+     * }>
      */
     private function monthlyForecast(
         Organization $organization,
@@ -190,8 +216,7 @@ class OrganizationDashboardInsights
             $months[$key] = [
                 'key' => $key,
                 'label' => $month->format('M'),
-                'total' => 0.0,
-                'is_past' => $offset < 0,
+                'mode' => $this->forecastModeForMonth($month),
             ];
         }
 
@@ -204,38 +229,97 @@ class OrganizationDashboardInsights
 
         foreach ($months as $key => $month) {
             $monthStart = Carbon::createFromFormat('Y-m-d', $key.'-01')->startOfMonth();
-            $monthEnd = $monthStart->copy()->endOfMonth();
+            $actual = null;
+            $estimated = null;
 
-            if ($month['is_past']) {
-                $months[$key]['total'] = $this->pastMonthTotal(
-                    $snapshots,
-                    $recurring,
-                    $cloudCosts,
-                    $monthStart,
-                );
-
-                continue;
+            if ($month['mode'] === 'actual' || $month['mode'] === 'both') {
+                $actual = round($this->pastMonthTotal($snapshots, $recurring, $cloudCosts, $monthStart), 2);
             }
 
-            $months[$key]['total'] = $this->projectedMonthTotal($recurring, $cloudCosts, $monthStart, $monthEnd);
+            if ($month['mode'] === 'estimated' || $month['mode'] === 'both') {
+                $estimated = round($this->projectedMonthTotal($recurring, $cloudCosts), 2);
+            }
+
+            $total = match ($month['mode']) {
+                'actual' => $actual ?? 0.0,
+                'estimated' => $estimated ?? 0.0,
+                default => max($actual ?? 0.0, $estimated ?? 0.0),
+            };
+
+            $months[$key]['actual'] = $actual;
+            $months[$key]['estimated'] = $estimated;
+            $months[$key]['total'] = $total;
         }
 
         $max = collect($months)->max('total') ?: 0.0;
 
         return array_values(collect($months)
             ->map(function (array $month) use ($currency, $max): array {
-                $total = round($month['total'], 2);
+                $total = round((float) $month['total'], 2);
+                $actual = $month['actual'];
+                $estimated = $month['estimated'];
+                $columnPercent = $max > 0 ? round(($total / $max) * 100, 1) : 0.0;
+
+                $actualSegment = 0.0;
+                $estimatedSegment = 0.0;
+
+                if ($total > 0) {
+                    if ($month['mode'] === 'actual') {
+                        $actualSegment = 100.0;
+                    } elseif ($month['mode'] === 'estimated') {
+                        $estimatedSegment = 100.0;
+                    } else {
+                        $actualValue = (float) ($actual ?? 0.0);
+                        $estimatedValue = (float) ($estimated ?? 0.0);
+                        $actualSegment = round(min($actualValue, $total) / $total * 100, 1);
+                        $estimatedSegment = round(max($estimatedValue - $actualValue, 0.0) / $total * 100, 1);
+
+                        if ($actualSegment + $estimatedSegment < 100 && $estimatedValue >= $actualValue) {
+                            $estimatedSegment = round(100 - $actualSegment, 1);
+                        } elseif ($actualSegment + $estimatedSegment < 100) {
+                            $actualSegment = 100.0;
+                            $estimatedSegment = 0.0;
+                        }
+                    }
+                }
 
                 return [
                     'key' => $month['key'],
                     'label' => $month['label'],
+                    'mode' => $month['mode'],
+                    'actual' => $actual,
+                    'estimated' => $estimated,
                     'total' => $total,
                     'formatted' => $this->formatMoney($currency, $total),
-                    'percent' => $max > 0 ? round(($total / $max) * 100, 1) : 0.0,
+                    'formatted_actual' => $actual === null ? null : $this->formatMoney($currency, $actual),
+                    'formatted_estimated' => $estimated === null ? null : $this->formatMoney($currency, $estimated),
+                    'percent' => $columnPercent,
+                    'actual_segment_percent' => $actualSegment,
+                    'estimated_segment_percent' => $estimatedSegment,
                 ];
             })
             ->values()
             ->all());
+    }
+
+    /**
+     * Cloud provider invoices often finalize a few days after month end.
+     * Keep the prior month provisional through the 5th of the following month.
+     */
+    private function forecastModeForMonth(CarbonInterface $monthStart): string
+    {
+        $monthStart = $monthStart->copy()->startOfMonth();
+        $billingFinalizedAfter = $monthStart->copy()->addMonthNoOverflow()->day(5)->endOfDay();
+
+        if (now()->gt($billingFinalizedAfter)) {
+            return 'actual';
+        }
+
+        if ($monthStart->gt(now()->startOfMonth())) {
+            return 'estimated';
+        }
+
+        return 'both';
     }
 
     /**
@@ -285,20 +369,12 @@ class OrganizationDashboardInsights
      * @param  Collection<int, Software>  $recurring
      * @param  Collection<int, CloudTenant>  $cloudCosts
      */
-    private function projectedMonthTotal(
-        Collection $recurring,
-        Collection $cloudCosts,
-        CarbonInterface $monthStart,
-        CarbonInterface $monthEnd,
-    ): float {
-        $total = $recurring->sum(function (Software $software) use ($monthStart, $monthEnd): float {
-            return collect($this->billingDates($software, $monthStart, $monthEnd))
-                ->sum(fn (): float => (float) $software->billing_amount);
-        });
+    private function projectedMonthTotal(Collection $recurring, Collection $cloudCosts): float
+    {
+        $softwareTotal = $recurring->sum(fn (Software $software): float => $software->monthlyCost() ?? 0.0);
+        $cloudTotal = $cloudCosts->sum(fn (CloudTenant $tenant): float => $tenant->monthlyCost() ?? 0.0);
 
-        $total += $cloudCosts->sum(fn (CloudTenant $tenant): float => $tenant->monthlyCost() ?? 0.0);
-
-        return (float) $total;
+        return (float) $softwareTotal + (float) $cloudTotal;
     }
 
     /**
@@ -338,16 +414,21 @@ class OrganizationDashboardInsights
 
     /**
      * @param  Collection<int, Software>  $recurring
+     * @param  Collection<int, CloudTenant>  $cloudCosts
      */
-    private function upcomingBillingTotal(Collection $recurring, int $days): float
+    private function upcomingBillingTotal(Collection $recurring, Collection $cloudCosts, int $days): float
     {
         $start = now()->startOfDay();
         $end = now()->addDays($days)->endOfDay();
 
-        return round($recurring->sum(function (Software $software) use ($start, $end): float {
+        $softwareTotal = $recurring->sum(function (Software $software) use ($start, $end): float {
             return collect($this->billingDates($software, $start, $end))
                 ->sum(fn (): float => (float) $software->billing_amount);
-        }), 2);
+        });
+
+        $cloudTotal = $cloudCosts->sum(fn (CloudTenant $tenant): float => $tenant->monthlyCost() ?? 0.0);
+
+        return round((float) $softwareTotal + (float) $cloudTotal, 2);
     }
 
     /**
