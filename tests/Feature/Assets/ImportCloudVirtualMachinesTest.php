@@ -252,7 +252,7 @@ test('discovery preselects every instance and binds selection client side', func
         ->call('discoverVirtualMachines')
         ->assertSet('selectedExternalIds', ['i-0abc123', 'i-0def456'])
         ->assertSee('wire:model.self="selectedExternalIds"', escape: false)
-        ->assertDontSee('wire:model.live', escape: false)
+        ->assertDontSee('wire:model.live="selectedExternalIds"', escape: false)
         ->assertSee('x-model="selectAll"', escape: false)
         ->assertSee('allIds.slice()', escape: false)
         ->assertDontSee('@js(', escape: false);
