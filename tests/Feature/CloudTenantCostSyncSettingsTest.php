@@ -3,7 +3,9 @@
 use App\Actions\Assets\UpdateCloudTenantCostSyncSettings;
 use App\Enums\CloudTenantCostSyncProvider;
 use App\Enums\CloudTenantProvider;
+use App\Enums\SoftwareCostSyncProvider;
 use App\Models\CloudTenant;
+use App\Models\Software;
 use Illuminate\Validation\ValidationException;
 use Livewire\Livewire;
 
@@ -52,4 +54,27 @@ test('google workspace cloud tenants can store credentials for cost sync', funct
 
     expect($tenant->fresh()->hasCredentials())->toBeTrue()
         ->and($tenant->fresh()->credentials['customer_id'])->toBe('C01234567');
+});
+
+test('google workspace credential forms expose a setup guide modal', function () {
+    [, $organization] = actingAsOrganizationMember();
+
+    $software = Software::factory()->create([
+        'organization_id' => $organization->id,
+    ]);
+
+    Livewire::test('pages::assets.software.show', ['software' => $software])
+        ->set('cost_sync_provider', SoftwareCostSyncProvider::GoogleWorkspace->value)
+        ->assertSee('Setup guide')
+        ->assertSee('Set up Google Workspace access')
+        ->assertSee('https://www.googleapis.com/auth/apps.licensing', false);
+
+    $tenant = CloudTenant::factory()->create([
+        'organization_id' => $organization->id,
+        'provider' => CloudTenantProvider::GoogleWorkspace,
+    ]);
+
+    Livewire::test('pages::assets.cloud-tenants.show', ['cloudTenant' => $tenant])
+        ->assertSee('Setup guide')
+        ->assertSee('Set up Google Workspace access');
 });

@@ -36,37 +36,16 @@ class GoogleWorkspaceCostFetcher implements FetchesAssetCosts
             : ($asset->credentials ?? []);
 
         $customerId = (string) ($credentials['customer_id'] ?? '');
+
+        if ($customerId === '') {
+            throw new RuntimeException(__('Google Workspace cost sync credentials are incomplete.'));
+        }
+
         $accessToken = $this->accessToken($credentials);
+        $seatCount = $this->countLicensedSeats($accessToken, $customerId);
 
-        $response = Http::withToken($accessToken)
-            ->acceptJson()
-            ->timeout(30)
-            ->get('https://www.googleapis.com/admin/directory/v1/customer/'.$customerId.'/subscriptions');
-
-        if (! $response->successful()) {
-            throw new RuntimeException(__('Google Workspace Admin API request failed with status :status.', [
-                'status' => $response->status(),
-            ]));
-        }
-
-        $items = $response->json('items') ?? $response->json('subscriptions') ?? [];
-        $seatCount = 0;
-        $amount = 0.0;
-
-        foreach ($items as $item) {
-            if (! is_array($item)) {
-                continue;
-            }
-
-            $seatCount += (int) data_get($item, 'seats.numberOfSeats', data_get($item, 'seats.licensedNumberOfSeats', 0));
-            $amount += (float) data_get($item, 'plan.amount', 0);
-        }
-
-        if ($amount <= 0 && is_numeric($asset->billing_amount)) {
-            $amount = (float) $asset->billing_amount;
-        }
-
-        $currency = strtoupper($asset->currency ?: 'USD');
+        $amount = is_numeric($asset->billing_amount) ? (float) $asset->billing_amount : 0.0;
+        $currency = strtoupper((string) ($asset->currency ?: 'USD'));
 
         $periodStart = CarbonImmutable::parse($to)->startOfMonth()->startOfDay();
         $periodEnd = CarbonImmutable::parse($to)->endOfMonth()->startOfDay();
@@ -82,7 +61,7 @@ class GoogleWorkspaceCostFetcher implements FetchesAssetCosts
                 currency: $currency,
                 provider: CostSyncSource::GoogleWorkspace,
                 seatCount: $seatCount > 0 ? $seatCount : null,
-                meta: ['source' => 'google_workspace_subscriptions'],
+                meta: ['source' => 'google_workspace_licensing'],
             ),
         ];
     }
@@ -94,6 +73,10 @@ class GoogleWorkspaceCostFetcher implements FetchesAssetCosts
     {
         $serviceAccountJson = (string) ($credentials['service_account_json'] ?? '');
         $adminEmail = (string) ($credentials['admin_email'] ?? '');
+
+        if ($adminEmail === '') {
+            throw new RuntimeException(__('Google Workspace cost sync credentials are incomplete.'));
+        }
 
         $decoded = json_decode($serviceAccountJson, true);
         if (! is_array($decoded) || blank($decoded['private_key'] ?? null) || blank($decoded['client_email'] ?? null)) {
@@ -120,6 +103,44 @@ class GoogleWorkspaceCostFetcher implements FetchesAssetCosts
         return (string) $response->json('access_token');
     }
 
+    protected function countLicensedSeats(string $accessToken, string $customerId): int
+    {
+        $seatCount = 0;
+        $pageToken = null;
+
+        do {
+            $query = [
+                'customerId' => $customerId,
+                'maxResults' => 1000,
+            ];
+
+            if (is_string($pageToken)) {
+                $query['pageToken'] = $pageToken;
+            }
+
+            $response = Http::withToken($accessToken)
+                ->acceptJson()
+                ->timeout(30)
+                ->get('https://licensing.googleapis.com/apps/licensing/v1/product/Google-Apps/users', $query);
+
+            if (! $response->successful()) {
+                throw new RuntimeException(__('Google Workspace Admin API request failed with status :status.', [
+                    'status' => $response->status(),
+                ]));
+            }
+
+            $items = $response->json('items');
+            if (is_array($items)) {
+                $seatCount += count($items);
+            }
+
+            $nextPageToken = $response->json('nextPageToken');
+            $pageToken = is_string($nextPageToken) ? $nextPageToken : null;
+        } while (filled($pageToken));
+
+        return $seatCount;
+    }
+
     protected function buildAssertion(string $clientEmail, string $privateKey, string $adminEmail): string
     {
         $header = $this->base64UrlEncode(json_encode(['alg' => 'RS256', 'typ' => 'JWT'], JSON_THROW_ON_ERROR));
@@ -130,7 +151,7 @@ class GoogleWorkspaceCostFetcher implements FetchesAssetCosts
             'aud' => 'https://oauth2.googleapis.com/token',
             'iat' => $now,
             'exp' => $now + 3600,
-            'scope' => 'https://www.googleapis.com/auth/apps.licensing https://www.googleapis.com/auth/admin.directory.user.readonly',
+            'scope' => 'https://www.googleapis.com/auth/apps.licensing',
         ], JSON_THROW_ON_ERROR));
 
         $data = $header.'.'.$payload;

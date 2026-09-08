@@ -614,6 +614,12 @@ new #[Title('Software')] class extends Component {
             <flux:input wire:model="cost_email" type="email" :label="__('Account email')" :disabled="! auth()->user()->can('update', $software)" />
             <flux:input wire:model="cost_api_token" type="password" :label="__('API token')" :description="$software->hasCostSyncCredentials() ? __('Leave blank to keep the existing token.') : null" :disabled="! auth()->user()->can('update', $software)" />
         @elseif ($cost_sync_provider === SoftwareCostSyncProvider::GoogleWorkspace->value)
+            <div class="flex flex-wrap items-center justify-between gap-3">
+                <flux:text>{{ __('Connect with a service account that has domain-wide delegation.') }}</flux:text>
+                <flux:modal.trigger name="google-workspace-setup">
+                    <flux:button type="button" size="sm" variant="ghost">{{ __('Setup guide') }}</flux:button>
+                </flux:modal.trigger>
+            </div>
             <flux:input wire:model="cost_customer_id" :label="__('Customer ID')" :disabled="! auth()->user()->can('update', $software)" />
             <flux:input wire:model="cost_service_account_email" :label="__('Service account email')" :disabled="! auth()->user()->can('update', $software)" />
             <flux:input wire:model="cost_admin_email" type="email" :label="__('Admin email')" :disabled="! auth()->user()->can('update', $software)" />
@@ -892,4 +898,6 @@ new #[Title('Software')] class extends Component {
         </div>
     </div>
 </flux:modal>
-</div>
+
+@include('pages.assets.partials.google-workspace-setup-modal')
+

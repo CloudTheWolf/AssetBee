@@ -121,6 +121,49 @@ test('azure cost fetcher queries cost management after authenticating', function
         ->and($periods[0]->currency)->toBe('USD');
 });
 
+test('google workspace cost fetcher counts licensed seats', function () {
+    Http::fake([
+        'https://licensing.googleapis.com/apps/licensing/v1/product/Google-Apps/users*' => Http::response([
+            'items' => [
+                ['userId' => 'user-1'],
+                ['userId' => 'user-2'],
+                ['userId' => 'user-3'],
+            ],
+        ]),
+    ]);
+
+    $software = Software::factory()->create([
+        'billing_amount' => 120.5,
+        'currency' => 'USD',
+        'cost_sync_provider' => SoftwareCostSyncProvider::GoogleWorkspace,
+        'cost_sync_credentials' => [
+            'customer_id' => 'C01234567',
+            'service_account_email' => 'sa@example.com',
+            'admin_email' => 'admin@example.com',
+            'service_account_json' => '{"type":"service_account","client_email":"sa@example.com","private_key":"unused-in-test"}',
+        ],
+    ]);
+
+    $fetcher = new class extends GoogleWorkspaceCostFetcher
+    {
+        protected function accessToken(array $credentials): string
+        {
+            return 'workspace-token';
+        }
+    };
+
+    $periods = $fetcher->fetch(
+        $software,
+        CarbonImmutable::now()->subMonths(1),
+        CarbonImmutable::now(),
+    );
+
+    expect($periods)->toHaveCount(1)
+        ->and($periods[0]->amount)->toBe(120.5)
+        ->and($periods[0]->seatCount)->toBe(3)
+        ->and($periods[0]->currency)->toBe('USD');
+});
+
 test('aws and google workspace fetchers advertise support correctly', function () {
     $aws = CloudTenant::factory()->aws()->withCredentials()->create([
         'cost_sync_provider' => CloudTenantCostSyncProvider::Native,

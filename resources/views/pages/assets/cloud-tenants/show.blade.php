@@ -524,6 +524,12 @@ new #[Title('Cloud Tenant')] class extends Component {
                     :disabled="! auth()->user()->can('update', $cloudTenant)"
                 />
             @elseif ($cloudTenant->provider === CloudTenantProvider::GoogleWorkspace)
+                <div class="flex flex-wrap items-center justify-between gap-3">
+                    <flux:text>{{ __('Connect with a service account that has domain-wide delegation.') }}</flux:text>
+                    <flux:modal.trigger name="google-workspace-setup">
+                        <flux:button type="button" size="sm" variant="ghost">{{ __('Setup guide') }}</flux:button>
+                    </flux:modal.trigger>
+                </div>
                 <flux:input wire:model="customer_id" :label="__('Customer ID')" required :disabled="! auth()->user()->can('update', $cloudTenant)" />
                 <flux:input wire:model="service_account_email" :label="__('Service account email')" required :disabled="! auth()->user()->can('update', $cloudTenant)" />
                 <flux:input wire:model="admin_email" type="email" :label="__('Admin email')" required :disabled="! auth()->user()->can('update', $cloudTenant)" />
@@ -810,4 +816,6 @@ new #[Title('Cloud Tenant')] class extends Component {
             @endforelse
         </ul>
     </div>
+
+    @include('pages.assets.partials.google-workspace-setup-modal')
 </div>
