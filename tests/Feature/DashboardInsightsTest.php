@@ -1,7 +1,11 @@
 <?php
 
+use App\Enums\CloudTenantProvider;
+use App\Enums\CostSyncSource;
 use App\Enums\SoftwareBillingInterval;
 use App\Enums\SoftwareLicenseType;
+use App\Models\CloudTenant;
+use App\Models\CostSnapshot;
 use App\Models\Hardware;
 use App\Models\Software;
 use App\Models\SoftwareAssignment;
@@ -29,9 +33,59 @@ test('dashboard insights estimate monthly and annual software spend', function (
         ->and($insights['costs']['estimated_monthly'])->toBe(200.0)
         ->and($insights['costs']['estimated_annual'])->toBe(2400.0)
         ->and($insights['costs']['upcoming_30_days'])->toBe(100.0)
-        ->and($insights['top_software_costs'])->toHaveCount(2)
+        ->and($insights['top_costs'])->toHaveCount(2)
         ->and($insights['monthly_forecast'])->toHaveCount(12)
         ->and($insights['upcoming_renewals'])->not->toBeEmpty();
+});
+
+test('dashboard insights include cloud tenant and synced licence costs', function () {
+    [, $organization] = actingAsOrganizationMember();
+
+    $software = Software::factory()->recurring('monthly', 50.00)->create([
+        'organization_id' => $organization->id,
+        'name' => 'Synced Licence',
+        'currency' => 'GBP',
+        'next_billing_at' => now()->startOfMonth()->addDays(10)->toDateString(),
+    ]);
+
+    $tenant = CloudTenant::factory()->aws()->create([
+        'organization_id' => $organization->id,
+        'name' => 'Prod AWS',
+        'billing_amount' => 75.00,
+        'billing_interval' => SoftwareBillingInterval::Monthly,
+        'currency' => 'GBP',
+    ]);
+
+    $pastMonth = now()->startOfMonth()->subMonthNoOverflow();
+
+    CostSnapshot::factory()->create([
+        'organization_id' => $organization->id,
+        'costable_type' => Software::class,
+        'costable_id' => $software->id,
+        'period_start' => $pastMonth->toDateString(),
+        'period_end' => $pastMonth->copy()->endOfMonth()->toDateString(),
+        'amount' => 88.00,
+        'currency' => 'GBP',
+        'provider' => CostSyncSource::Atlassian,
+    ]);
+
+    $insights = app(OrganizationDashboardInsights::class)->for($organization);
+
+    $pastKey = $pastMonth->format('Y-m');
+    $futureKey = now()->startOfMonth()->addMonthNoOverflow()->format('Y-m');
+
+    $pastForecast = collect($insights['monthly_forecast'])->firstWhere('key', $pastKey);
+    $futureForecast = collect($insights['monthly_forecast'])->firstWhere('key', $futureKey);
+
+    expect($insights['costs']['estimated_monthly'])->toBe(125.0)
+        ->and($insights['costs']['estimated_annual'])->toBe(1500.0)
+        ->and($pastForecast['total'])->toBe(163.0)
+        ->and($futureForecast['total'])->toBe(125.0)
+        ->and(collect($insights['top_costs'])->pluck('name')->all())
+        ->toContain('Synced Licence', 'Prod AWS')
+        ->and(collect($insights['top_costs'])->firstWhere('name', 'Prod AWS')['type'])->toBe('cloud_tenant')
+        ->and(collect($insights['top_costs'])->firstWhere('name', 'Synced Licence')['type'])->toBe('software')
+        ->and($tenant->provider)->toBe(CloudTenantProvider::Aws);
 });
 
 test('dashboard insights flag underutilized seats and unassigned hardware', function () {
@@ -74,9 +128,9 @@ test('dashboard page shows estimated spend labels', function () {
 
     $this->get(route('dashboard'))
         ->assertOk()
-        ->assertSee(__('Est. monthly software spend'))
+        ->assertSee(__('Est. monthly spend'))
         ->assertSee(__('Estimated spend (12 months)'))
-        ->assertSee(__('Top software by monthly cost'))
+        ->assertSee(__('Top costs by month'))
         ->assertSee('Visible Spend')
         ->assertDontSee(__('Software seats used'));
 });

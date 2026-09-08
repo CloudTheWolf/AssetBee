@@ -51,14 +51,14 @@ new #[Title('Dashboard')] class extends Component {
 
     <div class="grid gap-4 md:grid-cols-3">
         <div class="rounded-xl border border-zinc-200 p-5 dark:border-zinc-700">
-            <flux:text>{{ __('Est. monthly software spend') }}</flux:text>
+            <flux:text>{{ __('Est. monthly spend') }}</flux:text>
             <flux:heading size="xl" class="mt-2 tabular-nums">{{ $costs['formatted_monthly'] }}</flux:heading>
             @foreach ($costs['other_currencies'] as $other)
                 <flux:text class="mt-1">{{ __('Also :amount / mo', ['amount' => $other['formatted_monthly']]) }}</flux:text>
             @endforeach
         </div>
         <div class="rounded-xl border border-zinc-200 p-5 dark:border-zinc-700">
-            <flux:text>{{ __('Est. annual software spend') }}</flux:text>
+            <flux:text>{{ __('Est. annual spend') }}</flux:text>
             <flux:heading size="xl" class="mt-2 tabular-nums">{{ $costs['formatted_annual'] }}</flux:heading>
         </div>
         <div class="rounded-xl border border-zinc-200 p-5 dark:border-zinc-700">
@@ -71,7 +71,7 @@ new #[Title('Dashboard')] class extends Component {
         <div class="rounded-xl border border-zinc-200 p-5 dark:border-zinc-700">
             <div class="mb-4">
                 <flux:heading size="lg">{{ __('Estimated spend (12 months)') }}</flux:heading>
-                <flux:text>{{ __('Projected from recurring software billing schedules.') }}</flux:text>
+                <flux:text>{{ __('Past months from synced cost actuals; future months projected from billing.') }}</flux:text>
             </div>
 
             @if (collect($insights['monthly_forecast'])->sum('total') > 0)
@@ -89,33 +89,38 @@ new #[Title('Dashboard')] class extends Component {
                     @endforeach
                 </div>
             @else
-                <flux:text>{{ __('Add recurring software billing amounts to see a spend forecast.') }}</flux:text>
+                <flux:text>{{ __('Add recurring billing or sync licence costs to see a spend forecast.') }}</flux:text>
             @endif
         </div>
 
         <div class="rounded-xl border border-zinc-200 p-5 dark:border-zinc-700">
             <div class="mb-4">
-                <flux:heading size="lg">{{ __('Top software by monthly cost') }}</flux:heading>
-                <flux:text>{{ __('Normalized from monthly, quarterly, and yearly intervals.') }}</flux:text>
+                <flux:heading size="lg">{{ __('Top costs by month') }}</flux:heading>
+                <flux:text>{{ __('Software licences and cloud tenants, normalized to monthly.') }}</flux:text>
             </div>
 
-            @forelse ($insights['top_software_costs'] as $softwareCost)
-                <a href="{{ route('assets.software.show', $softwareCost['id']) }}" wire:navigate class="mb-3 block last:mb-0">
+            @forelse ($insights['top_costs'] as $cost)
+                @php
+                    $costUrl = $cost['type'] === 'cloud_tenant'
+                        ? route('assets.cloud-tenants.show', $cost['id'])
+                        : route('assets.software.show', $cost['id']);
+                @endphp
+                <a href="{{ $costUrl }}" wire:navigate class="mb-3 block last:mb-0">
                     <div class="mb-1 flex items-center justify-between gap-3">
                         <div class="min-w-0">
-                            <div class="truncate font-medium">{{ $softwareCost['name'] }}</div>
-                            @if ($softwareCost['vendor'])
-                                <flux:text class="truncate">{{ $softwareCost['vendor'] }}</flux:text>
+                            <div class="truncate font-medium">{{ $cost['name'] }}</div>
+                            @if ($cost['vendor'])
+                                <flux:text class="truncate">{{ $cost['vendor'] }}</flux:text>
                             @endif
                         </div>
-                        <div class="shrink-0 tabular-nums text-sm font-medium">{{ $softwareCost['formatted'] }}</div>
+                        <div class="shrink-0 tabular-nums text-sm font-medium">{{ $cost['formatted'] }}</div>
                     </div>
                     <div class="h-2 overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
-                        <div class="h-full rounded-full bg-accent" style="width: {{ $softwareCost['percent'] }}%"></div>
+                        <div class="h-full rounded-full bg-accent" style="width: {{ $cost['percent'] }}%"></div>
                     </div>
                 </a>
             @empty
-                <flux:text>{{ __('No recurring software costs recorded yet.') }}</flux:text>
+                <flux:text>{{ __('No recurring or synced costs recorded yet.') }}</flux:text>
             @endforelse
         </div>
     </div>
