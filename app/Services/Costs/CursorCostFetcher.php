@@ -26,56 +26,87 @@ class CursorCostFetcher implements FetchesAssetCosts
     {
         /** @var Software $asset */
         $credentials = $asset->cost_sync_credentials ?? [];
-        $teamId = (string) ($credentials['team_id'] ?? '');
         $apiKey = (string) ($credentials['api_key'] ?? '');
 
-        if ($teamId === '' || $apiKey === '') {
+        if ($apiKey === '') {
             throw new RuntimeException(__('Cursor cost sync credentials are incomplete.'));
         }
 
-        $response = Http::withToken($apiKey)
-            ->acceptJson()
-            ->timeout(30)
-            ->get("https://api.cursor.com/teams/{$teamId}/billing");
+        $page = 1;
+        $pageSize = 100;
+        $totalPages = 1;
+        $totalMembers = null;
+        $subscriptionCycleStartMs = null;
+        $overallSpendCents = 0.0;
 
-        if (! $response->successful()) {
-            $response = Http::withToken($apiKey)
+        do {
+            $response = Http::withBasicAuth($apiKey, '')
                 ->acceptJson()
+                ->asJson()
                 ->timeout(30)
-                ->get("https://api.cursor.com/teams/{$teamId}");
-        }
+                ->post('https://api.cursor.com/teams/spend', [
+                    'page' => $page,
+                    'pageSize' => $pageSize,
+                ]);
 
-        if (! $response->successful()) {
-            throw new RuntimeException(__('Cursor API request failed with status :status.', [
-                'status' => $response->status(),
-            ]));
-        }
+            if (! $response->successful()) {
+                throw new RuntimeException(__('Cursor API request failed with status :status.', [
+                    'status' => $response->status(),
+                ]));
+            }
 
-        $payload = $response->json() ?? [];
-        $amount = (float) data_get($payload, 'billing.amount', data_get($payload, 'amount', data_get($payload, 'monthlySpend', 0)));
-        $currency = strtoupper((string) data_get($payload, 'billing.currency', data_get($payload, 'currency', $asset->currency ?: 'USD')));
-        $seatCount = data_get($payload, 'seats', data_get($payload, 'memberCount', data_get($payload, 'usage.seats')));
-        $seatCount = is_numeric($seatCount) ? (int) $seatCount : null;
+            $payload = $response->json() ?? [];
+            $members = data_get($payload, 'teamMemberSpend', []);
+            if (! is_array($members)) {
+                $members = [];
+            }
 
-        if ($amount <= 0 && is_numeric($asset->billing_amount)) {
-            $amount = (float) $asset->billing_amount;
-        }
+            foreach ($members as $member) {
+                if (! is_array($member)) {
+                    continue;
+                }
 
-        $periodStart = CarbonImmutable::parse($to)->startOfMonth()->startOfDay();
-        $periodEnd = CarbonImmutable::parse($to)->endOfMonth()->startOfDay();
-        if ($periodEnd->greaterThan(now())) {
+                $overallSpendCents += (float) ($member['overallSpendCents'] ?? $member['spendCents'] ?? 0);
+            }
+
+            $totalPages = max(1, (int) data_get($payload, 'totalPages', 1));
+            $totalMembers = is_numeric(data_get($payload, 'totalMembers'))
+                ? (int) data_get($payload, 'totalMembers')
+                : $totalMembers;
+            $subscriptionCycleStartMs = is_numeric(data_get($payload, 'subscriptionCycleStart'))
+                ? (int) data_get($payload, 'subscriptionCycleStart')
+                : $subscriptionCycleStartMs;
+
+            $page++;
+        } while ($page <= $totalPages);
+
+        $amount = round($overallSpendCents / 100, 2);
+        $currency = strtoupper($asset->currency ?: 'USD');
+        $seatCount = is_int($totalMembers) ? $totalMembers : null;
+
+        if ($subscriptionCycleStartMs !== null && $subscriptionCycleStartMs > 0) {
+            $periodStart = CarbonImmutable::createFromTimestampMs($subscriptionCycleStartMs)->startOfDay();
             $periodEnd = now()->startOfDay();
+            if ($periodEnd->lessThan($periodStart)) {
+                $periodEnd = $periodStart;
+            }
+        } else {
+            $periodStart = CarbonImmutable::parse($to)->startOfMonth()->startOfDay();
+            $periodEnd = CarbonImmutable::parse($to)->endOfMonth()->startOfDay();
+            if ($periodEnd->greaterThan(now())) {
+                $periodEnd = now()->startOfDay();
+            }
         }
 
         return [
             new FetchedCostPeriod(
                 periodStart: $periodStart,
                 periodEnd: $periodEnd,
-                amount: round($amount, 2),
+                amount: $amount,
                 currency: $currency !== '' ? $currency : 'USD',
                 provider: CostSyncSource::Cursor,
                 seatCount: $seatCount,
-                meta: ['source' => 'cursor_team'],
+                meta: ['source' => 'cursor_teams_spend'],
             ),
         ];
     }

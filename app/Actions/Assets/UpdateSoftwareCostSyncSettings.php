@@ -113,9 +113,6 @@ class UpdateSoftwareCostSyncSettings
             }
 
             if ($provider === SoftwareCostSyncProvider::Cursor) {
-                if (blank($input['team_id'] ?? null)) {
-                    $validator->errors()->add('team_id', __('The Cursor team ID is required.'));
-                }
                 if (! $software->hasCostSyncCredentials() && blank($input['api_key'] ?? null)) {
                     $validator->errors()->add('api_key', __('The API key is required when saving credentials for the first time.'));
                 }
@@ -158,7 +155,9 @@ class UpdateSoftwareCostSyncSettings
                 'admin_email' => $validated['admin_email'],
             ],
             SoftwareCostSyncProvider::Cursor => [
-                'team_id' => $validated['team_id'],
+                'team_id' => filled($validated['team_id'] ?? null)
+                    ? $validated['team_id']
+                    : ($existing['team_id'] ?? null),
                 'api_key' => filled($validated['api_key'] ?? null)
                     ? $validated['api_key']
                     : ($existing['api_key'] ?? null),

@@ -619,8 +619,8 @@ new #[Title('Software')] class extends Component {
             <flux:input wire:model="cost_admin_email" type="email" :label="__('Admin email')" :disabled="! auth()->user()->can('update', $software)" />
             <flux:textarea wire:model="cost_service_account_json" rows="5" :label="__('Service account JSON')" :description="$software->hasCostSyncCredentials() ? __('Leave blank to keep the existing key.') : null" :disabled="! auth()->user()->can('update', $software)" />
         @elseif ($cost_sync_provider === SoftwareCostSyncProvider::Cursor->value)
-            <flux:input wire:model="cost_team_id" :label="__('Team ID')" :disabled="! auth()->user()->can('update', $software)" />
-            <flux:input wire:model="cost_api_key" type="password" :label="__('API key')" :description="$software->hasCostSyncCredentials() ? __('Leave blank to keep the existing key.') : null" :disabled="! auth()->user()->can('update', $software)" />
+            <flux:input wire:model="cost_team_id" :label="__('Team ID')" :description="__('Optional. Admin API keys are already scoped to a team.')" :disabled="! auth()->user()->can('update', $software)" />
+            <flux:input wire:model="cost_api_key" type="password" :label="__('Admin API key')" :description="$software->hasCostSyncCredentials() ? __('Leave blank to keep the existing key.') : __('Create an admin-scoped key from Cursor Dashboard → API Keys.')" :disabled="! auth()->user()->can('update', $software)" />
         @elseif ($cost_sync_provider === SoftwareCostSyncProvider::CustomHttp->value)
             <div class="grid gap-4 sm:grid-cols-2">
                 <flux:select wire:model="cost_request_method" :label="__('Method')" :disabled="! auth()->user()->can('update', $software)">

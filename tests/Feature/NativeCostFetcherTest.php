@@ -46,17 +46,26 @@ test('atlassian cost fetcher reads billing details', function () {
 
 test('cursor cost fetcher maps team billing payload', function () {
     Http::fake([
-        'https://api.cursor.com/teams/team-1/billing' => Http::response([
-            'amount' => 80,
-            'currency' => 'USD',
-            'seats' => 8,
+        'https://api.cursor.com/teams/spend' => Http::response([
+            'teamMemberSpend' => [
+                [
+                    'overallSpendCents' => 4500,
+                    'spendCents' => 2000,
+                ],
+                [
+                    'overallSpendCents' => 3500,
+                    'spendCents' => 1500,
+                ],
+            ],
+            'subscriptionCycleStart' => CarbonImmutable::now()->startOfMonth()->getTimestampMs(),
+            'totalMembers' => 8,
+            'totalPages' => 1,
         ]),
     ]);
 
     $software = Software::factory()->create([
         'cost_sync_provider' => SoftwareCostSyncProvider::Cursor,
         'cost_sync_credentials' => [
-            'team_id' => 'team-1',
             'api_key' => 'key',
         ],
     ]);
