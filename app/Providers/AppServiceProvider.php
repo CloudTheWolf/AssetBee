@@ -3,11 +3,19 @@
 namespace App\Providers;
 
 use App\Contracts\Cloud\DiscoversCloudVirtualMachines;
+use App\Contracts\Costs\FetchesAssetCosts;
 use App\Contracts\DomainDnsLookup;
 use App\Models\Organization;
 use App\Models\User;
 use App\Services\Cloud\AwsEc2DiscoveryService;
 use App\Services\Cloud\CloudVirtualMachineDiscoveryManager;
+use App\Services\Costs\AtlassianCostFetcher;
+use App\Services\Costs\AwsCostFetcher;
+use App\Services\Costs\AzureCostFetcher;
+use App\Services\Costs\CostFetchManager;
+use App\Services\Costs\CursorCostFetcher;
+use App\Services\Costs\CustomHttpCostFetcher;
+use App\Services\Costs\GoogleWorkspaceCostFetcher;
 use App\Services\PhpDomainDnsLookup;
 use App\Support\OrganizationSubscriptionLimits;
 use App\Support\SailRuntime;
@@ -44,6 +52,21 @@ class AppServiceProvider extends ServiceProvider
         $this->app->singleton(CloudVirtualMachineDiscoveryManager::class, function ($app): CloudVirtualMachineDiscoveryManager {
             return new CloudVirtualMachineDiscoveryManager(
                 $app->tagged(DiscoversCloudVirtualMachines::class),
+            );
+        });
+
+        $this->app->tag([
+            AwsCostFetcher::class,
+            AzureCostFetcher::class,
+            AtlassianCostFetcher::class,
+            GoogleWorkspaceCostFetcher::class,
+            CursorCostFetcher::class,
+            CustomHttpCostFetcher::class,
+        ], FetchesAssetCosts::class);
+
+        $this->app->singleton(CostFetchManager::class, function ($app): CostFetchManager {
+            return new CostFetchManager(
+                $app->tagged(FetchesAssetCosts::class),
             );
         });
     }

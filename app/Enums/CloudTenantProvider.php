@@ -26,7 +26,7 @@ enum CloudTenantProvider: string
     public function supportsCredentials(): bool
     {
         return match ($this) {
-            self::Aws, self::Azure, self::Gcp => true,
+            self::Aws, self::Azure, self::Gcp, self::GoogleWorkspace => true,
             default => false,
         };
     }
@@ -35,6 +35,14 @@ enum CloudTenantProvider: string
     {
         return match ($this) {
             self::Aws => true,
+            default => false,
+        };
+    }
+
+    public function supportsCostSync(): bool
+    {
+        return match ($this) {
+            self::Aws, self::Azure, self::GoogleWorkspace => true,
             default => false,
         };
     }

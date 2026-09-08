@@ -64,6 +64,16 @@ class UpdateCloudTenantCredentials
                     'string',
                 ],
             ],
+            CloudTenantProvider::GoogleWorkspace => [
+                'customer_id' => ['required', 'string', 'max:255'],
+                'service_account_email' => ['required', 'string', 'max:255'],
+                'service_account_json' => [
+                    Rule::requiredIf(! $cloudTenant->hasCredentials()),
+                    'nullable',
+                    'string',
+                ],
+                'admin_email' => ['required', 'email', 'max:255'],
+            ],
             default => [],
         };
     }
@@ -84,7 +94,7 @@ class UpdateCloudTenantCredentials
             $secretField = match ($cloudTenant->provider) {
                 CloudTenantProvider::Aws => 'secret_access_key',
                 CloudTenantProvider::Azure => 'client_secret',
-                CloudTenantProvider::Gcp => 'service_account_json',
+                CloudTenantProvider::Gcp, CloudTenantProvider::GoogleWorkspace => 'service_account_json',
                 default => null,
             };
 
@@ -130,6 +140,14 @@ class UpdateCloudTenantCredentials
                 'service_account_json' => filled($validated['service_account_json'] ?? null)
                     ? $validated['service_account_json']
                     : ($existing['service_account_json'] ?? null),
+            ],
+            CloudTenantProvider::GoogleWorkspace => [
+                'customer_id' => $validated['customer_id'],
+                'service_account_email' => $validated['service_account_email'],
+                'service_account_json' => filled($validated['service_account_json'] ?? null)
+                    ? $validated['service_account_json']
+                    : ($existing['service_account_json'] ?? null),
+                'admin_email' => $validated['admin_email'],
             ],
             default => [],
         };

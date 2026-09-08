@@ -2,6 +2,7 @@
 
 namespace Database\Factories;
 
+use App\Enums\SoftwareCostSyncProvider;
 use App\Enums\SoftwareLicenseType;
 use App\Enums\SoftwareStatus;
 use App\Models\Organization;
@@ -34,6 +35,7 @@ class SoftwareFactory extends Factory
             'currency' => 'GBP',
             'next_billing_at' => null,
             'notes' => fake()->optional()->sentence(),
+            'cost_sync_provider' => SoftwareCostSyncProvider::None,
         ];
     }
 

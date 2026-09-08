@@ -1,12 +1,16 @@
 <?php
 
+use App\Actions\Assets\ClearCloudTenantCostSyncSettings;
 use App\Actions\Assets\ClearCloudTenantCredentials;
 use App\Actions\Assets\DeleteCloudTenant;
 use App\Actions\Assets\DiscoverCloudVirtualMachines;
 use App\Actions\Assets\ImportCloudVirtualMachines;
+use App\Actions\Assets\SyncAssetCosts;
 use App\Actions\Assets\UpdateCloudTenant;
+use App\Actions\Assets\UpdateCloudTenantCostSyncSettings;
 use App\Actions\Assets\UpdateCloudTenantCredentials;
 use App\Enums\AwsRegion;
+use App\Enums\CloudTenantCostSyncProvider;
 use App\Enums\CloudTenantProvider;
 use App\Enums\CloudTenantStatus;
 use App\Models\CloudTenant;
@@ -57,6 +61,45 @@ new #[Title('Cloud Tenant')] class extends Component {
 
     public string $service_account_json = '';
 
+    public string $customer_id = '';
+
+    public string $service_account_email = '';
+
+    public string $admin_email = '';
+
+    public string $cost_sync_provider = 'none';
+
+    public string $cost_bearer_token = '';
+
+    public string $cost_username = '';
+
+    public string $cost_password = '';
+
+    public string $cost_header_name = '';
+
+    public string $cost_header_value = '';
+
+    public string $cost_request_method = 'GET';
+
+    public string $cost_request_url = '';
+
+    public string $cost_request_auth = 'none';
+
+    public string $cost_request_body = '';
+
+    public string $cost_response_amount_path = 'amount';
+
+    public string $cost_response_currency_path = 'currency';
+
+    public string $cost_response_seats_path = '';
+
+    public string $cost_amount_period = 'month';
+
+    /** @var list<array{name: string, value: string}> */
+    public array $cost_request_headers = [];
+
+    public ?string $costSyncError = null;
+
     public string $discoveryRegion = 'us-east-1';
 
     /** @var list<string> */
@@ -69,9 +112,10 @@ new #[Title('Cloud Tenant')] class extends Component {
         $this->authorize('view', $cloudTenant);
         abort_unless($cloudTenant->organization_id === CurrentOrganization::require()->id, 404);
 
-        $this->cloudTenant = $cloudTenant->load('virtualwares');
+        $this->cloudTenant = $cloudTenant->load(['virtualwares', 'costSnapshots']);
         $this->fillForm();
         $this->fillCredentialForm();
+        $this->fillCostSyncForm();
     }
 
     public function fillForm(): void
@@ -93,6 +137,49 @@ new #[Title('Cloud Tenant')] class extends Component {
         $this->discoveryRegion = $this->region !== '' ? $this->region : AwsRegion::UsEast1->value;
     }
 
+    public function fillCostSyncForm(): void
+    {
+        $this->cost_sync_provider = $this->cloudTenant->cost_sync_provider?->value ?? 'none';
+        $request = $this->cloudTenant->costSyncRequestFormDefaults();
+        $requestConfig = $this->cloudTenant->cost_sync_request ?? [];
+        $authCredentials = is_array($requestConfig['auth_credentials'] ?? null)
+            ? $requestConfig['auth_credentials']
+            : [];
+
+        $this->cost_request_method = (string) $request['method'];
+        $this->cost_request_url = (string) $request['url'];
+        $this->cost_request_auth = (string) $request['auth'];
+        $this->cost_request_body = (string) $request['body'];
+        $this->cost_response_amount_path = (string) $request['response_amount_path'];
+        $this->cost_response_currency_path = (string) $request['response_currency_path'];
+        $this->cost_response_seats_path = (string) $request['response_seats_path'];
+        $this->cost_amount_period = (string) $request['amount_period'];
+        $this->cost_request_headers = collect($request['headers'] ?? [])
+            ->map(fn ($header): array => [
+                'name' => (string) ($header['name'] ?? ''),
+                'value' => (string) ($header['value'] ?? ''),
+            ])
+            ->values()
+            ->all();
+        $this->cost_bearer_token = '';
+        $this->cost_username = (string) ($authCredentials['username'] ?? '');
+        $this->cost_password = '';
+        $this->cost_header_name = (string) ($authCredentials['header_name'] ?? '');
+        $this->cost_header_value = '';
+        $this->costSyncError = $this->cloudTenant->cost_sync_error;
+    }
+
+    public function addCostRequestHeader(): void
+    {
+        $this->cost_request_headers[] = ['name' => '', 'value' => ''];
+    }
+
+    public function removeCostRequestHeader(int $index): void
+    {
+        unset($this->cost_request_headers[$index]);
+        $this->cost_request_headers = array_values($this->cost_request_headers);
+    }
+
     public function save(UpdateCloudTenant $updateCloudTenant): void
     {
         $this->authorize('update', $this->cloudTenant);
@@ -104,9 +191,10 @@ new #[Title('Cloud Tenant')] class extends Component {
             'domain' => $this->domain !== '' ? $this->domain : null,
             'status' => $this->status,
             'notes' => $this->notes !== '' ? $this->notes : null,
-        ])->load('virtualwares');
+        ])->load(['virtualwares', 'costSnapshots']);
 
         $this->fillCredentialForm();
+        $this->fillCostSyncForm();
 
         Flux::toast(variant: 'success', text: __('Cloud tenant updated.'));
     }
@@ -118,7 +206,7 @@ new #[Title('Cloud Tenant')] class extends Component {
         $this->cloudTenant = $updateCloudTenantCredentials->handle(
             $this->cloudTenant,
             $this->credentialInput(),
-        )->load('virtualwares');
+        )->load(['virtualwares', 'costSnapshots']);
 
         $this->fillCredentialForm();
         $this->resetDiscovery();
@@ -130,11 +218,77 @@ new #[Title('Cloud Tenant')] class extends Component {
     {
         $this->authorize('update', $this->cloudTenant);
 
-        $this->cloudTenant = $clearCloudTenantCredentials->handle($this->cloudTenant)->load('virtualwares');
+        $this->cloudTenant = $clearCloudTenantCredentials->handle($this->cloudTenant)->load(['virtualwares', 'costSnapshots']);
         $this->fillCredentialForm();
         $this->resetDiscovery();
 
         Flux::toast(variant: 'success', text: __('Credentials removed.'));
+    }
+
+    public function saveCostSync(UpdateCloudTenantCostSyncSettings $updateCloudTenantCostSyncSettings): void
+    {
+        $this->authorize('update', $this->cloudTenant);
+
+        $this->cloudTenant = $updateCloudTenantCostSyncSettings->handle($this->cloudTenant, [
+            'cost_sync_provider' => $this->cost_sync_provider,
+            'bearer_token' => $this->cost_bearer_token !== '' ? $this->cost_bearer_token : null,
+            'username' => $this->cost_username !== '' ? $this->cost_username : null,
+            'password' => $this->cost_password !== '' ? $this->cost_password : null,
+            'header_name' => $this->cost_header_name !== '' ? $this->cost_header_name : null,
+            'header_value' => $this->cost_header_value !== '' ? $this->cost_header_value : null,
+            'cost_sync_request' => [
+                'method' => $this->cost_request_method,
+                'url' => $this->cost_request_url,
+                'headers' => $this->cost_request_headers,
+                'auth' => $this->cost_request_auth,
+                'body' => $this->cost_request_body,
+                'response_amount_path' => $this->cost_response_amount_path,
+                'response_currency_path' => $this->cost_response_currency_path,
+                'response_seats_path' => $this->cost_response_seats_path,
+                'amount_period' => $this->cost_amount_period,
+            ],
+        ])->load(['virtualwares', 'costSnapshots']);
+
+        $this->fillCostSyncForm();
+
+        Flux::toast(variant: 'success', text: __('Cost sync settings saved.'));
+    }
+
+    public function clearCostSync(ClearCloudTenantCostSyncSettings $clearCloudTenantCostSyncSettings): void
+    {
+        $this->authorize('update', $this->cloudTenant);
+
+        $this->cloudTenant = $clearCloudTenantCostSyncSettings->handle($this->cloudTenant)
+            ->load(['virtualwares', 'costSnapshots']);
+        $this->fillCostSyncForm();
+
+        Flux::toast(variant: 'success', text: __('Cost sync settings cleared.'));
+    }
+
+    public function syncCosts(SyncAssetCosts $syncAssetCosts): void
+    {
+        $this->authorize('update', $this->cloudTenant);
+        $this->costSyncError = null;
+
+        try {
+            $result = $syncAssetCosts->handle($this->cloudTenant);
+        } catch (\Throwable $exception) {
+            $this->cloudTenant->refresh();
+            $this->costSyncError = $exception->getMessage();
+            $this->fillCostSyncForm();
+
+            Flux::toast(variant: 'danger', text: __('Cost sync failed.'));
+
+            return;
+        }
+
+        $this->cloudTenant = $this->cloudTenant->fresh()->load(['virtualwares', 'costSnapshots']);
+        $this->fillCostSyncForm();
+
+        Flux::toast(
+            variant: 'success',
+            text: __('Synced :count cost periods.', ['count' => $result['snapshots']]),
+        );
     }
 
     public function discoverVirtualMachines(DiscoverCloudVirtualMachines $discoverCloudVirtualMachines): void
@@ -234,6 +388,12 @@ new #[Title('Cloud Tenant')] class extends Component {
             CloudTenantProvider::Gcp => [
                 'project_id' => $this->project_id,
                 'service_account_json' => $this->service_account_json !== '' ? $this->service_account_json : null,
+            ],
+            CloudTenantProvider::GoogleWorkspace => [
+                'customer_id' => $this->customer_id,
+                'service_account_email' => $this->service_account_email,
+                'service_account_json' => $this->service_account_json !== '' ? $this->service_account_json : null,
+                'admin_email' => $this->admin_email,
             ],
             default => [],
         };
@@ -363,6 +523,18 @@ new #[Title('Cloud Tenant')] class extends Component {
                     :required="! $cloudTenant->hasCredentials()"
                     :disabled="! auth()->user()->can('update', $cloudTenant)"
                 />
+            @elseif ($cloudTenant->provider === CloudTenantProvider::GoogleWorkspace)
+                <flux:input wire:model="customer_id" :label="__('Customer ID')" required :disabled="! auth()->user()->can('update', $cloudTenant)" />
+                <flux:input wire:model="service_account_email" :label="__('Service account email')" required :disabled="! auth()->user()->can('update', $cloudTenant)" />
+                <flux:input wire:model="admin_email" type="email" :label="__('Admin email')" required :disabled="! auth()->user()->can('update', $cloudTenant)" />
+                <flux:textarea
+                    wire:model="service_account_json"
+                    :label="__('Service account JSON')"
+                    rows="6"
+                    :description="$cloudTenant->hasCredentials() ? __('Leave blank to keep the existing key.') : null"
+                    :required="! $cloudTenant->hasCredentials()"
+                    :disabled="! auth()->user()->can('update', $cloudTenant)"
+                />
             @endif
 
             @can('update', $cloudTenant)
@@ -384,6 +556,115 @@ new #[Title('Cloud Tenant')] class extends Component {
             @endcan
         </form>
     @endif
+
+    <form wire:submit="saveCostSync" class="flex flex-col gap-6 rounded-xl border border-zinc-200 p-6 dark:border-zinc-700">
+        <div>
+            <flux:heading size="lg">{{ __('Cost sync') }}</flux:heading>
+            <flux:text>
+                {{ __('Pull spend from the cloud provider or a custom HTTP endpoint.') }}
+                @if ($cloudTenant->formattedBillingAmount())
+                    · {{ __('Current') }}: {{ $cloudTenant->formattedBillingAmount() }}
+                @endif
+                @if ($cloudTenant->cost_synced_at)
+                    · {{ __('Last synced :time.', ['time' => $cloudTenant->cost_synced_at->diffForHumans()]) }}
+                @endif
+            </flux:text>
+        </div>
+
+        <flux:select wire:model.live="cost_sync_provider" :label="__('Provider')" :disabled="! auth()->user()->can('update', $cloudTenant)">
+            @foreach (CloudTenantCostSyncProvider::cases() as $option)
+                @if ($option === CloudTenantCostSyncProvider::Native && ! $cloudTenant->provider->supportsCostSync())
+                    @continue
+                @endif
+                <option value="{{ $option->value }}">{{ $option->label() }}</option>
+            @endforeach
+        </flux:select>
+
+        @if ($cost_sync_provider === CloudTenantCostSyncProvider::Native->value)
+            <flux:text>{{ __('Uses the encrypted provider credentials saved above.') }}</flux:text>
+        @elseif ($cost_sync_provider === CloudTenantCostSyncProvider::CustomHttp->value)
+            <div class="grid gap-4 sm:grid-cols-2">
+                <flux:select wire:model="cost_request_method" :label="__('Method')" :disabled="! auth()->user()->can('update', $cloudTenant)">
+                    @foreach (['GET', 'POST', 'PUT', 'PATCH'] as $method)
+                        <option value="{{ $method }}">{{ $method }}</option>
+                    @endforeach
+                </flux:select>
+                <flux:input wire:model="cost_request_url" :label="__('URL')" :disabled="! auth()->user()->can('update', $cloudTenant)" />
+            </div>
+            <flux:select wire:model="cost_request_auth" :label="__('Authentication')" :disabled="! auth()->user()->can('update', $cloudTenant)">
+                <option value="none">{{ __('None') }}</option>
+                <option value="bearer">{{ __('Bearer token') }}</option>
+                <option value="basic">{{ __('Basic auth') }}</option>
+                <option value="header">{{ __('Custom header') }}</option>
+            </flux:select>
+            @if ($cost_request_auth === 'bearer')
+                <flux:input wire:model="cost_bearer_token" type="password" :label="__('Bearer token')" :disabled="! auth()->user()->can('update', $cloudTenant)" />
+            @elseif ($cost_request_auth === 'basic')
+                <flux:input wire:model="cost_username" :label="__('Username')" :disabled="! auth()->user()->can('update', $cloudTenant)" />
+                <flux:input wire:model="cost_password" type="password" :label="__('Password')" :disabled="! auth()->user()->can('update', $cloudTenant)" />
+            @elseif ($cost_request_auth === 'header')
+                <flux:input wire:model="cost_header_name" :label="__('Header name')" :disabled="! auth()->user()->can('update', $cloudTenant)" />
+                <flux:input wire:model="cost_header_value" type="password" :label="__('Header value')" :disabled="! auth()->user()->can('update', $cloudTenant)" />
+            @endif
+            <div class="flex flex-col gap-3">
+                <flux:heading size="sm">{{ __('Headers') }}</flux:heading>
+                @foreach ($cost_request_headers as $index => $header)
+                    <div class="grid gap-3 sm:grid-cols-[1fr_1fr_auto]" wire:key="cloud-cost-header-{{ $index }}">
+                        <flux:input wire:model="cost_request_headers.{{ $index }}.name" :label="__('Name')" :disabled="! auth()->user()->can('update', $cloudTenant)" />
+                        <flux:input wire:model="cost_request_headers.{{ $index }}.value" :label="__('Value')" :disabled="! auth()->user()->can('update', $cloudTenant)" />
+                        @can('update', $cloudTenant)
+                            <flux:button type="button" size="sm" wire:click="removeCostRequestHeader({{ $index }})">{{ __('Remove') }}</flux:button>
+                        @endcan
+                    </div>
+                @endforeach
+                @can('update', $cloudTenant)
+                    <flux:button type="button" size="sm" wire:click="addCostRequestHeader">{{ __('Add header') }}</flux:button>
+                @endcan
+            </div>
+            <flux:textarea wire:model="cost_request_body" rows="4" :label="__('Body')" :disabled="! auth()->user()->can('update', $cloudTenant)" />
+            <div class="grid gap-4 sm:grid-cols-2">
+                <flux:input wire:model="cost_response_amount_path" :label="__('Amount JSON path')" :disabled="! auth()->user()->can('update', $cloudTenant)" />
+                <flux:input wire:model="cost_response_currency_path" :label="__('Currency JSON path')" :disabled="! auth()->user()->can('update', $cloudTenant)" />
+                <flux:input wire:model="cost_response_seats_path" :label="__('Seats JSON path')" :disabled="! auth()->user()->can('update', $cloudTenant)" />
+                <flux:select wire:model="cost_amount_period" :label="__('Amount period')" :disabled="! auth()->user()->can('update', $cloudTenant)">
+                    <option value="month">{{ __('Current month') }}</option>
+                    <option value="as_reported">{{ __('As reported') }}</option>
+                </flux:select>
+            </div>
+        @endif
+
+        @if ($costSyncError || $cloudTenant->cost_sync_error)
+            <div class="rounded-lg border border-red-300 bg-red-50 p-4 text-sm text-red-800 dark:border-red-700 dark:bg-red-950/30 dark:text-red-200">
+                {{ $costSyncError ?: $cloudTenant->cost_sync_error }}
+            </div>
+        @endif
+
+        @can('update', $cloudTenant)
+            <div class="flex flex-wrap justify-between gap-3">
+                <div class="flex gap-2">
+                    @if ($cloudTenant->hasCostSyncConfigured())
+                        <flux:button type="button" variant="danger" wire:click="clearCostSync" wire:confirm="{{ __('Clear cost sync settings?') }}">{{ __('Clear') }}</flux:button>
+                        <flux:button type="button" wire:click="syncCosts" wire:loading.attr="disabled">{{ __('Sync now') }}</flux:button>
+                    @endif
+                </div>
+                <flux:button variant="primary" type="submit">{{ __('Save cost sync') }}</flux:button>
+            </div>
+        @endcan
+
+        @if ($cloudTenant->costSnapshots->isNotEmpty())
+            <div class="flex flex-col gap-2">
+                <flux:heading size="sm">{{ __('Recent cost history') }}</flux:heading>
+                <ul class="divide-y divide-zinc-200 rounded-lg border border-zinc-200 dark:divide-zinc-700 dark:border-zinc-700">
+                    @foreach ($cloudTenant->costSnapshots->take(12) as $snapshot)
+                        <li class="flex items-center justify-between gap-3 px-4 py-3 text-sm">
+                            <span>{{ $snapshot->period_start->format('Y-m') }} · {{ $snapshot->provider->label() }}</span>
+                            <span>{{ $snapshot->formattedAmount() }}</span>
+                        </li>
+                    @endforeach
+                </ul>
+            </div>
+        @endif
+    </form>
 
     @if ($cloudTenant->provider->supportsVmImport())
         <div class="flex flex-col gap-4 rounded-xl border border-zinc-200 p-6 dark:border-zinc-700">

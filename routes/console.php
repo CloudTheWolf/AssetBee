@@ -46,3 +46,8 @@ Schedule::command('virtualware:sync')
     ->everyFifteenMinutes()
     ->withoutOverlapping()
     ->name('virtualware-sync');
+
+Schedule::command('cost:sync')
+    ->daily()
+    ->withoutOverlapping()
+    ->name('cost-sync');

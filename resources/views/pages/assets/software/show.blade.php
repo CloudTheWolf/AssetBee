@@ -3,11 +3,15 @@
 use App\Actions\Assets\AddSoftwareKeys;
 use App\Actions\Assets\AssignSoftwareKey;
 use App\Actions\Assets\BulkAssignSoftwareSeats;
+use App\Actions\Assets\ClearSoftwareCostSyncSettings;
 use App\Actions\Assets\DeleteSoftware;
 use App\Actions\Assets\DeleteSoftwareKey;
+use App\Actions\Assets\SyncAssetCosts;
 use App\Actions\Assets\UnassignSoftwareSeat;
 use App\Actions\Assets\UpdateSoftware;
+use App\Actions\Assets\UpdateSoftwareCostSyncSettings;
 use App\Enums\SoftwareBillingInterval;
+use App\Enums\SoftwareCostSyncProvider;
 use App\Enums\SoftwareLicenseType;
 use App\Enums\SoftwareSeatManagerType;
 use App\Enums\SoftwareStatus;
@@ -74,13 +78,65 @@ new #[Title('Software')] class extends Component {
 
     public string $revealedLicenseKeyLabel = '';
 
+    public string $cost_sync_provider = 'none';
+
+    public string $cost_organization_id = '';
+
+    public string $cost_email = '';
+
+    public string $cost_api_token = '';
+
+    public string $cost_customer_id = '';
+
+    public string $cost_service_account_email = '';
+
+    public string $cost_service_account_json = '';
+
+    public string $cost_admin_email = '';
+
+    public string $cost_team_id = '';
+
+    public string $cost_api_key = '';
+
+    public string $cost_bearer_token = '';
+
+    public string $cost_username = '';
+
+    public string $cost_password = '';
+
+    public string $cost_header_name = '';
+
+    public string $cost_header_value = '';
+
+    public string $cost_request_method = 'GET';
+
+    public string $cost_request_url = '';
+
+    public string $cost_request_auth = 'none';
+
+    public string $cost_request_body = '';
+
+    public string $cost_response_amount_path = 'amount';
+
+    public string $cost_response_currency_path = 'currency';
+
+    public string $cost_response_seats_path = '';
+
+    public string $cost_amount_period = 'month';
+
+    /** @var list<array{name: string, value: string}> */
+    public array $cost_request_headers = [];
+
+    public ?string $costSyncError = null;
+
     public function mount(Software $software): void
     {
         $this->authorize('view', $software);
         abort_unless($software->organization_id === CurrentOrganization::require()->id, 404);
 
-        $this->software = $software->load(['assignments.userware', 'assignments.key', 'keys.assignment.userware', 'seatManagerUserware']);
+        $this->software = $software->load(['assignments.userware', 'assignments.key', 'keys.assignment.userware', 'seatManagerUserware', 'costSnapshots']);
         $this->fillForm();
+        $this->fillCostSyncForm();
     }
 
     public function fillForm(): void
@@ -100,6 +156,62 @@ new #[Title('Software')] class extends Component {
         $this->currency = $this->software->currency ?: 'GBP';
         $this->next_billing_at = $this->software->next_billing_at?->format('Y-m-d') ?? '';
         $this->notes = (string) ($this->software->notes ?? '');
+    }
+
+    public function fillCostSyncForm(): void
+    {
+        $this->cost_sync_provider = $this->software->cost_sync_provider?->value ?? 'none';
+        $defaults = $this->software->costSyncCredentialFormDefaults();
+        $this->cost_organization_id = (string) ($defaults['organization_id'] ?? '');
+        $this->cost_email = (string) ($defaults['email'] ?? '');
+        $this->cost_api_token = '';
+        $this->cost_customer_id = (string) ($defaults['customer_id'] ?? '');
+        $this->cost_service_account_email = (string) ($defaults['service_account_email'] ?? '');
+        $this->cost_service_account_json = '';
+        $this->cost_admin_email = (string) ($defaults['admin_email'] ?? '');
+        $this->cost_team_id = (string) ($defaults['team_id'] ?? '');
+        $this->cost_api_key = '';
+        $this->cost_bearer_token = '';
+        $this->cost_username = (string) ($defaults['username'] ?? '');
+        $this->cost_password = '';
+        $this->cost_header_name = (string) ($defaults['header_name'] ?? '');
+        $this->cost_header_value = '';
+
+        $request = $this->software->costSyncRequestFormDefaults();
+        $this->cost_request_method = (string) $request['method'];
+        $this->cost_request_url = (string) $request['url'];
+        $this->cost_request_auth = (string) $request['auth'];
+        $this->cost_request_body = (string) $request['body'];
+        $this->cost_response_amount_path = (string) $request['response_amount_path'];
+        $this->cost_response_currency_path = (string) $request['response_currency_path'];
+        $this->cost_response_seats_path = (string) $request['response_seats_path'];
+        $this->cost_amount_period = (string) $request['amount_period'];
+        $this->cost_request_headers = collect($request['headers'] ?? [])
+            ->map(fn ($header): array => [
+                'name' => (string) ($header['name'] ?? ''),
+                'value' => (string) ($header['value'] ?? ''),
+            ])
+            ->values()
+            ->all();
+        $this->costSyncError = $this->software->cost_sync_error;
+    }
+
+    public function updatedCostSyncProvider(): void
+    {
+        if ($this->cost_request_headers === []) {
+            $this->cost_request_headers = [['name' => '', 'value' => '']];
+        }
+    }
+
+    public function addCostRequestHeader(): void
+    {
+        $this->cost_request_headers[] = ['name' => '', 'value' => ''];
+    }
+
+    public function removeCostRequestHeader(int $index): void
+    {
+        unset($this->cost_request_headers[$index]);
+        $this->cost_request_headers = array_values($this->cost_request_headers);
     }
 
     public function updatedSeatManagerType(): void
@@ -259,6 +371,84 @@ new #[Title('Software')] class extends Component {
         $this->redirect(route('assets.software.index', absolute: false), navigate: true);
     }
 
+    public function saveCostSync(UpdateSoftwareCostSyncSettings $updateSoftwareCostSyncSettings): void
+    {
+        $this->authorize('update', $this->software);
+
+        $this->software = $updateSoftwareCostSyncSettings->handle($this->software, [
+            'cost_sync_provider' => $this->cost_sync_provider,
+            'organization_id' => $this->cost_organization_id !== '' ? $this->cost_organization_id : null,
+            'email' => $this->cost_email !== '' ? $this->cost_email : null,
+            'api_token' => $this->cost_api_token !== '' ? $this->cost_api_token : null,
+            'customer_id' => $this->cost_customer_id !== '' ? $this->cost_customer_id : null,
+            'service_account_email' => $this->cost_service_account_email !== '' ? $this->cost_service_account_email : null,
+            'service_account_json' => $this->cost_service_account_json !== '' ? $this->cost_service_account_json : null,
+            'admin_email' => $this->cost_admin_email !== '' ? $this->cost_admin_email : null,
+            'team_id' => $this->cost_team_id !== '' ? $this->cost_team_id : null,
+            'api_key' => $this->cost_api_key !== '' ? $this->cost_api_key : null,
+            'bearer_token' => $this->cost_bearer_token !== '' ? $this->cost_bearer_token : null,
+            'username' => $this->cost_username !== '' ? $this->cost_username : null,
+            'password' => $this->cost_password !== '' ? $this->cost_password : null,
+            'header_name' => $this->cost_header_name !== '' ? $this->cost_header_name : null,
+            'header_value' => $this->cost_header_value !== '' ? $this->cost_header_value : null,
+            'cost_sync_request' => [
+                'method' => $this->cost_request_method,
+                'url' => $this->cost_request_url,
+                'headers' => $this->cost_request_headers,
+                'auth' => $this->cost_request_auth,
+                'body' => $this->cost_request_body,
+                'response_amount_path' => $this->cost_response_amount_path,
+                'response_currency_path' => $this->cost_response_currency_path,
+                'response_seats_path' => $this->cost_response_seats_path,
+                'amount_period' => $this->cost_amount_period,
+            ],
+        ])->load(['assignments.userware', 'assignments.key', 'keys.assignment.userware', 'seatManagerUserware', 'costSnapshots']);
+
+        $this->fillForm();
+        $this->fillCostSyncForm();
+
+        Flux::toast(variant: 'success', text: __('Cost sync settings saved.'));
+    }
+
+    public function clearCostSync(ClearSoftwareCostSyncSettings $clearSoftwareCostSyncSettings): void
+    {
+        $this->authorize('update', $this->software);
+
+        $this->software = $clearSoftwareCostSyncSettings->handle($this->software)
+            ->load(['assignments.userware', 'assignments.key', 'keys.assignment.userware', 'seatManagerUserware', 'costSnapshots']);
+        $this->fillCostSyncForm();
+
+        Flux::toast(variant: 'success', text: __('Cost sync settings cleared.'));
+    }
+
+    public function syncCosts(SyncAssetCosts $syncAssetCosts): void
+    {
+        $this->authorize('update', $this->software);
+        $this->costSyncError = null;
+
+        try {
+            $result = $syncAssetCosts->handle($this->software);
+        } catch (\Throwable $exception) {
+            $this->software->refresh();
+            $this->costSyncError = $exception->getMessage();
+            $this->fillForm();
+            $this->fillCostSyncForm();
+
+            Flux::toast(variant: 'danger', text: __('Cost sync failed.'));
+
+            return;
+        }
+
+        $this->software = $this->software->fresh()->load(['assignments.userware', 'assignments.key', 'keys.assignment.userware', 'seatManagerUserware', 'costSnapshots']);
+        $this->fillForm();
+        $this->fillCostSyncForm();
+
+        Flux::toast(
+            variant: 'success',
+            text: __('Synced :count cost periods.', ['count' => $result['snapshots']]),
+        );
+    }
+
     #[Computed]
     public function identities()
     {
@@ -400,6 +590,124 @@ new #[Title('Software')] class extends Component {
                 <flux:button variant="primary" type="submit">{{ __('Save') }}</flux:button>
             </div>
         @endcan
+    </form>
+
+    <form wire:submit="saveCostSync" class="flex flex-col gap-6 rounded-xl border border-zinc-200 p-6 dark:border-zinc-700">
+        <div>
+            <flux:heading size="lg">{{ __('Cost sync') }}</flux:heading>
+            <flux:text>
+                {{ __('Pull licence and seat costs from a provider. Successful syncs update billing and keep monthly history.') }}
+                @if ($software->cost_synced_at)
+                    · {{ __('Last synced :time.', ['time' => $software->cost_synced_at->diffForHumans()]) }}
+                @endif
+            </flux:text>
+        </div>
+
+        <flux:select wire:model.live="cost_sync_provider" :label="__('Provider')" :disabled="! auth()->user()->can('update', $software)">
+            @foreach (SoftwareCostSyncProvider::cases() as $option)
+                <option value="{{ $option->value }}">{{ $option->label() }}</option>
+            @endforeach
+        </flux:select>
+
+        @if ($cost_sync_provider === SoftwareCostSyncProvider::Atlassian->value)
+            <flux:input wire:model="cost_organization_id" :label="__('Atlassian organization ID')" :disabled="! auth()->user()->can('update', $software)" />
+            <flux:input wire:model="cost_email" type="email" :label="__('Account email')" :disabled="! auth()->user()->can('update', $software)" />
+            <flux:input wire:model="cost_api_token" type="password" :label="__('API token')" :description="$software->hasCostSyncCredentials() ? __('Leave blank to keep the existing token.') : null" :disabled="! auth()->user()->can('update', $software)" />
+        @elseif ($cost_sync_provider === SoftwareCostSyncProvider::GoogleWorkspace->value)
+            <flux:input wire:model="cost_customer_id" :label="__('Customer ID')" :disabled="! auth()->user()->can('update', $software)" />
+            <flux:input wire:model="cost_service_account_email" :label="__('Service account email')" :disabled="! auth()->user()->can('update', $software)" />
+            <flux:input wire:model="cost_admin_email" type="email" :label="__('Admin email')" :disabled="! auth()->user()->can('update', $software)" />
+            <flux:textarea wire:model="cost_service_account_json" rows="5" :label="__('Service account JSON')" :description="$software->hasCostSyncCredentials() ? __('Leave blank to keep the existing key.') : null" :disabled="! auth()->user()->can('update', $software)" />
+        @elseif ($cost_sync_provider === SoftwareCostSyncProvider::Cursor->value)
+            <flux:input wire:model="cost_team_id" :label="__('Team ID')" :disabled="! auth()->user()->can('update', $software)" />
+            <flux:input wire:model="cost_api_key" type="password" :label="__('API key')" :description="$software->hasCostSyncCredentials() ? __('Leave blank to keep the existing key.') : null" :disabled="! auth()->user()->can('update', $software)" />
+        @elseif ($cost_sync_provider === SoftwareCostSyncProvider::CustomHttp->value)
+            <div class="grid gap-4 sm:grid-cols-2">
+                <flux:select wire:model="cost_request_method" :label="__('Method')" :disabled="! auth()->user()->can('update', $software)">
+                    @foreach (['GET', 'POST', 'PUT', 'PATCH'] as $method)
+                        <option value="{{ $method }}">{{ $method }}</option>
+                    @endforeach
+                </flux:select>
+                <flux:input wire:model="cost_request_url" :label="__('URL')" :disabled="! auth()->user()->can('update', $software)" />
+            </div>
+            <flux:select wire:model="cost_request_auth" :label="__('Authentication')" :disabled="! auth()->user()->can('update', $software)">
+                <option value="none">{{ __('None') }}</option>
+                <option value="bearer">{{ __('Bearer token') }}</option>
+                <option value="basic">{{ __('Basic auth') }}</option>
+                <option value="header">{{ __('Custom header') }}</option>
+            </flux:select>
+            @if ($cost_request_auth === 'bearer')
+                <flux:input wire:model="cost_bearer_token" type="password" :label="__('Bearer token')" :disabled="! auth()->user()->can('update', $software)" />
+            @elseif ($cost_request_auth === 'basic')
+                <flux:input wire:model="cost_username" :label="__('Username')" :disabled="! auth()->user()->can('update', $software)" />
+                <flux:input wire:model="cost_password" type="password" :label="__('Password')" :disabled="! auth()->user()->can('update', $software)" />
+            @elseif ($cost_request_auth === 'header')
+                <flux:input wire:model="cost_header_name" :label="__('Header name')" :disabled="! auth()->user()->can('update', $software)" />
+                <flux:input wire:model="cost_header_value" type="password" :label="__('Header value')" :disabled="! auth()->user()->can('update', $software)" />
+            @endif
+            <div class="flex flex-col gap-3">
+                <flux:heading size="sm">{{ __('Headers') }}</flux:heading>
+                @foreach ($cost_request_headers as $index => $header)
+                    <div class="grid gap-3 sm:grid-cols-[1fr_1fr_auto]" wire:key="cost-header-{{ $index }}">
+                        <flux:input wire:model="cost_request_headers.{{ $index }}.name" :label="__('Name')" :disabled="! auth()->user()->can('update', $software)" />
+                        <flux:input wire:model="cost_request_headers.{{ $index }}.value" :label="__('Value')" :disabled="! auth()->user()->can('update', $software)" />
+                        @can('update', $software)
+                            <flux:button type="button" size="sm" wire:click="removeCostRequestHeader({{ $index }})">{{ __('Remove') }}</flux:button>
+                        @endcan
+                    </div>
+                @endforeach
+                @can('update', $software)
+                    <flux:button type="button" size="sm" wire:click="addCostRequestHeader">{{ __('Add header') }}</flux:button>
+                @endcan
+            </div>
+            <flux:textarea wire:model="cost_request_body" rows="4" :label="__('Body')" :disabled="! auth()->user()->can('update', $software)" />
+            <div class="grid gap-4 sm:grid-cols-2">
+                <flux:input wire:model="cost_response_amount_path" :label="__('Amount JSON path')" :disabled="! auth()->user()->can('update', $software)" />
+                <flux:input wire:model="cost_response_currency_path" :label="__('Currency JSON path')" :disabled="! auth()->user()->can('update', $software)" />
+                <flux:input wire:model="cost_response_seats_path" :label="__('Seats JSON path')" :disabled="! auth()->user()->can('update', $software)" />
+                <flux:select wire:model="cost_amount_period" :label="__('Amount period')" :disabled="! auth()->user()->can('update', $software)">
+                    <option value="month">{{ __('Current month') }}</option>
+                    <option value="as_reported">{{ __('As reported') }}</option>
+                </flux:select>
+            </div>
+        @endif
+
+        @if ($costSyncError || $software->cost_sync_error)
+            <div class="rounded-lg border border-red-300 bg-red-50 p-4 text-sm text-red-800 dark:border-red-700 dark:bg-red-950/30 dark:text-red-200">
+                {{ $costSyncError ?: $software->cost_sync_error }}
+            </div>
+        @endif
+
+        @can('update', $software)
+            <div class="flex flex-wrap justify-between gap-3">
+                <div class="flex gap-2">
+                    @if ($software->hasCostSyncConfigured())
+                        <flux:button type="button" variant="danger" wire:click="clearCostSync" wire:confirm="{{ __('Clear cost sync settings?') }}">{{ __('Clear') }}</flux:button>
+                        <flux:button type="button" wire:click="syncCosts" wire:loading.attr="disabled">{{ __('Sync now') }}</flux:button>
+                    @endif
+                </div>
+                <flux:button variant="primary" type="submit">{{ __('Save cost sync') }}</flux:button>
+            </div>
+        @endcan
+
+        @if ($software->costSnapshots->isNotEmpty())
+            <div class="flex flex-col gap-2">
+                <flux:heading size="sm">{{ __('Recent cost history') }}</flux:heading>
+                <ul class="divide-y divide-zinc-200 rounded-lg border border-zinc-200 dark:divide-zinc-700 dark:border-zinc-700">
+                    @foreach ($software->costSnapshots->take(12) as $snapshot)
+                        <li class="flex items-center justify-between gap-3 px-4 py-3 text-sm">
+                            <span>{{ $snapshot->period_start->format('Y-m') }} · {{ $snapshot->provider->label() }}</span>
+                            <span>
+                                {{ $snapshot->formattedAmount() }}
+                                @if ($snapshot->seat_count !== null)
+                                    · {{ $snapshot->seat_count }} {{ __('seats') }}
+                                @endif
+                            </span>
+                        </li>
+                    @endforeach
+                </ul>
+            </div>
+        @endif
     </form>
 
     <livewire:asset-documents :documentable="$software" :key="'software-docs-'.$software->id" />

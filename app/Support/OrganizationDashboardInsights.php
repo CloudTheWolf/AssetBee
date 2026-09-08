@@ -47,6 +47,13 @@ class OrganizationDashboardInsights
             ->orderBy('name')
             ->get();
 
+        $cloudCosts = CloudTenant::query()
+            ->where('organization_id', $organization->id)
+            ->whereNotNull('billing_amount')
+            ->whereNotNull('billing_interval')
+            ->orderBy('name')
+            ->get();
+
         $seatLicenses = Software::query()
             ->withCount('assignments')
             ->where('organization_id', $organization->id)
@@ -54,10 +61,13 @@ class OrganizationDashboardInsights
             ->whereNotNull('total_seats')
             ->get();
 
-        $primaryCurrency = $this->primaryCurrency($recurring);
+        $primaryCurrency = $this->primaryCurrency($recurring, $cloudCosts);
         $primaryRecurring = $recurring->where('currency', $primaryCurrency)->values();
+        $primaryCloudCosts = $cloudCosts->where('currency', $primaryCurrency)->values();
 
-        $estimatedMonthly = round($primaryRecurring->sum(fn (Software $software): float => $software->monthlyCost() ?? 0.0), 2);
+        $softwareMonthly = round($primaryRecurring->sum(fn (Software $software): float => $software->monthlyCost() ?? 0.0), 2);
+        $cloudMonthly = round($primaryCloudCosts->sum(fn (CloudTenant $tenant): float => $tenant->monthlyCost() ?? 0.0), 2);
+        $estimatedMonthly = round($softwareMonthly + $cloudMonthly, 2);
         $estimatedAnnual = round($estimatedMonthly * 12, 2);
         $monthlyForecast = $this->monthlyForecast($primaryRecurring, $primaryCurrency);
         $upcoming30Days = $this->upcomingBillingTotal($primaryRecurring, 30);
@@ -83,7 +93,7 @@ class OrganizationDashboardInsights
                 'formatted_monthly' => $this->formatMoney($primaryCurrency, $estimatedMonthly),
                 'formatted_annual' => $this->formatMoney($primaryCurrency, $estimatedAnnual),
                 'formatted_upcoming_30_days' => $this->formatMoney($primaryCurrency, $upcoming30Days),
-                'other_currencies' => $this->otherCurrencyTotals($recurring, $primaryCurrency),
+                'other_currencies' => $this->otherCurrencyTotals($recurring, $cloudCosts, $primaryCurrency),
             ],
             'monthly_forecast' => $monthlyForecast,
             'top_software_costs' => $this->topSoftwareCosts($primaryRecurring),
@@ -95,40 +105,59 @@ class OrganizationDashboardInsights
 
     /**
      * @param  Collection<int, Software>  $recurring
+     * @param  Collection<int, CloudTenant>  $cloudCosts
      */
-    private function primaryCurrency(Collection $recurring): string
+    private function primaryCurrency(Collection $recurring, Collection $cloudCosts): string
     {
-        if ($recurring->isEmpty()) {
+        $currencies = $recurring
+            ->map(fn (Software $software): string => strtoupper($software->currency ?: 'GBP'))
+            ->concat($cloudCosts->map(fn (CloudTenant $tenant): string => strtoupper($tenant->currency ?: 'GBP')));
+
+        if ($currencies->isEmpty()) {
             return 'GBP';
         }
 
-        return (string) $recurring
-            ->groupBy(fn (Software $software): string => strtoupper($software->currency ?: 'GBP'))
-            ->sortByDesc(fn (Collection $group): int => $group->count())
+        return (string) $currencies
+            ->countBy()
+            ->sortDesc()
             ->keys()
             ->first();
     }
 
     /**
      * @param  Collection<int, Software>  $recurring
+     * @param  Collection<int, CloudTenant>  $cloudCosts
      * @return list<array{currency: string, estimated_monthly: float, formatted_monthly: string}>
      */
-    private function otherCurrencyTotals(Collection $recurring, string $primaryCurrency): array
+    private function otherCurrencyTotals(Collection $recurring, Collection $cloudCosts, string $primaryCurrency): array
     {
-        return array_values($recurring
-            ->groupBy(fn (Software $software): string => strtoupper($software->currency ?: 'GBP'))
-            ->reject(fn (Collection $group, string $currency): bool => $currency === $primaryCurrency)
-            ->map(function (Collection $group, string $currency): array {
-                $monthly = round($group->sum(fn (Software $software): float => $software->monthlyCost() ?? 0.0), 2);
+        $totals = [];
 
-                return [
-                    'currency' => $currency,
-                    'estimated_monthly' => $monthly,
-                    'formatted_monthly' => $this->formatMoney($currency, $monthly),
-                ];
-            })
+        foreach ($recurring as $software) {
+            $currency = strtoupper($software->currency ?: 'GBP');
+            if ($currency === strtoupper($primaryCurrency)) {
+                continue;
+            }
+
+            $totals[$currency] = ($totals[$currency] ?? 0.0) + ($software->monthlyCost() ?? 0.0);
+        }
+
+        foreach ($cloudCosts as $tenant) {
+            $currency = strtoupper($tenant->currency ?: 'GBP');
+            if ($currency === strtoupper($primaryCurrency)) {
+                continue;
+            }
+
+            $totals[$currency] = ($totals[$currency] ?? 0.0) + ($tenant->monthlyCost() ?? 0.0);
+        }
+
+        return array_values(collect($totals)
+            ->map(fn (float $monthly, string $currency): array => [
+                'currency' => $currency,
+                'estimated_monthly' => round($monthly, 2),
+                'formatted_monthly' => $this->formatMoney($currency, round($monthly, 2)),
+            ])
             ->sortBy('currency')
-            ->values()
             ->all());
     }
 

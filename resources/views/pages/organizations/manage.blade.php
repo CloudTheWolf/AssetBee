@@ -30,6 +30,8 @@ new #[Title('Organization settings')] class extends Component
 
     public bool $virtualware_sync_enabled = false;
 
+    public bool $cost_sync_enabled = false;
+
     public string $invite_email = '';
 
     public string $invite_role = 'member';
@@ -46,6 +48,7 @@ new #[Title('Organization settings')] class extends Component
         $this->name = $organization->name;
         $this->google_hosted_domains = $organization->googleDomains()->pluck('domain')->implode("\n");
         $this->virtualware_sync_enabled = (bool) $organization->virtualware_sync_enabled;
+        $this->cost_sync_enabled = (bool) $organization->cost_sync_enabled;
     }
 
     public function save(UpdateOrganization $updateOrganization): void
@@ -57,6 +60,7 @@ new #[Title('Organization settings')] class extends Component
             'name' => $this->name,
             'google_hosted_domains' => $this->google_hosted_domains,
             'virtualware_sync_enabled' => $this->virtualware_sync_enabled,
+            'cost_sync_enabled' => $this->cost_sync_enabled,
         ]);
 
         unset($this->organization);
@@ -229,6 +233,11 @@ new #[Title('Organization settings')] class extends Component
             wire:model="virtualware_sync_enabled"
             :label="__('Automatic virtualware sync')"
             :description="__('Every 15 minutes, refresh imported AWS EC2 instances and sync guests from Proxmox hosts.')"
+        />
+        <flux:checkbox
+            wire:model="cost_sync_enabled"
+            :label="__('Automatic cost sync')"
+            :description="__('Once daily, refresh software and cloud tenant costs from configured providers.')"
         />
         <flux:textarea
             wire:model="google_hosted_domains"

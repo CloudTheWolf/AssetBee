@@ -25,6 +25,7 @@ class UpdateOrganization
             'name' => ['required', 'string', 'max:255'],
             'google_hosted_domains' => ['nullable'],
             'virtualware_sync_enabled' => ['sometimes', 'boolean'],
+            'cost_sync_enabled' => ['sometimes', 'boolean'],
         ])->validate();
 
         return DB::transaction(function () use ($organization, $validated, $input) {
@@ -35,6 +36,9 @@ class UpdateOrganization
                     : $organization->slug,
                 ...array_key_exists('virtualware_sync_enabled', $validated)
                     ? ['virtualware_sync_enabled' => (bool) $validated['virtualware_sync_enabled']]
+                    : [],
+                ...array_key_exists('cost_sync_enabled', $validated)
+                    ? ['cost_sync_enabled' => (bool) $validated['cost_sync_enabled']]
                     : [],
             ]);
 

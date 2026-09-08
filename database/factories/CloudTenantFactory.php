@@ -2,6 +2,7 @@
 
 namespace Database\Factories;
 
+use App\Enums\CloudTenantCostSyncProvider;
 use App\Enums\CloudTenantProvider;
 use App\Enums\CloudTenantStatus;
 use App\Models\CloudTenant;
@@ -26,6 +27,8 @@ class CloudTenantFactory extends Factory
             'domain' => fake()->optional()->domainName(),
             'status' => CloudTenantStatus::Active,
             'notes' => fake()->optional()->sentence(),
+            'cost_sync_provider' => CloudTenantCostSyncProvider::None,
+            'currency' => 'USD',
         ];
     }
 
@@ -58,6 +61,12 @@ class CloudTenantFactory extends Factory
                 CloudTenantProvider::Gcp, CloudTenantProvider::Gcp->value => [
                     'project_id' => 'example-project',
                     'service_account_json' => '{"type":"service_account"}',
+                ],
+                CloudTenantProvider::GoogleWorkspace, CloudTenantProvider::GoogleWorkspace->value => [
+                    'customer_id' => 'C01234567',
+                    'service_account_email' => 'sa@example.com',
+                    'service_account_json' => '{"type":"service_account","client_email":"sa@example.com","private_key":"x"}',
+                    'admin_email' => 'admin@example.com',
                 ],
                 default => [
                     'access_key_id' => 'AKIAEXAMPLEKEY1234',
