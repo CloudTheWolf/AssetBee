@@ -81,7 +81,7 @@ class CursorCostFetcher implements FetchesAssetCosts
         } while ($page <= $totalPages);
 
         $amount = round($overallSpendCents / 100, 2);
-        $currency = strtoupper($asset->currency ?: 'USD');
+        $currency = strtoupper((string) ($asset->currency ?: 'USD'));
         $seatCount = is_int($totalMembers) ? $totalMembers : null;
 
         if ($subscriptionCycleStartMs !== null && $subscriptionCycleStartMs > 0) {
@@ -103,7 +103,7 @@ class CursorCostFetcher implements FetchesAssetCosts
                 periodStart: $periodStart,
                 periodEnd: $periodEnd,
                 amount: $amount,
-                currency: $currency !== '' ? $currency : 'USD',
+                currency: $currency,
                 provider: CostSyncSource::Cursor,
                 seatCount: $seatCount,
                 meta: ['source' => 'cursor_teams_spend'],
