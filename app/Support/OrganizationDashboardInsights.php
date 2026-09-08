@@ -251,8 +251,7 @@ class OrganizationDashboardInsights
     ): float {
         $monthKey = $monthStart->format('Y-m');
         $monthSnapshots = $snapshots->filter(
-            fn (CostSnapshot $snapshot): bool => $snapshot->period_start !== null
-                && $snapshot->period_start->format('Y-m') === $monthKey,
+            fn (CostSnapshot $snapshot): bool => $snapshot->period_start->format('Y-m') === $monthKey,
         );
 
         $total = 0.0;
