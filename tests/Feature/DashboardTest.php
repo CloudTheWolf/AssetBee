@@ -22,5 +22,5 @@ test('authenticated organization members can visit the dashboard', function () {
         ->assertOk()
         ->assertSee(__('Userware'))
         ->assertSee(__('Hardware'))
-        ->assertSee(__('Est. monthly software spend'));
+        ->assertSee(__('Est. monthly spend'));
 });
