@@ -65,11 +65,25 @@ class AzureCostFetcher implements FetchesAssetCosts
             ]));
         }
 
-        $columns = collect($response->json('properties.columns') ?? [])
-            ->pluck('name')
-            ->map(fn ($name) => strtolower((string) $name))
-            ->all();
-        $rows = $response->json('properties.rows') ?? [];
+        $columnRows = $response->json('properties.columns');
+        if (! is_array($columnRows)) {
+            $columnRows = [];
+        }
+
+        /** @var list<string> $columns */
+        $columns = [];
+        foreach ($columnRows as $column) {
+            if (! is_array($column)) {
+                continue;
+            }
+
+            $columns[] = strtolower((string) ($column['name'] ?? ''));
+        }
+
+        $rows = $response->json('properties.rows');
+        if (! is_array($rows)) {
+            $rows = [];
+        }
 
         /** @var list<FetchedCostPeriod> $periods */
         $periods = [];

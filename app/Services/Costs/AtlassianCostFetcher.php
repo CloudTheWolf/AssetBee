@@ -52,8 +52,18 @@ class AtlassianCostFetcher implements FetchesAssetCosts
                 ]));
             }
 
-            $seatCount = collect($licenses->json('data') ?? $licenses->json() ?? [])
-                ->sum(fn ($row): int => (int) data_get($row, 'count', data_get($row, 'seats', 0)));
+            $licenseRows = $licenses->json('data');
+            if (! is_array($licenseRows)) {
+                $licenseRows = $licenses->json();
+            }
+            if (! is_array($licenseRows)) {
+                $licenseRows = [];
+            }
+
+            $seatCount = 0;
+            foreach ($licenseRows as $row) {
+                $seatCount += (int) data_get($row, 'count', data_get($row, 'seats', 0));
+            }
 
             $amount = is_numeric($asset->billing_amount) ? (float) $asset->billing_amount : 0.0;
             $periodStart = CarbonImmutable::parse($to)->startOfMonth()->startOfDay();
