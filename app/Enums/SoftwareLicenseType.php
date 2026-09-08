@@ -7,6 +7,7 @@ enum SoftwareLicenseType: string
     case Seat = 'seat';
     case Site = 'site';
     case Subscription = 'subscription';
+    case Key = 'key';
 
     public function label(): string
     {
@@ -14,6 +15,7 @@ enum SoftwareLicenseType: string
             self::Seat => __('Seat'),
             self::Site => __('Site'),
             self::Subscription => __('Subscription'),
+            self::Key => __('Key'),
         };
     }
 }

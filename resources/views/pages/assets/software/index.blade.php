@@ -119,7 +119,7 @@ new #[Title('Software')] class extends Component {
         $sortBy = in_array($this->sortBy, $sortable, true) ? $this->sortBy : 'name';
 
         return Software::query()
-            ->withCount('assignments')
+            ->withCount(['assignments', 'keys'])
             ->where('organization_id', CurrentOrganization::require()->id)
             ->when($this->search !== '', function ($query) {
                 $query->where(function ($query) {
@@ -179,6 +179,8 @@ new #[Title('Software')] class extends Component {
                     <flux:table.cell>
                         @if ($software->license_type === App\Enums\SoftwareLicenseType::Seat)
                             {{ $software->assignments_count }} / {{ $software->total_seats }}
+                        @elseif ($software->license_type === App\Enums\SoftwareLicenseType::Key)
+                            {{ $software->assignments_count }} / {{ $software->keys_count }}
                         @elseif ($software->is_recurring)
                             {{ $software->formattedBillingAmount() ?? '—' }}
                             @if ($software->billing_interval)
@@ -226,12 +228,14 @@ new #[Title('Software')] class extends Component {
             <flux:heading size="lg">{{ __('Add software') }}</flux:heading>
             <flux:input wire:model="name" :label="__('Name')" required />
             <flux:input wire:model="vendor" :label="__('Vendor')" />
-            <flux:select wire:model="license_type" :label="__('License type')">
+            <flux:select wire:model.live="license_type" :label="__('License type')">
                 @foreach (App\Enums\SoftwareLicenseType::cases() as $option)
                     <option value="{{ $option->value }}">{{ $option->label() }}</option>
                 @endforeach
             </flux:select>
-            <flux:input wire:model="total_seats" type="number" min="1" :label="__('Total seats')" />
+            @if ($license_type === App\Enums\SoftwareLicenseType::Seat->value)
+                <flux:input wire:model="total_seats" type="number" min="1" :label="__('Total seats')" />
+            @endif
             <flux:select wire:model="createStatus" :label="__('Status')">
                 @foreach (App\Enums\SoftwareStatus::cases() as $option)
                     <option value="{{ $option->value }}">{{ $option->label() }}</option>

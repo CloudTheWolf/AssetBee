@@ -106,6 +106,14 @@ class Software extends Model
     }
 
     /**
+     * @return HasMany<SoftwareKey, $this>
+     */
+    public function keys(): HasMany
+    {
+        return $this->hasMany(SoftwareKey::class);
+    }
+
+    /**
      * @return MorphMany<AssetDocument, $this>
      */
     public function documents(): MorphMany
@@ -143,6 +151,29 @@ class Software extends Model
         }
 
         return $this->seatsUsed() < $this->total_seats;
+    }
+
+    public function keysUsed(): int
+    {
+        return $this->keys()->whereHas('assignment')->count();
+    }
+
+    public function keysAvailable(): ?int
+    {
+        if ($this->license_type !== SoftwareLicenseType::Key) {
+            return null;
+        }
+
+        return max(0, $this->keys()->count() - $this->keysUsed());
+    }
+
+    public function hasAvailableKeys(): bool
+    {
+        if ($this->license_type !== SoftwareLicenseType::Key) {
+            return true;
+        }
+
+        return $this->keys()->whereDoesntHave('assignment')->exists();
     }
 
     public function formattedBillingAmount(): ?string

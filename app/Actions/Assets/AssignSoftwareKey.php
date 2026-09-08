@@ -5,19 +5,26 @@ namespace App\Actions\Assets;
 use App\Enums\SoftwareLicenseType;
 use App\Models\Software;
 use App\Models\SoftwareAssignment;
+use App\Models\SoftwareKey;
 use App\Models\Userware;
 use Illuminate\Validation\ValidationException;
 
-class AssignSoftwareSeat
+class AssignSoftwareKey
 {
     /**
      * @throws ValidationException
      */
-    public function handle(Software $software, Userware $userware, ?string $notes = null): SoftwareAssignment
+    public function handle(Software $software, SoftwareKey $key, Userware $userware, ?string $notes = null): SoftwareAssignment
     {
-        if ($software->license_type === SoftwareLicenseType::Key) {
+        if ($software->license_type !== SoftwareLicenseType::Key) {
             throw ValidationException::withMessages([
-                'userware_id' => __('Key-based licenses must be assigned by selecting a specific key.'),
+                'software_key_id' => __('License keys can only be assigned for key-based software.'),
+            ]);
+        }
+
+        if ($key->software_id !== $software->id) {
+            throw ValidationException::withMessages([
+                'software_key_id' => __('The selected key does not belong to this software.'),
             ]);
         }
 
@@ -27,9 +34,9 @@ class AssignSoftwareSeat
             ]);
         }
 
-        if (! $software->hasAvailableSeats()) {
+        if ($key->isAssigned()) {
             throw ValidationException::withMessages([
-                'userware_id' => __('No seats are available for this license.'),
+                'software_key_id' => __('This license key is already assigned.'),
             ]);
         }
 
@@ -40,13 +47,14 @@ class AssignSoftwareSeat
 
         if ($existing !== null) {
             throw ValidationException::withMessages([
-                'userware_id' => __('This identity already has a seat for this license.'),
+                'userware_id' => __('This identity already has a key for this license.'),
             ]);
         }
 
-        return SoftwareAssignment::create([
+        return SoftwareAssignment::query()->create([
             'software_id' => $software->id,
             'userware_id' => $userware->id,
+            'software_key_id' => $key->id,
             'assigned_at' => now(),
             'notes' => $notes,
         ]);

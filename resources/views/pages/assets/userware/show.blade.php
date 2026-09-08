@@ -54,6 +54,7 @@ new #[Title('Userware')] class extends Component {
             'hardwares',
             'virtualwares',
             'softwareAssignments.software',
+            'softwareAssignments.key',
             'accounts.software',
         ]);
         $this->fillForm();
@@ -94,6 +95,7 @@ new #[Title('Userware')] class extends Component {
             'hardwares',
             'virtualwares',
             'softwareAssignments.software',
+            'softwareAssignments.key',
             'accounts.software',
         ]);
 
@@ -225,7 +227,7 @@ new #[Title('Userware')] class extends Component {
 
     <div class="rounded-xl border border-zinc-200 p-6 dark:border-zinc-700">
         <flux:heading size="lg">{{ __('Assigned software') }}</flux:heading>
-        <flux:text class="mt-1">{{ __('Seat licenses assigned to this identity.') }}</flux:text>
+        <flux:text class="mt-1">{{ __('Licenses assigned to this identity.') }}</flux:text>
 
         <ul class="mt-4 divide-y divide-zinc-200 dark:divide-zinc-700">
             @forelse ($userware->softwareAssignments as $assignment)
@@ -237,6 +239,9 @@ new #[Title('Userware')] class extends Component {
                         <flux:text>
                             {{ $assignment->software->vendor ?? $assignment->software->license_type->label() }}
                             · {{ __('Assigned') }} {{ $assignment->assigned_at->format('M j, Y') }}
+                            @if ($assignment->key)
+                                · {{ $assignment->key->label ?: $assignment->key->maskedValue() }}
+                            @endif
                         </flux:text>
                     </div>
                     <flux:button size="sm" :href="route('assets.software.show', $assignment->software)" wire:navigate>
@@ -244,7 +249,7 @@ new #[Title('Userware')] class extends Component {
                     </flux:button>
                 </li>
             @empty
-                <li class="py-3"><flux:text>{{ __('No software seats assigned.') }}</flux:text></li>
+                <li class="py-3"><flux:text>{{ __('No software assigned.') }}</flux:text></li>
             @endforelse
         </ul>
     </div>

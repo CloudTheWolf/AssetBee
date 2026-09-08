@@ -1,7 +1,10 @@
 <?php
 
+use App\Actions\Assets\AddSoftwareKeys;
+use App\Actions\Assets\AssignSoftwareKey;
 use App\Actions\Assets\BulkAssignSoftwareSeats;
 use App\Actions\Assets\DeleteSoftware;
+use App\Actions\Assets\DeleteSoftwareKey;
 use App\Actions\Assets\UnassignSoftwareSeat;
 use App\Actions\Assets\UpdateSoftware;
 use App\Enums\SoftwareBillingInterval;
@@ -10,6 +13,7 @@ use App\Enums\SoftwareSeatManagerType;
 use App\Enums\SoftwareStatus;
 use App\Models\Software;
 use App\Models\SoftwareAssignment;
+use App\Models\SoftwareKey;
 use App\Models\Userware;
 use App\Support\CurrentOrganization;
 use Flux\Flux;
@@ -56,12 +60,26 @@ new #[Title('Software')] class extends Component {
     /** @var list<int|string> */
     public array $selectedUserwareIds = [];
 
+    public string $newKeys = '';
+
+    public string $newKeyLabel = '';
+
+    public string $assignKeyId = '';
+
+    public string $assignUserwareId = '';
+
+    public bool $showLicenseKeyModal = false;
+
+    public string $revealedLicenseKey = '';
+
+    public string $revealedLicenseKeyLabel = '';
+
     public function mount(Software $software): void
     {
         $this->authorize('view', $software);
         abort_unless($software->organization_id === CurrentOrganization::require()->id, 404);
 
-        $this->software = $software->load(['assignments.userware', 'seatManagerUserware']);
+        $this->software = $software->load(['assignments.userware', 'assignments.key', 'keys.assignment.userware', 'seatManagerUserware']);
         $this->fillForm();
     }
 
@@ -115,11 +133,76 @@ new #[Title('Software')] class extends Component {
             'currency' => $this->currency !== '' ? $this->currency : 'GBP',
             'next_billing_at' => $this->is_recurring && $this->next_billing_at !== '' ? $this->next_billing_at : null,
             'notes' => $this->notes !== '' ? $this->notes : null,
-        ])->load(['assignments.userware', 'seatManagerUserware']);
+        ])->load(['assignments.userware', 'assignments.key', 'keys.assignment.userware', 'seatManagerUserware']);
 
         $this->fillForm();
 
         Flux::toast(variant: 'success', text: __('Software updated.'));
+    }
+
+    public function addKeys(AddSoftwareKeys $addSoftwareKeys): void
+    {
+        $this->authorize('update', $this->software);
+
+        $created = $addSoftwareKeys->handle(
+            $this->software,
+            $this->newKeys,
+            $this->newKeyLabel !== '' ? $this->newKeyLabel : null,
+        );
+
+        $this->newKeys = '';
+        $this->newKeyLabel = '';
+        $this->reloadKeyRelations();
+
+        Flux::toast(
+            variant: 'success',
+            text: __('Added :count license keys.', ['count' => $created->count()]),
+        );
+    }
+
+    public function deleteKey(SoftwareKey $key, DeleteSoftwareKey $deleteSoftwareKey): void
+    {
+        $this->authorize('update', $this->software);
+        abort_unless($key->software_id === $this->software->id, 404);
+
+        $deleteSoftwareKey->handle($key);
+        $this->reloadKeyRelations();
+
+        Flux::toast(variant: 'success', text: __('License key deleted.'));
+    }
+
+    public function revealKey(SoftwareKey $key): void
+    {
+        $this->authorize('view', $this->software);
+        abort_unless($key->software_id === $this->software->id, 404);
+
+        $this->revealedLicenseKey = $key->value;
+        $this->revealedLicenseKeyLabel = $key->label ?: $key->maskedValue();
+        $this->showLicenseKeyModal = true;
+    }
+
+    public function closeLicenseKeyModal(): void
+    {
+        $this->showLicenseKeyModal = false;
+        $this->revealedLicenseKey = '';
+        $this->revealedLicenseKeyLabel = '';
+    }
+
+    public function assignKey(AssignSoftwareKey $assignSoftwareKey): void
+    {
+        $this->authorize('assign', $this->software);
+
+        $key = SoftwareKey::query()->findOrFail((int) $this->assignKeyId);
+        $userware = Userware::query()->findOrFail((int) $this->assignUserwareId);
+
+        $assignSoftwareKey->handle($this->software, $key, $userware);
+
+        $this->assignKeyId = '';
+        $this->assignUserwareId = '';
+        $this->reloadKeyRelations();
+        unset($this->identities, $this->unassignedKeys);
+
+        Flux::toast(variant: 'success', text: __('License key assigned.'));
     }
 
     public function assignSeats(BulkAssignSoftwareSeats $bulkAssignSoftwareSeats): void
@@ -128,7 +211,7 @@ new #[Title('Software')] class extends Component {
 
         $result = $bulkAssignSoftwareSeats->handle($this->software, $this->selectedUserwareIds);
 
-        $this->software->load(['assignments.userware']);
+        $this->software->load(['assignments.userware', 'assignments.key']);
         $this->selectedUserwareIds = [];
         unset($this->identities);
 
@@ -147,7 +230,7 @@ new #[Title('Software')] class extends Component {
             $this->identities->pluck('id')->all(),
         );
 
-        $this->software->load(['assignments.userware']);
+        $this->software->load(['assignments.userware', 'assignments.key']);
         $this->selectedUserwareIds = [];
         unset($this->identities);
 
@@ -163,10 +246,10 @@ new #[Title('Software')] class extends Component {
         abort_unless($assignment->software_id === $this->software->id, 404);
 
         $unassignSoftwareSeat->handle($assignment);
-        $this->software->load(['assignments.userware']);
-        unset($this->identities);
+        $this->reloadKeyRelations();
+        unset($this->identities, $this->unassignedKeys);
 
-        Flux::toast(variant: 'success', text: __('Seat unassigned.'));
+        Flux::toast(variant: 'success', text: __('Assignment removed.'));
     }
 
     public function delete(DeleteSoftware $deleteSoftware): void
@@ -189,6 +272,14 @@ new #[Title('Software')] class extends Component {
     }
 
     #[Computed]
+    public function unassignedKeys()
+    {
+        return $this->software->keys
+            ->filter(fn (SoftwareKey $key): bool => ! $key->isAssigned())
+            ->values();
+    }
+
+    #[Computed]
     public function managerIdentities()
     {
         return Userware::query()
@@ -208,8 +299,14 @@ new #[Title('Software')] class extends Component {
             ->orderBy('department')
             ->pluck('department');
     }
+
+    private function reloadKeyRelations(): void
+    {
+        $this->software->load(['assignments.userware', 'assignments.key', 'keys.assignment.userware']);
+    }
 }; ?>
 
+<div>
 <div class="mx-auto flex w-full max-w-3xl flex-col gap-6">
     <div class="flex items-center gap-3">
         <flux:button size="sm" :href="route('assets.software.index')" wire:navigate icon="arrow-left">{{ __('Back') }}</flux:button>
@@ -219,6 +316,9 @@ new #[Title('Software')] class extends Component {
                 {{ $software->license_type->label() }}
                 @if ($software->license_type === SoftwareLicenseType::Seat)
                     · {{ $software->assignments->count() }} / {{ $software->total_seats }} {{ __('seats') }}
+                @endif
+                @if ($software->license_type === SoftwareLicenseType::Key)
+                    · {{ $software->keysUsed() }} / {{ $software->keys->count() }} {{ __('keys') }}
                 @endif
                 @if ($software->seatManagerLabel())
                     · {{ __('Seat manager') }}: {{ $software->seatManagerLabel() }}
@@ -233,12 +333,14 @@ new #[Title('Software')] class extends Component {
     <form wire:submit="save" class="flex flex-col gap-6 rounded-xl border border-zinc-200 p-6 dark:border-zinc-700">
         <flux:input wire:model="name" :label="__('Name')" required :disabled="! auth()->user()->can('update', $software)" />
         <flux:input wire:model="vendor" :label="__('Vendor')" :disabled="! auth()->user()->can('update', $software)" />
-        <flux:select wire:model="license_type" :label="__('License type')" :disabled="! auth()->user()->can('update', $software)">
+        <flux:select wire:model.live="license_type" :label="__('License type')" :disabled="! auth()->user()->can('update', $software)">
             @foreach (SoftwareLicenseType::cases() as $option)
                 <option value="{{ $option->value }}">{{ $option->label() }}</option>
             @endforeach
         </flux:select>
-        <flux:input wire:model="total_seats" type="number" min="1" :label="__('Total seats')" :disabled="! auth()->user()->can('update', $software)" />
+        @if ($license_type === SoftwareLicenseType::Seat->value)
+            <flux:input wire:model="total_seats" type="number" min="1" :label="__('Total seats')" :disabled="! auth()->user()->can('update', $software)" />
+        @endif
 
         <div class="grid gap-4 rounded-lg border border-zinc-200 p-4 dark:border-zinc-700">
             <flux:select wire:model.live="seat_manager_type" :label="__('Seat manager')" :disabled="! auth()->user()->can('update', $software)">
@@ -302,58 +404,184 @@ new #[Title('Software')] class extends Component {
 
     <livewire:asset-documents :documentable="$software" :key="'software-docs-'.$software->id" />
 
-    @can('assign', $software)
+    @if ($software->license_type === SoftwareLicenseType::Key)
         <div class="flex flex-col gap-4 rounded-xl border border-zinc-200 p-6 dark:border-zinc-700">
-            <flux:heading size="lg">{{ __('Seat assignments') }}</flux:heading>
-
-            @if ($this->identities->isNotEmpty())
-                <form wire:submit="assignSeats" class="flex flex-col gap-3">
-                    <flux:select
-                        wire:model="selectedUserwareIds"
-                        multiple
-                        :size="8"
-                        :label="__('Identities')"
-                        class="!h-auto min-h-40 py-1"
-                    >
-                        @foreach ($this->identities as $identity)
-                            <option value="{{ $identity->id }}">{{ $identity->name }} ({{ $identity->email }})</option>
-                        @endforeach
-                    </flux:select>
-
-                    <div class="flex flex-col gap-2 sm:flex-row sm:justify-end">
-                        <flux:button
-                            type="button"
-                            variant="ghost"
-                            data-test="assign-all-seats"
-                            wire:click="assignAllSeats"
-                            wire:confirm="{{ __('Assign this software to all available identities?') }}"
-                        >
-                            {{ __('Assign to all userware') }}
-                        </flux:button>
-                        <flux:button variant="primary" type="submit" data-test="bulk-assign-seats">
-                            {{ __('Assign selected') }}
-                        </flux:button>
+            <flux:heading size="lg">{{ __('License keys') }}</flux:heading>
+            @can('update', $software)
+                <form wire:submit="addKeys" class="flex flex-col gap-3">
+                    <flux:input wire:model="newKeyLabel" :label="__('Label (optional)')" :placeholder="__('Applies to all keys added below')" />
+                    <flux:textarea wire:model="newKeys" rows="4" :label="__('Keys')" :placeholder="__('One key per line')" required />
+                    <div class="flex justify-end">
+                        <flux:button variant="primary" type="submit" data-test="add-software-keys">{{ __('Add keys') }}</flux:button>
                     </div>
                 </form>
-            @else
-                <flux:text>{{ __('All identities already have a seat, or none exist yet.') }}</flux:text>
-            @endif
+            @endcan
 
             <ul class="divide-y divide-zinc-200 dark:divide-zinc-700">
-                @forelse ($software->assignments as $assignment)
-                    <li class="flex items-center justify-between py-3">
-                        <div>
-                            <div class="font-medium">{{ $assignment->userware->name }}</div>
-                            <flux:text>{{ $assignment->userware->email }}</flux:text>
+                @forelse ($software->keys as $key)
+                    <li class="flex flex-col gap-3 py-3 sm:flex-row sm:items-center sm:justify-between" wire:key="software-key-{{ $key->id }}">
+                        <div class="min-w-0">
+                            <div class="font-medium font-mono">{{ $key->maskedValue() }}</div>
+                            <flux:text>
+                                @if ($key->label)
+                                    {{ $key->label }} ·
+                                @endif
+                                @if ($key->assignment)
+                                    {{ __('Assigned to') }} {{ $key->assignment->userware->name }}
+                                @else
+                                    {{ __('Unassigned') }}
+                                @endif
+                            </flux:text>
                         </div>
-                        <flux:button size="sm" variant="danger" wire:click="unassignSeat({{ $assignment->id }})" wire:confirm="{{ __('Remove this seat?') }}">
-                            {{ __('Unassign') }}
-                        </flux:button>
+                        <div class="flex gap-2">
+                            <flux:button size="sm" variant="ghost" wire:click="revealKey({{ $key->id }})">{{ __('Reveal') }}</flux:button>
+                            @can('update', $software)
+                                @unless ($key->isAssigned())
+                                    <flux:button size="sm" variant="danger" wire:click="deleteKey({{ $key->id }})" wire:confirm="{{ __('Delete this license key?') }}">
+                                        {{ __('Delete') }}
+                                    </flux:button>
+                                @endunless
+                            @endcan
+                        </div>
                     </li>
                 @empty
-                    <li class="py-3"><flux:text>{{ __('No seats assigned.') }}</flux:text></li>
+                    <li class="py-3"><flux:text>{{ __('No license keys yet.') }}</flux:text></li>
                 @endforelse
             </ul>
         </div>
-    @endcan
+
+        @can('assign', $software)
+            <div class="flex flex-col gap-4 rounded-xl border border-zinc-200 p-6 dark:border-zinc-700">
+                <flux:heading size="lg">{{ __('Key assignments') }}</flux:heading>
+
+                @if ($this->unassignedKeys->isNotEmpty() && $this->identities->isNotEmpty())
+                    <form wire:submit="assignKey" class="flex flex-col gap-3">
+                        <flux:select wire:model="assignKeyId" :label="__('License key')" required>
+                            <option value="">{{ __('Select key') }}</option>
+                            @foreach ($this->unassignedKeys as $key)
+                                <option value="{{ $key->id }}">
+                                    {{ $key->label ? $key->label.' — ' : '' }}{{ $key->maskedValue() }}
+                                </option>
+                            @endforeach
+                        </flux:select>
+                        <flux:select wire:model="assignUserwareId" :label="__('User')" required>
+                            <option value="">{{ __('Select user') }}</option>
+                            @foreach ($this->identities as $identity)
+                                <option value="{{ $identity->id }}">{{ $identity->name }} ({{ $identity->email }})</option>
+                            @endforeach
+                        </flux:select>
+                        <div class="flex justify-end">
+                            <flux:button variant="primary" type="submit" data-test="assign-software-key">{{ __('Assign key') }}</flux:button>
+                        </div>
+                    </form>
+                @else
+                    <flux:text>
+                        @if ($software->keys->isEmpty())
+                            {{ __('Add license keys before assigning them.') }}
+                        @elseif ($this->unassignedKeys->isEmpty())
+                            {{ __('All keys are already assigned.') }}
+                        @else
+                            {{ __('All identities already have a key, or none exist yet.') }}
+                        @endif
+                    </flux:text>
+                @endif
+
+                <ul class="divide-y divide-zinc-200 dark:divide-zinc-700">
+                    @forelse ($software->assignments as $assignment)
+                        <li class="flex items-center justify-between py-3">
+                            <div>
+                                <div class="font-medium">{{ $assignment->userware->name }}</div>
+                                <flux:text>
+                                    {{ $assignment->userware->email }}
+                                    @if ($assignment->key)
+                                        · {{ $assignment->key->label ?: $assignment->key->maskedValue() }}
+                                    @endif
+                                </flux:text>
+                            </div>
+                            <flux:button size="sm" variant="danger" wire:click="unassignSeat({{ $assignment->id }})" wire:confirm="{{ __('Remove this key assignment?') }}">
+                                {{ __('Unassign') }}
+                            </flux:button>
+                        </li>
+                    @empty
+                        <li class="py-3"><flux:text>{{ __('No keys assigned.') }}</flux:text></li>
+                    @endforelse
+                </ul>
+            </div>
+        @endcan
+    @else
+        @can('assign', $software)
+            <div class="flex flex-col gap-4 rounded-xl border border-zinc-200 p-6 dark:border-zinc-700">
+                <flux:heading size="lg">{{ __('Seat assignments') }}</flux:heading>
+
+                @if ($this->identities->isNotEmpty())
+                    <form wire:submit="assignSeats" class="flex flex-col gap-3">
+                        <flux:select
+                            wire:model="selectedUserwareIds"
+                            multiple
+                            :size="8"
+                            :label="__('Identities')"
+                            class="!h-auto min-h-40 py-1"
+                        >
+                            @foreach ($this->identities as $identity)
+                                <option value="{{ $identity->id }}">{{ $identity->name }} ({{ $identity->email }})</option>
+                            @endforeach
+                        </flux:select>
+
+                        <div class="flex flex-col gap-2 sm:flex-row sm:justify-end">
+                            <flux:button
+                                type="button"
+                                variant="ghost"
+                                data-test="assign-all-seats"
+                                wire:click="assignAllSeats"
+                                wire:confirm="{{ __('Assign this software to all available identities?') }}"
+                            >
+                                {{ __('Assign to all userware') }}
+                            </flux:button>
+                            <flux:button variant="primary" type="submit" data-test="bulk-assign-seats">
+                                {{ __('Assign selected') }}
+                            </flux:button>
+                        </div>
+                    </form>
+                @else
+                    <flux:text>{{ __('All identities already have a seat, or none exist yet.') }}</flux:text>
+                @endif
+
+                <ul class="divide-y divide-zinc-200 dark:divide-zinc-700">
+                    @forelse ($software->assignments as $assignment)
+                        <li class="flex items-center justify-between py-3">
+                            <div>
+                                <div class="font-medium">{{ $assignment->userware->name }}</div>
+                                <flux:text>{{ $assignment->userware->email }}</flux:text>
+                            </div>
+                            <flux:button size="sm" variant="danger" wire:click="unassignSeat({{ $assignment->id }})" wire:confirm="{{ __('Remove this seat?') }}">
+                                {{ __('Unassign') }}
+                            </flux:button>
+                        </li>
+                    @empty
+                        <li class="py-3"><flux:text>{{ __('No seats assigned.') }}</flux:text></li>
+                    @endforelse
+                </ul>
+            </div>
+        @endcan
+    @endif
+</div>
+
+<flux:modal wire:model="showLicenseKeyModal" class="max-w-lg" @close="closeLicenseKeyModal">
+    <div class="space-y-6">
+        <div class="space-y-2">
+            <flux:heading size="lg">{{ __('License key') }}</flux:heading>
+            @if (filled($revealedLicenseKeyLabel))
+                <flux:text>{{ $revealedLicenseKeyLabel }}</flux:text>
+            @endif
+        </div>
+
+        <div class="break-all rounded-lg border border-zinc-200 p-4 font-mono text-sm dark:border-zinc-700">
+            {{ $revealedLicenseKey }}
+        </div>
+
+        <div class="flex justify-end">
+            <flux:button variant="primary" wire:click="closeLicenseKeyModal">{{ __('Close') }}</flux:button>
+        </div>
+    </div>
+</flux:modal>
 </div>

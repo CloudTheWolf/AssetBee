@@ -13,12 +13,13 @@ use Illuminate\Support\Carbon;
  * @property int $id
  * @property int $software_id
  * @property int $userware_id
+ * @property int|null $software_key_id
  * @property Carbon $assigned_at
  * @property string|null $notes
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  */
-#[Fillable(['software_id', 'userware_id', 'assigned_at', 'notes'])]
+#[Fillable(['software_id', 'userware_id', 'software_key_id', 'assigned_at', 'notes'])]
 class SoftwareAssignment extends Model
 {
     /** @use HasFactory<SoftwareAssignmentFactory> */
@@ -48,5 +49,13 @@ class SoftwareAssignment extends Model
     public function userware(): BelongsTo
     {
         return $this->belongsTo(Userware::class);
+    }
+
+    /**
+     * @return BelongsTo<SoftwareKey, $this>
+     */
+    public function key(): BelongsTo
+    {
+        return $this->belongsTo(SoftwareKey::class, 'software_key_id');
     }
 }

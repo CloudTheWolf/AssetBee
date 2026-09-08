@@ -45,6 +45,14 @@ class SoftwareFactory extends Factory
         ]);
     }
 
+    public function keyBased(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'license_type' => SoftwareLicenseType::Key,
+            'total_seats' => null,
+        ]);
+    }
+
     public function recurring(string $interval = 'monthly', float $amount = 99.00): static
     {
         return $this->state(fn (array $attributes) => [

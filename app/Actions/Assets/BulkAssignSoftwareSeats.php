@@ -22,6 +22,12 @@ class BulkAssignSoftwareSeats
      */
     public function handle(Software $software, array $userwareIds): array
     {
+        if ($software->license_type === SoftwareLicenseType::Key) {
+            throw ValidationException::withMessages([
+                'selectedUserwareIds' => __('Key-based licenses must be assigned by selecting a specific key.'),
+            ]);
+        }
+
         $validated = Validator::make(
             ['userware_ids' => $userwareIds],
             [
