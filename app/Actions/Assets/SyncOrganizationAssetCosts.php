@@ -16,13 +16,35 @@ class SyncOrganizationAssetCosts
     ) {}
 
     /**
-     * @return array{organizations: int, assets: int, synced: int, failed: int, errors: list<string>}
+     * @return array{
+     *     organizations: int,
+     *     assets: int,
+     *     synced: int,
+     *     failed: int,
+     *     errors: list<string>,
+     *     skipped_organizations: int
+     * }
      */
-    public function handle(): array
+    public function handle(bool $allOrganizations = false): array
     {
-        $organizations = Organization::query()
-            ->where('cost_sync_enabled', true)
-            ->pluck('id');
+        $organizationQuery = Organization::query();
+
+        if (! $allOrganizations) {
+            $organizationQuery->where('cost_sync_enabled', true);
+        }
+
+        $organizations = $organizationQuery->pluck('id');
+
+        $skippedOrganizations = 0;
+        if (! $allOrganizations) {
+            $skippedOrganizations = Organization::query()
+                ->where('cost_sync_enabled', false)
+                ->where(function ($query): void {
+                    $query->whereHas('softwares', fn ($software) => $software->where('cost_sync_provider', '!=', SoftwareCostSyncProvider::None->value))
+                        ->orWhereHas('cloudTenants', fn ($tenant) => $tenant->where('cost_sync_provider', '!=', CloudTenantCostSyncProvider::None->value));
+                })
+                ->count();
+        }
 
         $synced = 0;
         $failed = 0;
@@ -76,6 +98,7 @@ class SyncOrganizationAssetCosts
             'synced' => $synced,
             'failed' => $failed,
             'errors' => $errors,
+            'skipped_organizations' => $skippedOrganizations,
         ];
     }
 }

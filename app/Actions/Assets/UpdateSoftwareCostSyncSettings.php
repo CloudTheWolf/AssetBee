@@ -72,6 +72,8 @@ class UpdateSoftwareCostSyncSettings
             'cost_sync_error' => null,
         ]);
 
+        $software->organization?->update(['cost_sync_enabled' => true]);
+
         return $software->refresh();
     }
 

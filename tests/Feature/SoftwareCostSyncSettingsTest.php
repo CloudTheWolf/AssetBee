@@ -27,7 +27,8 @@ test('owners can save atlassian cost sync settings on software', function () {
 
     expect($software->cost_sync_provider)->toBe(SoftwareCostSyncProvider::Atlassian)
         ->and($software->cost_sync_credentials['organization_id'])->toBe('atlassian-org')
-        ->and($software->cost_sync_credentials['api_token'])->toBe('secret-token');
+        ->and($software->cost_sync_credentials['api_token'])->toBe('secret-token')
+        ->and($organization->fresh()->cost_sync_enabled)->toBeTrue();
 });
 
 test('software cost sync credentials are encrypted at rest', function () {

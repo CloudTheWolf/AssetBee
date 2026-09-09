@@ -56,6 +56,22 @@ test('google workspace cloud tenants can store credentials for cost sync', funct
         ->and($tenant->fresh()->credentials['customer_id'])->toBe('C01234567');
 });
 
+test('enabling native cost sync turns on automatic organization cost sync', function () {
+    [, $organization] = actingAsOrganizationMember();
+    $organization->update(['cost_sync_enabled' => false]);
+
+    $tenant = CloudTenant::factory()->aws()->withCredentials()->create([
+        'organization_id' => $organization->id,
+    ]);
+
+    Livewire::test('pages::assets.cloud-tenants.show', ['cloudTenant' => $tenant])
+        ->set('cost_sync_provider', CloudTenantCostSyncProvider::Native->value)
+        ->call('saveCostSync')
+        ->assertHasNoErrors();
+
+    expect($organization->fresh()->cost_sync_enabled)->toBeTrue();
+});
+
 test('google workspace credential forms expose a setup guide modal', function () {
     [, $organization] = actingAsOrganizationMember();
 

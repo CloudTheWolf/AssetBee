@@ -65,6 +65,8 @@ class UpdateCloudTenantCostSyncSettings
             'cost_sync_error' => null,
         ]);
 
+        $cloudTenant->organization?->update(['cost_sync_enabled' => true]);
+
         return $cloudTenant->refresh();
     }
 

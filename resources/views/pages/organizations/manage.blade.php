@@ -237,7 +237,7 @@ new #[Title('Organization settings')] class extends Component
         <flux:checkbox
             wire:model="cost_sync_enabled"
             :label="__('Automatic cost sync')"
-            :description="__('Once daily, refresh software and cloud tenant costs from configured providers.')"
+            :description="__('Once daily via cost:sync, refresh software and cloud tenant costs from configured providers. Saving cost sync on an asset also enables this.')"
         />
         <flux:textarea
             wire:model="google_hosted_domains"
