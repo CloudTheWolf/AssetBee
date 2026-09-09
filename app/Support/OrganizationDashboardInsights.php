@@ -94,7 +94,7 @@ class OrganizationDashboardInsights
 
         $primaryCurrency = $this->primaryCurrency($recurring, $cloudCosts);
         $primaryRecurring = $recurring
-            ->filter(fn (Software $software): bool => $this->currencyCode($software->currency) === $primaryCurrency)
+            ->filter(fn (Software $software): bool => $this->costCurrency($software) === $primaryCurrency)
             ->values();
         $primaryCloudCosts = $cloudCosts
             ->filter(fn (CloudTenant $tenant): bool => $this->currencyCode($tenant->currency) === $primaryCurrency)
@@ -132,7 +132,7 @@ class OrganizationDashboardInsights
             ],
             'monthly_forecast' => $forecast['months'],
             'monthly_forecast_y_axis' => $forecast['y_axis'],
-            'top_costs' => $this->topCosts($primaryRecurring, $primaryCloudCosts),
+            'top_costs' => $this->topCosts($recurring, $cloudCosts),
             'upcoming_renewals' => $this->upcomingRenewals($recurring),
             'expiring_licenses' => $this->expiringLicenses($organization),
             'underutilized_seats' => $this->underutilizedSeats($seatLicenses),
@@ -145,19 +145,25 @@ class OrganizationDashboardInsights
      */
     private function primaryCurrency(Collection $recurring, Collection $cloudCosts): string
     {
-        $currencies = $recurring
-            ->map(fn (Software $software): string => $this->currencyCode($software->currency))
-            ->concat($cloudCosts->map(fn (CloudTenant $tenant): string => $this->currencyCode($tenant->currency)));
+        $totals = [];
 
-        if ($currencies->isEmpty()) {
+        foreach ($recurring as $software) {
+            $currency = $this->costCurrency($software);
+            $totals[$currency] = ($totals[$currency] ?? 0.0) + $this->effectiveMonthlyCost($software);
+        }
+
+        foreach ($cloudCosts as $tenant) {
+            $currency = $this->currencyCode($tenant->currency);
+            $totals[$currency] = ($totals[$currency] ?? 0.0) + ($tenant->monthlyCost() ?? 0.0);
+        }
+
+        if ($totals === []) {
             return 'GBP';
         }
 
-        return (string) $currencies
-            ->countBy()
-            ->sortDesc()
-            ->keys()
-            ->first();
+        arsort($totals);
+
+        return (string) array_key_first($totals);
     }
 
     /**
@@ -171,7 +177,7 @@ class OrganizationDashboardInsights
         $primary = strtoupper($primaryCurrency);
 
         foreach ($recurring as $software) {
-            $currency = $this->currencyCode($software->currency);
+            $currency = $this->costCurrency($software);
             if ($currency === $primary) {
                 continue;
             }
@@ -539,7 +545,7 @@ class OrganizationDashboardInsights
                     'name' => $software->name,
                     'vendor' => $software->vendor,
                     'monthly' => $monthly,
-                    'formatted' => $this->formatMoney($this->currencyCode($software->currency), $monthly),
+                    'formatted' => $this->formatMoney($this->costCurrency($software), $monthly),
                 ];
             })
             ->filter();
@@ -670,8 +676,7 @@ class OrganizationDashboardInsights
         }
 
         $childTotal = $software->childSoftwares
-            ->filter(fn (Software $child): bool => $child->is_recurring
-                && $child->status === SoftwareStatus::Active)
+            ->filter(fn (Software $child): bool => $child->status === SoftwareStatus::Active)
             ->sum(fn (Software $child): float => $child->monthlyCost() ?? 0.0);
 
         if ($childTotal > 0) {
@@ -679,6 +684,28 @@ class OrganizationDashboardInsights
         }
 
         return $own ?? 0.0;
+    }
+
+    /**
+     * Currency for a suite cost row: own billing currency, else the first child product with cost.
+     */
+    private function costCurrency(Software $software): string
+    {
+        $own = $software->monthlyCost();
+        if ($own !== null && $own > 0) {
+            return $this->currencyCode($software->currency);
+        }
+
+        $child = $software->childSoftwares->first(
+            fn (Software $child): bool => $child->status === SoftwareStatus::Active
+                && ($child->monthlyCost() ?? 0.0) > 0,
+        );
+
+        if ($child !== null) {
+            return $this->currencyCode($child->currency);
+        }
+
+        return $this->currencyCode($software->currency);
     }
 
     /**

@@ -297,6 +297,65 @@ test('dashboard rolls nested Atlassian product costs onto the suite when the par
     Carbon::setTestNow();
 });
 
+test('top costs always includes Atlassian sites even when another currency is primary', function () {
+    [, $organization] = actingAsOrganizationMember();
+
+    $suite = Software::factory()->create([
+        'organization_id' => $organization->id,
+        'name' => 'Atlassian',
+        'vendor' => 'Atlassian',
+        'currency' => 'USD',
+        'is_recurring' => false,
+        'billing_amount' => null,
+        'billing_interval' => null,
+    ]);
+
+    Software::factory()->recurring('monthly', 220.00)->create([
+        'organization_id' => $organization->id,
+        'parent_software_id' => $suite->id,
+        'name' => 'Jira',
+        'vendor' => 'Atlassian',
+        'currency' => 'USD',
+    ]);
+
+    Software::factory()->recurring('monthly', 80.00)->create([
+        'organization_id' => $organization->id,
+        'parent_software_id' => $suite->id,
+        'name' => 'Confluence',
+        'vendor' => 'Atlassian',
+        'currency' => 'USD',
+    ]);
+
+    CloudTenant::factory()->aws()->create([
+        'organization_id' => $organization->id,
+        'name' => 'GBP Cloud A',
+        'billing_amount' => 10.00,
+        'billing_interval' => SoftwareBillingInterval::Monthly,
+        'currency' => 'GBP',
+        'status' => 'active',
+    ]);
+
+    CloudTenant::factory()->aws()->create([
+        'organization_id' => $organization->id,
+        'name' => 'GBP Cloud B',
+        'billing_amount' => 10.00,
+        'billing_interval' => SoftwareBillingInterval::Monthly,
+        'currency' => 'GBP',
+        'status' => 'active',
+    ]);
+
+    $insights = app(OrganizationDashboardInsights::class)->for($organization);
+    $topNames = collect($insights['top_costs'])->pluck('name')->all();
+
+    expect($insights['costs']['currency'])->toBe('USD')
+        ->and($insights['costs']['estimated_monthly'])->toBe(300.0)
+        ->and($topNames)->toContain('Atlassian')
+        ->and($topNames)->toContain('GBP Cloud A')
+        ->and($topNames)->toContain('GBP Cloud B')
+        ->and($topNames)->not->toContain('Jira', 'Confluence')
+        ->and(collect($insights['top_costs'])->firstWhere('name', 'Atlassian')['formatted'])->toBe('USD 300.00');
+});
+
 test('dashboard insights flag underutilized seats and unassigned hardware', function () {
     [, $organization] = actingAsOrganizationMember();
 
