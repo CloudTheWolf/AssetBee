@@ -1,5 +1,6 @@
 <?php
 
+use App\Jobs\PurgeSoftDeletedAssets;
 use App\Models\Organization;
 use App\Models\OrganizationApiKey;
 use Illuminate\Foundation\Inspiring;
@@ -51,3 +52,8 @@ Schedule::command('cost:sync')
     ->daily()
     ->withoutOverlapping()
     ->name('cost-sync');
+
+Schedule::job(new PurgeSoftDeletedAssets)
+    ->daily()
+    ->withoutOverlapping()
+    ->name('purge-soft-deleted-assets');
