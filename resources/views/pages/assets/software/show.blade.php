@@ -907,22 +907,28 @@ new #[Title('Software')] class extends Component {
                     <option value="{{ $source->value }}">{{ $source->label() }}</option>
                 @endforeach
             </flux:select>
-            <div class="grid gap-4 sm:grid-cols-2">
-                @if ($cost_amount_source === CustomHttpAmountSource::Seats->value)
-                    <flux:input wire:model="cost_response_seats_path" :label="__('Seats JSON path')" :disabled="! auth()->user()->can('update', $software)" />
-                    <flux:input wire:model="cost_calculation_included_seats" type="number" min="0" step="1" :label="__('Included seats')" :description="__('Free seats subtracted before pricing, e.g. 3 in (seats - 3) × price.')" :disabled="! auth()->user()->can('update', $software)" />
-                    <flux:input wire:model="cost_calculation_price_per_seat" type="number" min="0" step="0.01" :label="__('Price per seat')" :disabled="! auth()->user()->can('update', $software)" />
-                    <flux:input wire:model="cost_calculation_currency" :label="__('Currency')" maxlength="3" :disabled="! auth()->user()->can('update', $software)" />
-                @else
-                    <flux:input wire:model="cost_response_amount_path" :label="__('Amount JSON path')" :disabled="! auth()->user()->can('update', $software)" />
-                    <flux:input wire:model="cost_response_currency_path" :label="__('Currency JSON path')" :disabled="! auth()->user()->can('update', $software)" />
-                    <flux:input wire:model="cost_response_seats_path" :label="__('Seats JSON path')" :disabled="! auth()->user()->can('update', $software)" />
-                @endif
-                <flux:select wire:model="cost_amount_period" :label="__('Amount period')" :disabled="! auth()->user()->can('update', $software)">
-                    <option value="month">{{ __('Current month') }}</option>
-                    <option value="as_reported">{{ __('As reported') }}</option>
-                </flux:select>
-            </div>
+            @if ($cost_amount_source === CustomHttpAmountSource::Seats->value)
+                <div class="grid gap-4 sm:grid-cols-2" wire:key="custom-http-amount-seats">
+                    <flux:input id="cost_response_seats_path" name="cost_response_seats_path" wire:model="cost_response_seats_path" :label="__('Seats JSON path')" autocomplete="off" :disabled="! auth()->user()->can('update', $software)" />
+                    <flux:input id="cost_calculation_included_seats" name="cost_calculation_included_seats" wire:model="cost_calculation_included_seats" type="number" min="0" step="1" :label="__('Included seats')" :description="__('Free seats subtracted before pricing, e.g. 3 in (seats - 3) × price.')" autocomplete="off" :disabled="! auth()->user()->can('update', $software)" />
+                    <flux:input id="cost_calculation_price_per_seat" name="cost_calculation_price_per_seat" wire:model="cost_calculation_price_per_seat" type="number" min="0" step="0.01" :label="__('Price per seat')" autocomplete="off" :disabled="! auth()->user()->can('update', $software)" />
+                    <flux:input id="cost_calculation_currency" name="cost_calculation_currency" wire:model="cost_calculation_currency" :label="__('Currency')" maxlength="3" autocomplete="off" :disabled="! auth()->user()->can('update', $software)" />
+                    <flux:select wire:model="cost_amount_period" :label="__('Amount period')" :disabled="! auth()->user()->can('update', $software)">
+                        <option value="month">{{ __('Current month') }}</option>
+                        <option value="as_reported">{{ __('As reported') }}</option>
+                    </flux:select>
+                </div>
+            @else
+                <div class="grid gap-4 sm:grid-cols-2" wire:key="custom-http-amount-response">
+                    <flux:input id="cost_response_amount_path" name="cost_response_amount_path" wire:model="cost_response_amount_path" :label="__('Amount JSON path')" autocomplete="off" :disabled="! auth()->user()->can('update', $software)" />
+                    <flux:input id="cost_response_currency_path" name="cost_response_currency_path" wire:model="cost_response_currency_path" :label="__('Currency JSON path')" autocomplete="off" :disabled="! auth()->user()->can('update', $software)" />
+                    <flux:input id="cost_response_seats_path_optional" name="cost_response_seats_path" wire:model="cost_response_seats_path" :label="__('Seats JSON path')" autocomplete="off" :disabled="! auth()->user()->can('update', $software)" />
+                    <flux:select wire:model="cost_amount_period" :label="__('Amount period')" :disabled="! auth()->user()->can('update', $software)">
+                        <option value="month">{{ __('Current month') }}</option>
+                        <option value="as_reported">{{ __('As reported') }}</option>
+                    </flux:select>
+                </div>
+            @endif
         @endif
 
         @if ($costSyncError || $software->cost_sync_error)
