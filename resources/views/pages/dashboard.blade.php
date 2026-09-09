@@ -85,41 +85,57 @@ new #[Title('Dashboard')] class extends Component {
                         {{ __('Estimated') }}
                     </span>
                 </div>
-                <div class="flex h-48 items-end gap-2">
-                    @foreach ($insights['monthly_forecast'] as $month)
-                        @php
-                            $tooltip = match ($month['mode']) {
-                                'both' => __('Actual :actual · Est. :estimated', [
-                                    'actual' => $month['formatted_actual'],
-                                    'estimated' => $month['formatted_estimated'],
-                                ]),
-                                'actual' => __('Actual :amount', ['amount' => $month['formatted_actual']]),
-                                default => __('Est. :amount', ['amount' => $month['formatted_estimated']]),
-                            };
-                        @endphp
-                        <div class="flex flex-1 flex-col items-center gap-2" title="{{ $tooltip }}">
-                            <div class="flex h-40 w-full items-end">
-                                <div
-                                    class="flex w-full flex-col justify-end overflow-hidden rounded-t-md"
-                                    style="height: {{ max($month['percent'], $month['total'] > 0 ? 4 : 0) }}%"
-                                >
-                                    @if ($month['estimated_segment_percent'] > 0)
-                                        <div
-                                            class="w-full bg-zinc-300 dark:bg-zinc-600"
-                                            style="height: {{ $month['estimated_segment_percent'] }}%"
-                                        ></div>
-                                    @endif
-                                    @if ($month['actual_segment_percent'] > 0)
-                                        <div
-                                            class="w-full bg-accent/80 dark:bg-accent/70"
-                                            style="height: {{ $month['actual_segment_percent'] }}%"
-                                        ></div>
-                                    @endif
-                                </div>
+                <div class="flex gap-3">
+                    <div class="flex h-40 shrink-0 flex-col justify-between py-0.5 text-right text-xs tabular-nums text-zinc-500">
+                        @foreach ($insights['monthly_forecast_y_axis'] as $tick)
+                            <span>{{ $tick['label'] }}</span>
+                        @endforeach
+                    </div>
+                    <div class="flex min-w-0 flex-1 flex-col">
+                        <div class="relative flex h-40 items-end gap-2 border-l border-zinc-200 pl-2 dark:border-zinc-700">
+                            <div class="pointer-events-none absolute inset-y-0 left-0 right-0 flex flex-col justify-between py-0.5">
+                                <div class="border-t border-dashed border-zinc-200 dark:border-zinc-700"></div>
+                                <div class="border-t border-dashed border-zinc-200 dark:border-zinc-700"></div>
+                                <div class="border-t border-zinc-200 dark:border-zinc-700"></div>
                             </div>
-                            <span class="text-xs text-zinc-500">{{ $month['label'] }}</span>
+                            @foreach ($insights['monthly_forecast'] as $month)
+                                @php
+                                    $tooltip = match ($month['mode']) {
+                                        'both' => __('Actual :actual · Est. :estimated', [
+                                            'actual' => $month['formatted_actual'],
+                                            'estimated' => $month['formatted_estimated'],
+                                        ]),
+                                        'actual' => __('Actual :amount', ['amount' => $month['formatted_actual']]),
+                                        default => __('Est. :amount', ['amount' => $month['formatted_estimated']]),
+                                    };
+                                @endphp
+                                <div class="relative z-10 flex h-full flex-1 items-end" title="{{ $tooltip }}">
+                                    <div
+                                        class="flex w-full flex-col justify-end overflow-hidden rounded-t-md"
+                                        style="height: {{ max($month['percent'], $month['total'] > 0 ? 4 : 0) }}%"
+                                    >
+                                        @if ($month['estimated_segment_percent'] > 0)
+                                            <div
+                                                class="w-full bg-zinc-300 dark:bg-zinc-600"
+                                                style="height: {{ $month['estimated_segment_percent'] }}%"
+                                            ></div>
+                                        @endif
+                                        @if ($month['actual_segment_percent'] > 0)
+                                            <div
+                                                class="w-full bg-accent/80 dark:bg-accent/70"
+                                                style="height: {{ $month['actual_segment_percent'] }}%"
+                                            ></div>
+                                        @endif
+                                    </div>
+                                </div>
+                            @endforeach
                         </div>
-                    @endforeach
+                        <div class="mt-2 flex gap-2 pl-2">
+                            @foreach ($insights['monthly_forecast'] as $month)
+                                <div class="flex-1 text-center text-xs text-zinc-500">{{ $month['label'] }}</div>
+                            @endforeach
+                        </div>
+                    </div>
                 </div>
             @else
                 <flux:text>{{ __('Add recurring billing or sync licence and cloud costs to see a spend forecast.') }}</flux:text>

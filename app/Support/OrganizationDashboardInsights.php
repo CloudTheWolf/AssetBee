@@ -46,6 +46,7 @@ class OrganizationDashboardInsights
      *         actual_segment_percent: float,
      *         estimated_segment_percent: float
      *     }>,
+     *     monthly_forecast_y_axis: list<array{label: string}>,
      *     top_costs: list<array{id: int, type: string, name: string, vendor: string|null, monthly: float, formatted: string, percent: float}>,
      *     upcoming_renewals: list<array{id: int, name: string, amount: float, formatted_amount: string, currency: string, next_billing_at: string}>,
      *     expiring_licenses: list<array{id: int, name: string, expires_at: string}>,
@@ -56,11 +57,23 @@ class OrganizationDashboardInsights
     {
         $recurring = Software::query()
             ->roots()
+            ->with(['childSoftwares' => function ($query): void {
+                $query->where('status', SoftwareStatus::Active);
+            }])
             ->where('organization_id', $organization->id)
-            ->where('is_recurring', true)
             ->where('status', SoftwareStatus::Active)
-            ->whereNotNull('billing_amount')
-            ->whereNotNull('billing_interval')
+            ->where(function ($query): void {
+                $query->where(function ($own): void {
+                    $own->where('is_recurring', true)
+                        ->whereNotNull('billing_amount')
+                        ->whereNotNull('billing_interval');
+                })->orWhereHas('childSoftwares', function ($child): void {
+                    $child->where('status', SoftwareStatus::Active)
+                        ->where('is_recurring', true)
+                        ->whereNotNull('billing_amount')
+                        ->whereNotNull('billing_interval');
+                });
+            })
             ->orderBy('name')
             ->get();
 
@@ -87,11 +100,11 @@ class OrganizationDashboardInsights
             ->filter(fn (CloudTenant $tenant): bool => $this->currencyCode($tenant->currency) === $primaryCurrency)
             ->values();
 
-        $softwareMonthly = round($primaryRecurring->sum(fn (Software $software): float => $software->monthlyCost() ?? 0.0), 2);
+        $softwareMonthly = round($primaryRecurring->sum(fn (Software $software): float => $this->effectiveMonthlyCost($software)), 2);
         $cloudMonthly = round($primaryCloudCosts->sum(fn (CloudTenant $tenant): float => $tenant->monthlyCost() ?? 0.0), 2);
         $estimatedMonthly = round($softwareMonthly + $cloudMonthly, 2);
         $estimatedAnnual = round($estimatedMonthly * 12, 2);
-        $monthlyForecast = $this->monthlyForecast($organization, $primaryRecurring, $primaryCloudCosts, $primaryCurrency);
+        $forecast = $this->monthlyForecast($organization, $primaryRecurring, $primaryCloudCosts, $primaryCurrency);
         $upcoming30Days = $this->upcomingBillingTotal($primaryRecurring, $primaryCloudCosts, 30);
 
         return [
@@ -117,7 +130,8 @@ class OrganizationDashboardInsights
                 'formatted_upcoming_30_days' => $this->formatMoney($primaryCurrency, $upcoming30Days),
                 'other_currencies' => $this->otherCurrencyTotals($recurring, $cloudCosts, $primaryCurrency),
             ],
-            'monthly_forecast' => $monthlyForecast,
+            'monthly_forecast' => $forecast['months'],
+            'monthly_forecast_y_axis' => $forecast['y_axis'],
             'top_costs' => $this->topCosts($primaryRecurring, $primaryCloudCosts),
             'upcoming_renewals' => $this->upcomingRenewals($recurring),
             'expiring_licenses' => $this->expiringLicenses($organization),
@@ -162,7 +176,7 @@ class OrganizationDashboardInsights
                 continue;
             }
 
-            $totals[$currency] = ($totals[$currency] ?? 0.0) + ($software->monthlyCost() ?? 0.0);
+            $totals[$currency] = ($totals[$currency] ?? 0.0) + $this->effectiveMonthlyCost($software);
         }
 
         foreach ($cloudCosts as $tenant) {
@@ -187,20 +201,23 @@ class OrganizationDashboardInsights
     /**
      * @param  Collection<int, Software>  $recurring
      * @param  Collection<int, CloudTenant>  $cloudCosts
-     * @return list<array{
-     *     key: string,
-     *     label: string,
-     *     mode: string,
-     *     actual: float|null,
-     *     estimated: float|null,
-     *     total: float,
-     *     formatted: string,
-     *     formatted_actual: string|null,
-     *     formatted_estimated: string|null,
-     *     percent: float,
-     *     actual_segment_percent: float,
-     *     estimated_segment_percent: float
-     * }>
+     * @return array{
+     *     months: list<array{
+     *         key: string,
+     *         label: string,
+     *         mode: string,
+     *         actual: float|null,
+     *         estimated: float|null,
+     *         total: float,
+     *         formatted: string,
+     *         formatted_actual: string|null,
+     *         formatted_estimated: string|null,
+     *         percent: float,
+     *         actual_segment_percent: float,
+     *         estimated_segment_percent: float
+     *     }>,
+     *     y_axis: list<array{label: string}>
+     * }
      */
     private function monthlyForecast(
         Organization $organization,
@@ -223,29 +240,21 @@ class OrganizationDashboardInsights
             ];
         }
 
+        $softwareIndex = $this->softwareIndex($recurring);
+
         $snapshots = CostSnapshot::query()
             ->where('organization_id', $organization->id)
             ->whereBetween('period_start', [
                 $windowStart->copy()->subMonthNoOverflow()->toDateString(),
                 $windowEnd->toDateString(),
             ])
-            ->where(function ($query) use ($organization): void {
-                $query->where('costable_type', '!=', Software::class)
-                    ->orWhereNotIn(
-                        'costable_id',
-                        Software::query()
-                            ->select('id')
-                            ->where('organization_id', $organization->id)
-                            ->whereNotNull('parent_software_id'),
-                    );
-            })
             ->get()
             ->filter(fn (CostSnapshot $snapshot): bool => $this->currencyCode($snapshot->currency) === strtoupper($currency))
             ->values();
 
         $billingFallback = round($this->projectedMonthTotal($recurring, $cloudCosts), 2);
         $monthBeforeWindow = $currentMonthStart->copy()->subMonthsNoOverflow(6);
-        $baseline = round($this->pastMonthTotal($snapshots, $recurring, $cloudCosts, $monthBeforeWindow), 2);
+        $baseline = round($this->pastMonthTotal($snapshots, $recurring, $cloudCosts, $softwareIndex, $monthBeforeWindow), 2);
         if ($baseline <= 0) {
             $baseline = $billingFallback;
         }
@@ -256,7 +265,7 @@ class OrganizationDashboardInsights
             $estimated = null;
 
             if ($month['mode'] === 'actual' || $month['mode'] === 'both') {
-                $actual = round($this->pastMonthTotal($snapshots, $recurring, $cloudCosts, $monthStart), 2);
+                $actual = round($this->pastMonthTotal($snapshots, $recurring, $cloudCosts, $softwareIndex, $monthStart), 2);
             }
 
             if ($month['mode'] === 'estimated' || $month['mode'] === 'both') {
@@ -280,55 +289,63 @@ class OrganizationDashboardInsights
             };
         }
 
-        $max = collect($months)->max('total') ?: 0.0;
+        $dataMax = (float) (collect($months)->max('total') ?: 0.0);
+        $axisMax = $this->niceAxisMax($dataMax);
 
-        return array_values(collect($months)
-            ->map(function (array $month) use ($currency, $max): array {
-                $total = round((float) $month['total'], 2);
-                $actual = $month['actual'];
-                $estimated = $month['estimated'];
-                $columnPercent = $max > 0 ? round(($total / $max) * 100, 1) : 0.0;
+        return [
+            'months' => array_values(collect($months)
+                ->map(function (array $month) use ($currency, $axisMax): array {
+                    $total = round((float) $month['total'], 2);
+                    $actual = $month['actual'];
+                    $estimated = $month['estimated'];
+                    $columnPercent = $axisMax > 0 ? round(($total / $axisMax) * 100, 1) : 0.0;
 
-                $actualSegment = 0.0;
-                $estimatedSegment = 0.0;
+                    $actualSegment = 0.0;
+                    $estimatedSegment = 0.0;
 
-                if ($total > 0) {
-                    if ($month['mode'] === 'actual') {
-                        $actualSegment = 100.0;
-                    } elseif ($month['mode'] === 'estimated') {
-                        $estimatedSegment = 100.0;
-                    } else {
-                        $actualValue = (float) ($actual ?? 0.0);
-                        $estimatedValue = (float) ($estimated ?? 0.0);
-                        $actualSegment = round(min($actualValue, $total) / $total * 100, 1);
-                        $estimatedSegment = round(max($estimatedValue - $actualValue, 0.0) / $total * 100, 1);
-
-                        if ($actualSegment + $estimatedSegment < 100 && $estimatedValue >= $actualValue) {
-                            $estimatedSegment = round(100 - $actualSegment, 1);
-                        } elseif ($actualSegment + $estimatedSegment < 100) {
+                    if ($total > 0) {
+                        if ($month['mode'] === 'actual') {
                             $actualSegment = 100.0;
-                            $estimatedSegment = 0.0;
+                        } elseif ($month['mode'] === 'estimated') {
+                            $estimatedSegment = 100.0;
+                        } else {
+                            $actualValue = (float) ($actual ?? 0.0);
+                            $estimatedValue = (float) ($estimated ?? 0.0);
+                            $actualSegment = round(min($actualValue, $total) / $total * 100, 1);
+                            $estimatedSegment = round(max($estimatedValue - $actualValue, 0.0) / $total * 100, 1);
+
+                            if ($actualSegment + $estimatedSegment < 100 && $estimatedValue >= $actualValue) {
+                                $estimatedSegment = round(100 - $actualSegment, 1);
+                            } elseif ($actualSegment + $estimatedSegment < 100) {
+                                $actualSegment = 100.0;
+                                $estimatedSegment = 0.0;
+                            }
                         }
                     }
-                }
 
-                return [
-                    'key' => $month['key'],
-                    'label' => $month['label'],
-                    'mode' => $month['mode'],
-                    'actual' => $actual,
-                    'estimated' => $estimated,
-                    'total' => $total,
-                    'formatted' => $this->formatMoney($currency, $total),
-                    'formatted_actual' => $actual === null ? null : $this->formatMoney($currency, $actual),
-                    'formatted_estimated' => $estimated === null ? null : $this->formatMoney($currency, $estimated),
-                    'percent' => $columnPercent,
-                    'actual_segment_percent' => $actualSegment,
-                    'estimated_segment_percent' => $estimatedSegment,
-                ];
-            })
-            ->values()
-            ->all());
+                    return [
+                        'key' => $month['key'],
+                        'label' => $month['label'],
+                        'mode' => $month['mode'],
+                        'actual' => $actual,
+                        'estimated' => $estimated,
+                        'total' => $total,
+                        'formatted' => $this->formatMoney($currency, $total),
+                        'formatted_actual' => $actual === null ? null : $this->formatMoney($currency, $actual),
+                        'formatted_estimated' => $estimated === null ? null : $this->formatMoney($currency, $estimated),
+                        'percent' => $columnPercent,
+                        'actual_segment_percent' => $actualSegment,
+                        'estimated_segment_percent' => $estimatedSegment,
+                    ];
+                })
+                ->values()
+                ->all()),
+            'y_axis' => [
+                ['label' => $this->formatMoney($currency, $axisMax)],
+                ['label' => $this->formatMoney($currency, round($axisMax / 2, 2))],
+                ['label' => $this->formatMoney($currency, 0.0)],
+            ],
+        ];
     }
 
     /**
@@ -355,11 +372,13 @@ class OrganizationDashboardInsights
      * @param  Collection<int, CostSnapshot>  $snapshots
      * @param  Collection<int, Software>  $recurring
      * @param  Collection<int, CloudTenant>  $cloudCosts
+     * @param  Collection<int, Software>  $softwareIndex
      */
     private function pastMonthTotal(
         Collection $snapshots,
         Collection $recurring,
         Collection $cloudCosts,
+        Collection $softwareIndex,
         CarbonInterface $monthStart,
     ): float {
         $monthKey = $monthStart->format('Y-m');
@@ -368,23 +387,58 @@ class OrganizationDashboardInsights
         );
 
         $total = 0.0;
-        $covered = [];
+        $coveredRoots = [];
+        $coveredCloud = [];
+        /** @var array<int, array{parent: float|null, children: float}> $rootAmounts */
+        $rootAmounts = [];
 
         foreach ($monthSnapshots as $snapshot) {
-            $total += (float) $snapshot->amount;
-            $covered[$snapshot->costable_type.':'.$snapshot->costable_id] = true;
-        }
+            if ($snapshot->costable_type === CloudTenant::class) {
+                $total += (float) $snapshot->amount;
+                $coveredCloud[$snapshot->costable_id] = true;
 
-        foreach ($recurring as $software) {
-            if (isset($covered[Software::class.':'.$software->id])) {
                 continue;
             }
 
-            $total += $software->monthlyCost() ?? 0.0;
+            if ($snapshot->costable_type !== Software::class) {
+                $total += (float) $snapshot->amount;
+
+                continue;
+            }
+
+            $software = $softwareIndex->get($snapshot->costable_id);
+            if ($software === null) {
+                continue;
+            }
+
+            $rootId = $software->parent_software_id ?? $software->id;
+            $rootAmounts[$rootId] ??= ['parent' => null, 'children' => 0.0];
+
+            if ($software->parent_software_id === null) {
+                $rootAmounts[$rootId]['parent'] = ($rootAmounts[$rootId]['parent'] ?? 0.0) + (float) $snapshot->amount;
+            } else {
+                $rootAmounts[$rootId]['children'] += (float) $snapshot->amount;
+            }
+        }
+
+        foreach ($rootAmounts as $rootId => $parts) {
+            $parentAmount = $parts['parent'];
+            $total += ($parentAmount !== null && $parentAmount > 0)
+                ? $parentAmount
+                : $parts['children'];
+            $coveredRoots[$rootId] = true;
+        }
+
+        foreach ($recurring as $software) {
+            if (isset($coveredRoots[$software->id])) {
+                continue;
+            }
+
+            $total += $this->effectiveMonthlyCost($software);
         }
 
         foreach ($cloudCosts as $tenant) {
-            if (isset($covered[CloudTenant::class.':'.$tenant->id])) {
+            if (isset($coveredCloud[$tenant->id])) {
                 continue;
             }
 
@@ -400,7 +454,7 @@ class OrganizationDashboardInsights
      */
     private function projectedMonthTotal(Collection $recurring, Collection $cloudCosts): float
     {
-        $softwareTotal = $recurring->sum(fn (Software $software): float => $software->monthlyCost() ?? 0.0);
+        $softwareTotal = $recurring->sum(fn (Software $software): float => $this->effectiveMonthlyCost($software));
         $cloudTotal = $cloudCosts->sum(fn (CloudTenant $tenant): float => $tenant->monthlyCost() ?? 0.0);
 
         return (float) $softwareTotal + (float) $cloudTotal;
@@ -451,8 +505,12 @@ class OrganizationDashboardInsights
         $end = now()->addDays($days)->endOfDay();
 
         $softwareTotal = $recurring->sum(function (Software $software) use ($start, $end): float {
-            return collect($this->billingDates($software, $start, $end))
-                ->sum(fn (): float => (float) $software->billing_amount);
+            if ($software->billing_amount !== null && $software->billing_interval !== null) {
+                return collect($this->billingDates($software, $start, $end))
+                    ->sum(fn (): float => (float) $software->billing_amount);
+            }
+
+            return $this->effectiveMonthlyCost($software);
         });
 
         $cloudTotal = $cloudCosts->sum(fn (CloudTenant $tenant): float => $tenant->monthlyCost() ?? 0.0);
@@ -469,9 +527,9 @@ class OrganizationDashboardInsights
     {
         $softwareRows = $recurring
             ->map(function (Software $software): ?array {
-                $monthly = $software->monthlyCost();
+                $monthly = $this->effectiveMonthlyCost($software);
 
-                if ($monthly === null || $monthly <= 0) {
+                if ($monthly <= 0) {
                     return null;
                 }
 
@@ -537,7 +595,9 @@ class OrganizationDashboardInsights
             ->take(6)
             ->map(function (Software $software): array {
                 $currency = $this->currencyCode($software->currency);
-                $amount = (float) $software->billing_amount;
+                $amount = $software->billing_amount !== null
+                    ? (float) $software->billing_amount
+                    : $this->effectiveMonthlyCost($software);
 
                 return [
                     'id' => $software->id,
@@ -597,6 +657,67 @@ class OrganizationDashboardInsights
             ])
             ->values()
             ->all());
+    }
+
+    /**
+     * Prefer the suite/parent monthly amount; otherwise sum active child product costs.
+     */
+    private function effectiveMonthlyCost(Software $software): float
+    {
+        $own = $software->monthlyCost();
+        if ($own !== null && $own > 0) {
+            return $own;
+        }
+
+        $childTotal = $software->childSoftwares
+            ->filter(fn (Software $child): bool => $child->is_recurring
+                && $child->status === SoftwareStatus::Active)
+            ->sum(fn (Software $child): float => $child->monthlyCost() ?? 0.0);
+
+        if ($childTotal > 0) {
+            return round((float) $childTotal, 2);
+        }
+
+        return $own ?? 0.0;
+    }
+
+    /**
+     * @param  Collection<int, Software>  $recurring
+     * @return Collection<int, Software>
+     */
+    private function softwareIndex(Collection $recurring): Collection
+    {
+        $index = collect();
+
+        foreach ($recurring as $software) {
+            $index->put($software->id, $software);
+
+            foreach ($software->childSoftwares as $child) {
+                $index->put($child->id, $child);
+            }
+        }
+
+        return $index;
+    }
+
+    private function niceAxisMax(float $max): float
+    {
+        if ($max <= 0) {
+            return 0.0;
+        }
+
+        $exponent = (int) floor(log10($max));
+        $magnitude = 10 ** $exponent;
+        $fraction = $max / $magnitude;
+
+        $niceFraction = match (true) {
+            $fraction <= 1 => 1.0,
+            $fraction <= 2 => 2.0,
+            $fraction <= 5 => 5.0,
+            default => 10.0,
+        };
+
+        return round($niceFraction * $magnitude, 2);
     }
 
     private function currencyCode(?string $currency): string

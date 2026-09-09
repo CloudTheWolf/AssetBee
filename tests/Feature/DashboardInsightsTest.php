@@ -227,7 +227,74 @@ test('dashboard cost rollups keep Atlassian suites intact and include cloud tena
         ->and($insights['costs']['estimated_annual'])->toBe(4680.0)
         ->and($topNames)->toBe(['Atlassian', 'Prod AWS'])
         ->and(collect($insights['top_costs'])->firstWhere('name', 'Prod AWS')['type'])->toBe('cloud_tenant')
-        ->and($topNames)->not->toContain('Jira', 'Confluence', 'Closed AWS');
+        ->and($topNames)->not->toContain('Jira', 'Confluence', 'Closed AWS')
+        ->and($insights['monthly_forecast_y_axis'])->toHaveCount(3)
+        ->and($insights['monthly_forecast_y_axis'][2]['label'])->toBe('GBP 0.00');
+});
+
+test('dashboard rolls nested Atlassian product costs onto the suite when the parent has no billing', function () {
+    [, $organization] = actingAsOrganizationMember();
+
+    $suite = Software::factory()->create([
+        'organization_id' => $organization->id,
+        'name' => 'Atlassian',
+        'vendor' => 'Atlassian',
+        'currency' => 'GBP',
+        'is_recurring' => false,
+        'billing_amount' => null,
+        'billing_interval' => null,
+    ]);
+
+    Software::factory()->recurring('monthly', 180.00)->create([
+        'organization_id' => $organization->id,
+        'parent_software_id' => $suite->id,
+        'name' => 'Jira',
+        'vendor' => 'Atlassian',
+        'currency' => 'GBP',
+    ]);
+
+    Software::factory()->recurring('monthly', 120.00)->create([
+        'organization_id' => $organization->id,
+        'parent_software_id' => $suite->id,
+        'name' => 'Confluence',
+        'vendor' => 'Atlassian',
+        'currency' => 'GBP',
+    ]);
+
+    $pastMonth = now()->startOfMonth()->subMonthNoOverflow();
+
+    CostSnapshot::factory()->create([
+        'organization_id' => $organization->id,
+        'costable_type' => Software::class,
+        'costable_id' => Software::query()->where('name', 'Jira')->firstOrFail()->id,
+        'period_start' => $pastMonth->toDateString(),
+        'period_end' => $pastMonth->copy()->endOfMonth()->toDateString(),
+        'amount' => 175.00,
+        'currency' => 'GBP',
+        'provider' => CostSyncSource::Atlassian,
+    ]);
+
+    CostSnapshot::factory()->create([
+        'organization_id' => $organization->id,
+        'costable_type' => Software::class,
+        'costable_id' => Software::query()->where('name', 'Confluence')->firstOrFail()->id,
+        'period_start' => $pastMonth->toDateString(),
+        'period_end' => $pastMonth->copy()->endOfMonth()->toDateString(),
+        'amount' => 110.00,
+        'currency' => 'GBP',
+        'provider' => CostSyncSource::Atlassian,
+    ]);
+
+    Carbon::setTestNow(Carbon::parse($pastMonth->copy()->addMonthNoOverflow()->day(15)->toDateTimeString()));
+
+    $insights = app(OrganizationDashboardInsights::class)->for($organization);
+    $pastForecast = collect($insights['monthly_forecast'])->firstWhere('key', $pastMonth->format('Y-m'));
+
+    expect($insights['costs']['estimated_monthly'])->toBe(300.0)
+        ->and(collect($insights['top_costs'])->pluck('name')->all())->toBe(['Atlassian'])
+        ->and($pastForecast['actual'])->toBe(285.0);
+
+    Carbon::setTestNow();
 });
 
 test('dashboard insights flag underutilized seats and unassigned hardware', function () {
@@ -276,5 +343,6 @@ test('dashboard page shows estimated spend labels', function () {
         ->assertSee(__('Estimated'))
         ->assertSee(__('Top costs by month'))
         ->assertSee('Visible Spend')
+        ->assertSee('GBP 50.00')
         ->assertDontSee(__('Software seats used'));
 });
