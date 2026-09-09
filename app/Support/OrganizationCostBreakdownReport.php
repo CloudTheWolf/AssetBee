@@ -85,14 +85,14 @@ class OrganizationCostBreakdownReport
             'currency' => $primaryCurrency,
             'estimated_monthly' => $estimatedMonthly,
             'formatted_monthly' => $this->formatMoney($primaryCurrency, $estimatedMonthly),
-            'other_currencies' => $this->otherCurrencyTotals($softwareRows, $cloudRows, $primaryCurrency),
+            'other_currencies' => $this->otherCurrencyTotals($softwareRoots, $cloudTenants, $primaryCurrency),
             'software_total' => $softwareTotal,
             'formatted_software_total' => $this->formatMoney($primaryCurrency, $softwareTotal),
             'cloud_total' => $cloudTotal,
             'formatted_cloud_total' => $this->formatMoney($primaryCurrency, $cloudTotal),
             'line_item_count' => $softwareRows->count() + $cloudRows->count(),
-            'software' => $softwareRows->all(),
-            'cloud' => $cloudRows->all(),
+            'software' => array_values($softwareRows->all()),
+            'cloud' => array_values($cloudRows->all()),
         ];
     }
 
@@ -263,7 +263,7 @@ class OrganizationCostBreakdownReport
             'formatted' => $this->formatMoney($currency, $monthly),
             'interval' => $software->billing_interval?->label(),
             'currency' => $currency,
-            'children' => $children,
+            'children' => array_values($children),
         ];
     }
 
@@ -329,29 +329,31 @@ class OrganizationCostBreakdownReport
     }
 
     /**
-     * @param  Collection<int, array{currency: string, monthly: float}>  $softwareRows
-     * @param  Collection<int, array{currency: string, monthly: float}>  $cloudRows
+     * @param  Collection<int, Software>  $softwareRoots
+     * @param  Collection<int, CloudTenant>  $cloudTenants
      * @return list<array{currency: string, estimated_monthly: float, formatted_monthly: string}>
      */
-    private function otherCurrencyTotals(Collection $softwareRows, Collection $cloudRows, string $primaryCurrency): array
+    private function otherCurrencyTotals(Collection $softwareRoots, Collection $cloudTenants, string $primaryCurrency): array
     {
         $totals = [];
         $primary = strtoupper($primaryCurrency);
 
-        foreach ($softwareRows as $row) {
-            if ($row['currency'] === $primary) {
+        foreach ($softwareRoots as $software) {
+            $currency = $this->costCurrency($software);
+            if ($currency === $primary) {
                 continue;
             }
 
-            $totals[$row['currency']] = ($totals[$row['currency']] ?? 0.0) + $row['monthly'];
+            $totals[$currency] = ($totals[$currency] ?? 0.0) + $this->effectiveMonthlyCost($software);
         }
 
-        foreach ($cloudRows as $row) {
-            if ($row['currency'] === $primary) {
+        foreach ($cloudTenants as $tenant) {
+            $currency = $this->currencyCode($tenant->currency);
+            if ($currency === $primary) {
                 continue;
             }
 
-            $totals[$row['currency']] = ($totals[$row['currency']] ?? 0.0) + $row['monthly'];
+            $totals[$currency] = ($totals[$currency] ?? 0.0) + ($tenant->monthlyCost() ?? 0.0);
         }
 
         return array_values(collect($totals)
