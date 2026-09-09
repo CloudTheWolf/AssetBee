@@ -91,18 +91,13 @@ class PurgeSoftDeletedAssets
     {
         $count = 0;
 
-        $ids = Software::onlyTrashed()
+        $softwares = Software::onlyTrashed()
             ->where('deleted_at', '<=', $cutoff)
             ->orderByRaw('case when parent_software_id is null then 1 else 0 end')
             ->orderBy('id')
-            ->pluck('id');
+            ->get();
 
-        foreach ($ids as $id) {
-            $software = Software::onlyTrashed()->find($id);
-            if ($software === null) {
-                continue;
-            }
-
+        foreach ($softwares as $software) {
             $this->deleteMorphDocuments($software);
             $this->deleteMorphCostSnapshots($software);
             $software->forceDelete();
@@ -116,17 +111,12 @@ class PurgeSoftDeletedAssets
     {
         $count = 0;
 
-        $ids = Userware::onlyTrashed()
+        $userwares = Userware::onlyTrashed()
             ->where('deleted_at', '<=', $cutoff)
             ->orderBy('id')
-            ->pluck('id');
+            ->get();
 
-        foreach ($ids as $id) {
-            $userware = Userware::onlyTrashed()->find($id);
-            if ($userware === null) {
-                continue;
-            }
-
+        foreach ($userwares as $userware) {
             UserwareAccount::query()->where('userware_id', $userware->id)->delete();
             SoftwareAssignment::query()->where('userware_id', $userware->id)->delete();
             $userware->forceDelete();
@@ -140,17 +130,12 @@ class PurgeSoftDeletedAssets
     {
         $count = 0;
 
-        $ids = Hardware::onlyTrashed()
+        $hardwares = Hardware::onlyTrashed()
             ->where('deleted_at', '<=', $cutoff)
             ->orderBy('id')
-            ->pluck('id');
+            ->get();
 
-        foreach ($ids as $id) {
-            $hardware = Hardware::onlyTrashed()->find($id);
-            if ($hardware === null) {
-                continue;
-            }
-
+        foreach ($hardwares as $hardware) {
             $this->deleteMorphDocuments($hardware);
             $hardware->forceDelete();
             $count++;
@@ -163,17 +148,12 @@ class PurgeSoftDeletedAssets
     {
         $count = 0;
 
-        $ids = Virtualware::onlyTrashed()
+        $virtualwares = Virtualware::onlyTrashed()
             ->where('deleted_at', '<=', $cutoff)
             ->orderBy('id')
-            ->pluck('id');
+            ->get();
 
-        foreach ($ids as $id) {
-            $virtualware = Virtualware::onlyTrashed()->find($id);
-            if ($virtualware === null) {
-                continue;
-            }
-
+        foreach ($virtualwares as $virtualware) {
             $virtualware->forceDelete();
             $count++;
         }
@@ -185,17 +165,12 @@ class PurgeSoftDeletedAssets
     {
         $count = 0;
 
-        $ids = CloudTenant::onlyTrashed()
+        $tenants = CloudTenant::onlyTrashed()
             ->where('deleted_at', '<=', $cutoff)
             ->orderBy('id')
-            ->pluck('id');
+            ->get();
 
-        foreach ($ids as $id) {
-            $tenant = CloudTenant::onlyTrashed()->find($id);
-            if ($tenant === null) {
-                continue;
-            }
-
+        foreach ($tenants as $tenant) {
             $this->deleteMorphCostSnapshots($tenant);
             $tenant->forceDelete();
             $count++;
