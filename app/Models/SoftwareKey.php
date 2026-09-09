@@ -66,11 +66,16 @@ class SoftwareKey extends Model
     public function maskedValue(): string
     {
         $value = $this->value;
+        $length = strlen($value);
 
-        if (strlen($value) <= 4) {
-            return str_repeat('•', max(strlen($value), 4));
+        if ($length <= 4) {
+            return str_repeat('•', max($length, 4));
         }
 
-        return str_repeat('•', max(strlen($value) - 4, 4)).substr($value, -4);
+        if ($length <= 6) {
+            return str_repeat('•', max($length - 4, 4)).substr($value, -4);
+        }
+
+        return substr($value, 0, 2).str_repeat('•', max($length - 6, 4)).substr($value, -4);
     }
 }

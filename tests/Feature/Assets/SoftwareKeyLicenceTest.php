@@ -183,3 +183,27 @@ test('keys can only be added to key-based software', function () {
     expect(fn () => app(AddSoftwareKeys::class)->handle($software, 'AAAA-BBBB'))
         ->toThrow(ValidationException::class);
 });
+
+test('masked license keys show the first two and last four characters', function () {
+    $key = SoftwareKey::factory()->make([
+        'value' => 'AAAA-BBBB-CCCC-DDDD',
+    ]);
+
+    expect($key->maskedValue())->toBe('AA•••••••••••••DDDD');
+});
+
+test('short license keys are fully masked', function () {
+    $key = SoftwareKey::factory()->make([
+        'value' => 'ABCD',
+    ]);
+
+    expect($key->maskedValue())->toBe('••••');
+});
+
+test('medium license keys keep last-four masking only', function () {
+    $key = SoftwareKey::factory()->make([
+        'value' => 'ABCDEF',
+    ]);
+
+    expect($key->maskedValue())->toBe('••••CDEF');
+});
