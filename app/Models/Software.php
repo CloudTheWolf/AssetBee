@@ -182,7 +182,7 @@ class Software extends Model
     /**
      * Non-secret credential fields safe to display in forms.
      *
-     * @return array<string, string>
+     * @return array<string, mixed>
      */
     public function costSyncCredentialFormDefaults(): array
     {

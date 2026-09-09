@@ -57,7 +57,7 @@ class AtlassianCostFetcher implements FetchesAssetCosts
                 'seats' => $seats,
                 'amount' => $amount,
                 'child_software_id' => $config['child_software_id'],
-                'custom' => (bool) ($config['custom'] ?? false),
+                'custom' => $config['custom'],
                 'keys' => $config['keys'],
                 'name_contains' => $config['name_contains'],
             ];
