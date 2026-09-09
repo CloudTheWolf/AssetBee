@@ -41,6 +41,8 @@ enum AtlassianCostProduct: string
      *     price_per_seat: float,
      *     keys: list<string>,
      *     name_contains: string|null,
+     *     seat_source: string|null,
+     *     manual_seats: int|null,
      *     child_software_id: int|null,
      *     custom: bool
      * }
@@ -62,6 +64,8 @@ enum AtlassianCostProduct: string
                 : 0.0,
             'keys' => $keys,
             'name_contains' => null,
+            'seat_source' => null,
+            'manual_seats' => null,
             'child_software_id' => is_numeric($childId) ? (int) $childId : null,
             'custom' => false,
         ];
@@ -75,6 +79,8 @@ enum AtlassianCostProduct: string
      *     price_per_seat: float,
      *     keys: list<string>,
      *     name_contains: string|null,
+     *     seat_source: string|null,
+     *     manual_seats: int|null,
      *     child_software_id: int|null,
      *     custom: bool
      * }>
@@ -103,6 +109,8 @@ enum AtlassianCostProduct: string
      *     price_per_seat: float,
      *     keys: list<string>,
      *     name_contains: string|null,
+     *     seat_source: string|null,
+     *     manual_seats: int|null,
      *     child_software_id: int|null,
      *     custom: bool
      * }>
@@ -127,12 +135,12 @@ enum AtlassianCostProduct: string
                 $slug = self::slugForAddonLabel($label);
             }
 
-            $nameContains = $addon['name_contains'] ?? null;
-            $nameContains = is_string($nameContains) && trim($nameContains) !== ''
-                ? trim($nameContains)
-                : null;
+            $seatSource = AtlassianAddonSeatSource::tryFrom((string) ($addon['seat_source'] ?? ''))
+                ?? AtlassianAddonSeatSource::Jira;
 
-            $keys = self::normalizeKeys($addon['keys'] ?? null);
+            $manualSeats = $addon['manual_seats'] ?? null;
+            $manualSeats = is_numeric($manualSeats) ? max(0, (int) $manualSeats) : null;
+
             $childId = $addon['child_software_id'] ?? null;
 
             $configs[] = [
@@ -141,8 +149,10 @@ enum AtlassianCostProduct: string
                 'price_per_seat' => is_numeric($addon['price_per_seat'] ?? null)
                     ? (float) $addon['price_per_seat']
                     : 0.0,
-                'keys' => $keys,
-                'name_contains' => $nameContains,
+                'keys' => self::normalizeKeys($addon['keys'] ?? null),
+                'name_contains' => null,
+                'seat_source' => $seatSource->value,
+                'manual_seats' => $manualSeats,
                 'child_software_id' => is_numeric($childId) ? (int) $childId : null,
                 'custom' => true,
             ];
@@ -153,27 +163,51 @@ enum AtlassianCostProduct: string
 
     /**
      * @param  array<string, mixed>|null  $credentials
-     * @return list<array{slug: string, label: string, price_per_seat: string, keys: string, name_contains: string, custom: bool}>
+     * @return list<array{
+     *     slug: string,
+     *     label: string,
+     *     price_per_seat: string,
+     *     keys: string,
+     *     name_contains: string,
+     *     seat_source: string,
+     *     manual_seats: string,
+     *     custom: bool
+     * }>
      */
     public static function formDefaults(?array $credentials): array
     {
         return array_map(
-            static fn (array $config): array => [
-                'slug' => $config['slug'],
-                'label' => $config['label'],
-                'price_per_seat' => $config['price_per_seat'] > 0
-                    ? (string) $config['price_per_seat']
-                    : '',
-                'keys' => implode(', ', $config['keys']),
-                'name_contains' => (string) ($config['name_contains'] ?? ''),
-                'custom' => (bool) $config['custom'],
-            ],
+            static function (array $config): array {
+                return [
+                    'slug' => $config['slug'],
+                    'label' => $config['label'],
+                    'price_per_seat' => $config['price_per_seat'] > 0
+                        ? (string) $config['price_per_seat']
+                        : '',
+                    'keys' => implode(', ', $config['keys']),
+                    'name_contains' => (string) ($config['name_contains'] ?? ''),
+                    'seat_source' => (string) ($config['seat_source'] ?? AtlassianAddonSeatSource::Jira->value),
+                    'manual_seats' => $config['manual_seats'] !== null
+                        ? (string) $config['manual_seats']
+                        : '',
+                    'custom' => (bool) $config['custom'],
+                ];
+            },
             self::configsFromCredentials($credentials),
         );
     }
 
     /**
-     * @return array{slug: string, label: string, price_per_seat: string, keys: string, name_contains: string, custom: bool}
+     * @return array{
+     *     slug: string,
+     *     label: string,
+     *     price_per_seat: string,
+     *     keys: string,
+     *     name_contains: string,
+     *     seat_source: string,
+     *     manual_seats: string,
+     *     custom: bool
+     * }
      */
     public static function blankAddonFormRow(?string $label = null): array
     {
@@ -184,7 +218,9 @@ enum AtlassianCostProduct: string
             'label' => $label,
             'price_per_seat' => '',
             'keys' => '',
-            'name_contains' => $label,
+            'name_contains' => '',
+            'seat_source' => AtlassianAddonSeatSource::Jira->value,
+            'manual_seats' => '',
             'custom' => true,
         ];
     }
@@ -246,8 +282,8 @@ enum AtlassianCostProduct: string
                 array_unshift($addons, [
                     'slug' => 'addon_git_integration_for_jira',
                     'label' => 'Git Integration for Jira',
-                    'keys' => $legacy['keys'] ?? ['com.bigbrassband.jira-git-plugin'],
-                    'name_contains' => $legacy['name_contains'] ?? 'Git Integration',
+                    'keys' => $legacy['keys'] ?? [],
+                    'seat_source' => AtlassianAddonSeatSource::Jira->value,
                     'price_per_seat' => $legacy['price_per_seat'] ?? 0,
                     'child_software_id' => $legacy['child_software_id'] ?? null,
                 ]);

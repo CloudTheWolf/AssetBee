@@ -2,6 +2,7 @@
 
 namespace App\Actions\Assets;
 
+use App\Enums\AtlassianAddonSeatSource;
 use App\Enums\AtlassianCostProduct;
 use App\Enums\SoftwareCostSyncProvider;
 use App\Models\Software;
@@ -53,6 +54,8 @@ class UpdateSoftwareCostSyncSettings
             'products.*.price_per_seat' => ['nullable', 'numeric', 'min:0'],
             'products.*.keys' => ['nullable', 'string', 'max:500'],
             'products.*.name_contains' => ['nullable', 'string', 'max:255'],
+            'products.*.seat_source' => ['nullable', 'string', Rule::enum(AtlassianAddonSeatSource::class)],
+            'products.*.manual_seats' => ['nullable', 'integer', 'min:0'],
             'products.*.custom' => ['nullable', 'boolean'],
         ]);
 
@@ -126,13 +129,11 @@ class UpdateSoftwareCostSyncSettings
                         $validator->errors()->add("products.$index.label", __('Add-on name is required.'));
                     }
 
-                    $hasKeys = filled($product['keys'] ?? null);
-                    $hasNameMatch = filled($product['name_contains'] ?? null);
-                    if (! $hasKeys && ! $hasNameMatch) {
-                        $validator->errors()->add(
-                            "products.$index.keys",
-                            __('Provide a product key or a name match for Marketplace add-ons.'),
-                        );
+                    $seatSource = AtlassianAddonSeatSource::tryFrom((string) ($product['seat_source'] ?? ''));
+                    if ($seatSource === null) {
+                        $validator->errors()->add("products.$index.seat_source", __('Choose where add-on seats come from.'));
+                    } elseif ($seatSource === AtlassianAddonSeatSource::Manual && ! is_numeric($product['manual_seats'] ?? null)) {
+                        $validator->errors()->add("products.$index.manual_seats", __('Enter a manual seat count for this add-on.'));
                     }
                 }
 
@@ -263,11 +264,16 @@ class UpdateSoftwareCostSyncSettings
 
                 $previous = $existingAddonsBySlug[$slug] ?? [];
                 $keys = AtlassianCostProduct::normalizeKeys($product['keys'] ?? ($previous['keys'] ?? []));
-                $nameContains = trim((string) ($product['name_contains'] ?? ''));
-                if ($nameContains === '') {
-                    $nameContains = is_string($previous['name_contains'] ?? null)
-                        ? (string) $previous['name_contains']
-                        : $label;
+
+                $seatSource = AtlassianAddonSeatSource::tryFrom((string) ($product['seat_source'] ?? ''))
+                    ?? AtlassianAddonSeatSource::tryFrom((string) ($previous['seat_source'] ?? ''))
+                    ?? AtlassianAddonSeatSource::Jira;
+
+                $manualSeats = null;
+                if ($seatSource === AtlassianAddonSeatSource::Manual) {
+                    $manualSeats = is_numeric($product['manual_seats'] ?? null)
+                        ? max(0, (int) $product['manual_seats'])
+                        : (is_numeric($previous['manual_seats'] ?? null) ? max(0, (int) $previous['manual_seats']) : 0);
                 }
 
                 $price = array_key_exists('price_per_seat', $product) && blank($product['price_per_seat'])
@@ -281,7 +287,8 @@ class UpdateSoftwareCostSyncSettings
                     'label' => $label,
                     'price_per_seat' => $price,
                     'keys' => $keys,
-                    'name_contains' => $nameContains,
+                    'seat_source' => $seatSource->value,
+                    'manual_seats' => $manualSeats,
                     'child_software_id' => $previous['child_software_id'] ?? null,
                 ];
                 $usedAddonSlugs[$slug] = true;

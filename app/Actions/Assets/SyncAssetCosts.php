@@ -3,6 +3,7 @@
 namespace App\Actions\Assets;
 
 use App\Data\FetchedCostPeriod;
+use App\Enums\AtlassianAddonSeatSource;
 use App\Enums\AtlassianCostProduct;
 use App\Enums\SoftwareBillingInterval;
 use App\Enums\SoftwareCostSyncProvider;
@@ -220,6 +221,8 @@ class SyncAssetCosts
 
                     $storedAddons[$index] = array_merge($addon, [
                         'price_per_seat' => $product['price_per_seat'] ?? ($addon['price_per_seat'] ?? 0),
+                        'seat_source' => $product['seat_source'] ?? ($addon['seat_source'] ?? AtlassianAddonSeatSource::Jira->value),
+                        'manual_seats' => $product['manual_seats'] ?? ($addon['manual_seats'] ?? null),
                         'child_software_id' => $child->id,
                     ]);
                     $updated = true;
@@ -232,7 +235,8 @@ class SyncAssetCosts
                         'label' => $label,
                         'price_per_seat' => $product['price_per_seat'] ?? 0,
                         'keys' => $product['keys'] ?? [],
-                        'name_contains' => $product['name_contains'] ?? null,
+                        'seat_source' => $product['seat_source'] ?? AtlassianAddonSeatSource::Jira->value,
+                        'manual_seats' => $product['manual_seats'] ?? null,
                         'child_software_id' => $child->id,
                     ];
                 }

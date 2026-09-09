@@ -4,6 +4,7 @@ namespace App\Services\Costs;
 
 use App\Contracts\Costs\FetchesAssetCosts;
 use App\Data\FetchedCostPeriod;
+use App\Enums\AtlassianAddonSeatSource;
 use App\Enums\AtlassianCostProduct;
 use App\Enums\CostSyncSource;
 use App\Enums\SoftwareCostSyncProvider;
@@ -40,13 +41,18 @@ class AtlassianCostFetcher implements FetchesAssetCosts
             ->timeout(30);
 
         $productConfigs = AtlassianCostProduct::configsFromCredentials($credentials);
-        [$seatCounts, $uniqueUserCount] = $this->countSeatsByProduct($client, $organizationId, $productConfigs);
+        $hostConfigs = array_values(array_filter(
+            $productConfigs,
+            static fn (array $config): bool => ! $config['custom'],
+        ));
+
+        [$hostSeatCounts, $uniqueUserCount] = $this->countSeatsByProduct($client, $organizationId, $hostConfigs);
 
         $products = [];
         $totalAmount = 0.0;
 
         foreach ($productConfigs as $config) {
-            $seats = $seatCounts[$config['slug']] ?? 0;
+            $seats = $this->resolveSeatCount($config, $hostSeatCounts);
             $amount = round($seats * $config['price_per_seat'], 2);
             $totalAmount += $amount;
 
@@ -60,6 +66,8 @@ class AtlassianCostFetcher implements FetchesAssetCosts
                 'custom' => $config['custom'],
                 'keys' => $config['keys'],
                 'name_contains' => $config['name_contains'],
+                'seat_source' => $config['seat_source'],
+                'manual_seats' => $config['manual_seats'],
             ];
         }
 
@@ -83,6 +91,33 @@ class AtlassianCostFetcher implements FetchesAssetCosts
                 ],
             ),
         ];
+    }
+
+    /**
+     * @param  array{
+     *     slug: string,
+     *     custom: bool,
+     *     seat_source: string|null,
+     *     manual_seats: int|null
+     * }  $config
+     * @param  array<string, int>  $hostSeatCounts
+     */
+    protected function resolveSeatCount(array $config, array $hostSeatCounts): int
+    {
+        if (! $config['custom']) {
+            return $hostSeatCounts[$config['slug']] ?? 0;
+        }
+
+        $seatSource = AtlassianAddonSeatSource::tryFrom((string) ($config['seat_source'] ?? ''))
+            ?? AtlassianAddonSeatSource::Jira;
+
+        if ($seatSource === AtlassianAddonSeatSource::Manual) {
+            return max(0, (int) ($config['manual_seats'] ?? 0));
+        }
+
+        $host = $seatSource->hostProduct();
+
+        return $host === null ? 0 : ($hostSeatCounts[$host->value] ?? 0);
     }
 
     /**

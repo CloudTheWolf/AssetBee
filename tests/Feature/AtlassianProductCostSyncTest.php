@@ -2,6 +2,7 @@
 
 use App\Actions\Assets\SyncAssetCosts;
 use App\Actions\Assets\UpdateSoftwareCostSyncSettings;
+use App\Enums\AtlassianAddonSeatSource;
 use App\Enums\SoftwareCostSyncProvider;
 use App\Enums\SoftwareLicenseType;
 use App\Models\CostSnapshot;
@@ -29,7 +30,6 @@ test('atlassian fetcher calculates cost from seats times price per product', fun
                     'account_status' => 'active',
                     'product_access' => [
                         ['key' => 'jira-software', 'name' => 'Jira'],
-                        ['key' => 'com.bigbrassband.jira-git-plugin', 'name' => 'Git Integration for Jira'],
                     ],
                 ],
                 [
@@ -60,8 +60,7 @@ test('atlassian fetcher calculates cost from seats times price per product', fun
                     'slug' => 'addon_git_integration_for_jira',
                     'label' => 'Git Integration for Jira',
                     'price_per_seat' => 4,
-                    'keys' => ['com.bigbrassband.jira-git-plugin'],
-                    'name_contains' => 'Git Integration',
+                    'seat_source' => AtlassianAddonSeatSource::Jira->value,
                 ],
             ],
         ],
@@ -75,15 +74,62 @@ test('atlassian fetcher calculates cost from seats times price per product', fun
 
     $products = collect($periods[0]->meta['products'])->keyBy('slug');
 
-    expect($periods[0]->amount)->toBe(31.0) // (2*10)+(1*5)+(1*2)+(1*4)
+    expect($periods[0]->amount)->toBe(35.0) // (2*10)+(1*5)+(1*2)+(2*4 jira-sourced)
         ->and($periods[0]->seatCount)->toBe(3)
         ->and($products['jira']['seats'])->toBe(2)
-        ->and($products['jira']['amount'])->toBe(20.0)
-        ->and($products['confluence']['seats'])->toBe(1)
-        ->and($products['confluence']['amount'])->toBe(5.0)
-        ->and($products['compass']['seats'])->toBe(1)
-        ->and($products['addon_git_integration_for_jira']['seats'])->toBe(1)
+        ->and($products['addon_git_integration_for_jira']['seats'])->toBe(2)
+        ->and($products['addon_git_integration_for_jira']['amount'])->toBe(8.0)
         ->and($products['addon_git_integration_for_jira']['custom'])->toBeTrue();
+});
+
+test('marketplace add-ons can use a manual seat count', function () {
+    Http::fake([
+        'https://api.atlassian.com/admin/v1/orgs/org-1/users' => Http::response([
+            'data' => [
+                [
+                    'account_id' => 'u1',
+                    'account_status' => 'active',
+                    'product_access' => [
+                        ['key' => 'jira-software', 'name' => 'Jira'],
+                    ],
+                ],
+            ],
+            'links' => ['next' => null],
+        ]),
+    ]);
+
+    $software = Software::factory()->create([
+        'currency' => 'USD',
+        'cost_sync_provider' => SoftwareCostSyncProvider::Atlassian,
+        'cost_sync_credentials' => [
+            'organization_id' => 'org-1',
+            'api_token' => 'org-api-key',
+            'products' => [
+                'jira' => ['price_per_seat' => 1],
+            ],
+            'addons' => [
+                [
+                    'slug' => 'addon_custom',
+                    'label' => 'Custom App',
+                    'price_per_seat' => 3,
+                    'seat_source' => AtlassianAddonSeatSource::Manual->value,
+                    'manual_seats' => 10,
+                ],
+            ],
+        ],
+    ]);
+
+    $periods = app(AtlassianCostFetcher::class)->fetch(
+        $software,
+        CarbonImmutable::now()->subMonth(),
+        CarbonImmutable::now(),
+    );
+
+    $addon = collect($periods[0]->meta['products'])->firstWhere('slug', 'addon_custom');
+
+    expect($addon['seats'])->toBe(10)
+        ->and($addon['amount'])->toBe(30.0)
+        ->and($periods[0]->amount)->toBe(31.0);
 });
 
 test('atlassian sync creates sub-software for marketplace add-ons', function () {
@@ -105,7 +151,6 @@ test('atlassian sync creates sub-software for marketplace add-ons', function () 
                     'account_status' => 'active',
                     'product_access' => [
                         ['key' => 'jira-software', 'name' => 'Jira'],
-                        ['key' => 'com.bigbrassband.jira-git-plugin', 'name' => 'Git Integration for Jira'],
                     ],
                 ],
             ],
@@ -132,8 +177,7 @@ test('atlassian sync creates sub-software for marketplace add-ons', function () 
                     'slug' => 'addon_git_integration_for_jira',
                     'label' => 'Git Integration for Jira',
                     'price_per_seat' => 3,
-                    'keys' => ['com.bigbrassband.jira-git-plugin'],
-                    'name_contains' => 'Git Integration',
+                    'seat_source' => AtlassianAddonSeatSource::Jira->value,
                 ],
             ],
         ],
@@ -143,28 +187,19 @@ test('atlassian sync creates sub-software for marketplace add-ons', function () 
     $parent->refresh()->load('childSoftwares');
 
     $jira = $parent->childSoftwares->firstWhere('name', 'Jira');
-    $confluence = $parent->childSoftwares->firstWhere('name', 'Confluence');
     $git = $parent->childSoftwares->firstWhere('name', 'Git Integration for Jira');
 
-    expect($result['amount'])->toBe(26.0) // 2*8.5 + 1*6 + 1*3
-        ->and((float) $parent->billing_amount)->toBe(26.0)
-        ->and($parent->childSoftwares)->toHaveCount(4)
-        ->and($jira)->not->toBeNull()
-        ->and($jira->total_seats)->toBe(2)
-        ->and((float) $jira->billing_amount)->toBe(17.0)
-        ->and($jira->license_type)->toBe(SoftwareLicenseType::Seat)
-        ->and($confluence->total_seats)->toBe(1)
-        ->and((float) $confluence->billing_amount)->toBe(6.0)
+    expect($result['amount'])->toBe(29.0) // 2*8.5 + 1*6 + 2*3
         ->and($git)->not->toBeNull()
         ->and($git->vendor)->toBe('Atlassian Marketplace')
-        ->and($git->total_seats)->toBe(1)
-        ->and((float) $git->billing_amount)->toBe(3.0)
-        ->and($parent->cost_sync_credentials['products']['jira']['child_software_id'])->toBe($jira->id)
+        ->and($git->total_seats)->toBe(2)
+        ->and((float) $git->billing_amount)->toBe(6.0)
+        ->and($jira->license_type)->toBe(SoftwareLicenseType::Seat)
         ->and(collect($parent->cost_sync_credentials['addons'])->firstWhere('slug', 'addon_git_integration_for_jira')['child_software_id'])->toBe($git->id)
-        ->and(CostSnapshot::query()->where('costable_id', $jira->id)->count())->toBe(1);
+        ->and(CostSnapshot::query()->where('costable_id', $git->id)->count())->toBe(1);
 });
 
-test('owners can save marketplace add-ons on atlassian cost sync settings', function () {
+test('owners can save marketplace add-ons with seat source', function () {
     [, $organization] = actingAsOrganizationMember();
 
     $software = Software::factory()->create([
@@ -176,15 +211,17 @@ test('owners can save marketplace add-ons on atlassian cost sync settings', func
         ->set('cost_organization_id', 'atlassian-org')
         ->set('cost_api_token', 'secret-token')
         ->set('cost_atlassian_products', [
-            ['slug' => 'jira', 'label' => 'Jira', 'price_per_seat' => '9.99', 'keys' => 'jira-software', 'name_contains' => '', 'custom' => false],
-            ['slug' => 'confluence', 'label' => 'Confluence', 'price_per_seat' => '5.50', 'keys' => 'confluence', 'name_contains' => '', 'custom' => false],
-            ['slug' => 'compass', 'label' => 'Compass', 'price_per_seat' => '', 'keys' => 'compass', 'name_contains' => '', 'custom' => false],
+            ['slug' => 'jira', 'label' => 'Jira', 'price_per_seat' => '9.99', 'keys' => 'jira-software', 'name_contains' => '', 'seat_source' => '', 'manual_seats' => '', 'custom' => false],
+            ['slug' => 'confluence', 'label' => 'Confluence', 'price_per_seat' => '5.50', 'keys' => 'confluence', 'name_contains' => '', 'seat_source' => '', 'manual_seats' => '', 'custom' => false],
+            ['slug' => 'compass', 'label' => 'Compass', 'price_per_seat' => '', 'keys' => 'compass', 'name_contains' => '', 'seat_source' => '', 'manual_seats' => '', 'custom' => false],
             [
                 'slug' => '',
                 'label' => 'Git Integration for Jira',
                 'price_per_seat' => '3',
-                'keys' => 'com.bigbrassband.jira-git-plugin',
-                'name_contains' => 'Git Integration',
+                'keys' => '',
+                'name_contains' => '',
+                'seat_source' => AtlassianAddonSeatSource::Jira->value,
+                'manual_seats' => '',
                 'custom' => true,
             ],
         ])
@@ -195,10 +232,9 @@ test('owners can save marketplace add-ons on atlassian cost sync settings', func
     $addon = collect($software->cost_sync_credentials['addons'])->first();
 
     expect((float) $software->cost_sync_credentials['products']['jira']['price_per_seat'])->toBe(9.99)
-        ->and((float) $software->cost_sync_credentials['products']['confluence']['price_per_seat'])->toBe(5.5)
         ->and($addon['label'])->toBe('Git Integration for Jira')
-        ->and((float) $addon['price_per_seat'])->toBe(3.0)
-        ->and($addon['keys'])->toContain('com.bigbrassband.jira-git-plugin');
+        ->and($addon['seat_source'])->toBe(AtlassianAddonSeatSource::Jira->value)
+        ->and((float) $addon['price_per_seat'])->toBe(3.0);
 });
 
 test('owners can add and remove marketplace add-on rows in the ui', function () {
@@ -212,6 +248,7 @@ test('owners can add and remove marketplace add-on rows in the ui', function () 
         ->set('cost_sync_provider', SoftwareCostSyncProvider::Atlassian->value)
         ->call('addAtlassianAddon')
         ->assertSet('cost_atlassian_products.3.custom', true)
+        ->assertSet('cost_atlassian_products.3.seat_source', AtlassianAddonSeatSource::Jira->value)
         ->call('removeAtlassianAddon', 3)
         ->assertCount('cost_atlassian_products', 3);
 });
@@ -234,7 +271,7 @@ test('atlassian settings require at least one product price', function () {
     ]))->toThrow(ValidationException::class);
 });
 
-test('legacy git integration product credentials migrate into addons', function () {
+test('legacy git integration product credentials migrate into addons with jira seat source', function () {
     $software = Software::factory()->create([
         'cost_sync_provider' => SoftwareCostSyncProvider::Atlassian,
         'cost_sync_credentials' => [
@@ -244,7 +281,6 @@ test('legacy git integration product credentials migrate into addons', function 
                 'jira' => ['price_per_seat' => 1],
                 'git_integration_for_jira' => [
                     'price_per_seat' => 4,
-                    'keys' => ['com.bigbrassband.jira-git-plugin'],
                     'child_software_id' => 99,
                 ],
             ],
@@ -256,5 +292,6 @@ test('legacy git integration product credentials migrate into addons', function 
 
     expect($addon)->not->toBeNull()
         ->and($addon['label'])->toBe('Git Integration for Jira')
+        ->and($addon['seat_source'])->toBe(AtlassianAddonSeatSource::Jira->value)
         ->and($addon['price_per_seat'])->toBe('4');
 });

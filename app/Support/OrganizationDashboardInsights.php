@@ -2,6 +2,7 @@
 
 namespace App\Support;
 
+use App\Enums\CloudTenantStatus;
 use App\Enums\HardwareStatus;
 use App\Enums\SoftwareStatus;
 use App\Models\CloudTenant;
@@ -54,6 +55,7 @@ class OrganizationDashboardInsights
     public function for(Organization $organization): array
     {
         $recurring = Software::query()
+            ->roots()
             ->where('organization_id', $organization->id)
             ->where('is_recurring', true)
             ->where('status', SoftwareStatus::Active)
@@ -64,6 +66,7 @@ class OrganizationDashboardInsights
 
         $cloudCosts = CloudTenant::query()
             ->where('organization_id', $organization->id)
+            ->where('status', CloudTenantStatus::Active)
             ->whereNotNull('billing_amount')
             ->whereNotNull('billing_interval')
             ->orderBy('name')
@@ -226,6 +229,16 @@ class OrganizationDashboardInsights
                 $windowStart->copy()->subMonthNoOverflow()->toDateString(),
                 $windowEnd->toDateString(),
             ])
+            ->where(function ($query) use ($organization): void {
+                $query->where('costable_type', '!=', Software::class)
+                    ->orWhereNotIn(
+                        'costable_id',
+                        Software::query()
+                            ->select('id')
+                            ->where('organization_id', $organization->id)
+                            ->whereNotNull('parent_software_id'),
+                    );
+            })
             ->get()
             ->filter(fn (CostSnapshot $snapshot): bool => $this->currencyCode($snapshot->currency) === strtoupper($currency))
             ->values();

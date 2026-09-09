@@ -129,7 +129,7 @@ new #[Title('Dashboard')] class extends Component {
         <div class="rounded-xl border border-zinc-200 p-5 dark:border-zinc-700">
             <div class="mb-4">
                 <flux:heading size="lg">{{ __('Top costs by month') }}</flux:heading>
-                <flux:text>{{ __('Software licences and cloud tenants, normalized to monthly.') }}</flux:text>
+                <flux:text>{{ __('Top-level software suites and cloud tenants, normalized to monthly.') }}</flux:text>
             </div>
 
             @forelse ($insights['top_costs'] as $cost)

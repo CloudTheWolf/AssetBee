@@ -10,6 +10,7 @@ use App\Actions\Assets\SyncAssetCosts;
 use App\Actions\Assets\UnassignSoftwareSeat;
 use App\Actions\Assets\UpdateSoftware;
 use App\Actions\Assets\UpdateSoftwareCostSyncSettings;
+use App\Enums\AtlassianAddonSeatSource;
 use App\Enums\AtlassianCostProduct;
 use App\Enums\SoftwareBillingInterval;
 use App\Enums\SoftwareCostSyncProvider;
@@ -87,7 +88,7 @@ new #[Title('Software')] class extends Component {
 
     public string $cost_api_token = '';
 
-    /** @var list<array{slug: string, label: string, price_per_seat: string, keys: string, name_contains: string, custom: bool}> */
+    /** @var list<array{slug: string, label: string, price_per_seat: string, keys: string, name_contains: string, seat_source: string, manual_seats: string, custom: bool}> */
     public array $cost_atlassian_products = [];
 
     public string $cost_customer_id = '';
@@ -765,7 +766,7 @@ new #[Title('Software')] class extends Component {
                 <div class="flex flex-wrap items-start justify-between gap-3">
                     <div>
                         <flux:heading size="sm">{{ __('Marketplace add-ons') }}</flux:heading>
-                        <flux:text>{{ __('Third-party apps such as Git Integration for Jira. Match by product key and/or name from Admin API product_access.') }}</flux:text>
+                        <flux:text>{{ __('Third-party apps are not in Admin product_access. Bill them from a host product’s seats (usually Jira) or enter seats manually.') }}</flux:text>
                     </div>
                     @can('update', $software)
                         <flux:button type="button" size="sm" wire:click="addAtlassianAddon">{{ __('Add add-on') }}</flux:button>
@@ -786,7 +787,7 @@ new #[Title('Software')] class extends Component {
                                 <flux:button type="button" size="sm" variant="ghost" wire:click="removeAtlassianAddon({{ $index }})" class="mt-7">{{ __('Remove') }}</flux:button>
                             @endcan
                         </div>
-                        <div class="grid gap-3 sm:grid-cols-3">
+                        <div class="grid gap-3 sm:grid-cols-2">
                             <flux:input
                                 wire:model="cost_atlassian_products.{{ $index }}.price_per_seat"
                                 type="number"
@@ -795,21 +796,29 @@ new #[Title('Software')] class extends Component {
                                 :label="__('Price per seat')"
                                 :disabled="! auth()->user()->can('update', $software)"
                             />
-                            <flux:input
-                                wire:model="cost_atlassian_products.{{ $index }}.keys"
-                                :label="__('Product keys')"
-                                :description="__('Comma-separated')"
+                            <flux:select
+                                wire:model.live="cost_atlassian_products.{{ $index }}.seat_source"
+                                :label="__('Seat source')"
                                 :disabled="! auth()->user()->can('update', $software)"
-                            />
-                            <flux:input
-                                wire:model="cost_atlassian_products.{{ $index }}.name_contains"
-                                :label="__('Name contains')"
-                                :description="__('Fallback match on product name')"
-                                :disabled="! auth()->user()->can('update', $software)"
-                            />
+                            >
+                                @foreach (AtlassianAddonSeatSource::cases() as $seatSource)
+                                    <option value="{{ $seatSource->value }}">{{ $seatSource->label() }}</option>
+                                @endforeach
+                            </flux:select>
                         </div>
+                        @if (($product['seat_source'] ?? '') === AtlassianAddonSeatSource::Manual->value)
+                            <flux:input
+                                wire:model="cost_atlassian_products.{{ $index }}.manual_seats"
+                                type="number"
+                                min="0"
+                                :label="__('Manual seats')"
+                                :disabled="! auth()->user()->can('update', $software)"
+                            />
+                        @endif
                         <input type="hidden" wire:model="cost_atlassian_products.{{ $index }}.slug" />
                         <input type="hidden" wire:model="cost_atlassian_products.{{ $index }}.custom" />
+                        <input type="hidden" wire:model="cost_atlassian_products.{{ $index }}.keys" />
+                        <input type="hidden" wire:model="cost_atlassian_products.{{ $index }}.name_contains" />
                     </div>
                 @endforeach
 

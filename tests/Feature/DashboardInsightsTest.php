@@ -175,6 +175,61 @@ test('previous month stays provisional until the fifth of the following month', 
     Carbon::setTestNow();
 });
 
+test('dashboard cost rollups keep Atlassian suites intact and include cloud tenants', function () {
+    [, $organization] = actingAsOrganizationMember();
+
+    $suite = Software::factory()->recurring('monthly', 300.00)->create([
+        'organization_id' => $organization->id,
+        'name' => 'Atlassian',
+        'vendor' => 'Atlassian',
+        'currency' => 'GBP',
+        'next_billing_at' => now()->addDays(5)->toDateString(),
+    ]);
+
+    Software::factory()->recurring('monthly', 180.00)->create([
+        'organization_id' => $organization->id,
+        'parent_software_id' => $suite->id,
+        'name' => 'Jira',
+        'vendor' => 'Atlassian',
+        'currency' => 'GBP',
+    ]);
+
+    Software::factory()->recurring('monthly', 120.00)->create([
+        'organization_id' => $organization->id,
+        'parent_software_id' => $suite->id,
+        'name' => 'Confluence',
+        'vendor' => 'Atlassian',
+        'currency' => 'GBP',
+    ]);
+
+    CloudTenant::factory()->aws()->create([
+        'organization_id' => $organization->id,
+        'name' => 'Prod AWS',
+        'billing_amount' => 90.00,
+        'billing_interval' => SoftwareBillingInterval::Monthly,
+        'currency' => 'GBP',
+        'status' => 'active',
+    ]);
+
+    CloudTenant::factory()->aws()->create([
+        'organization_id' => $organization->id,
+        'name' => 'Closed AWS',
+        'billing_amount' => 500.00,
+        'billing_interval' => SoftwareBillingInterval::Monthly,
+        'currency' => 'GBP',
+        'status' => 'closed',
+    ]);
+
+    $insights = app(OrganizationDashboardInsights::class)->for($organization);
+    $topNames = collect($insights['top_costs'])->pluck('name')->all();
+
+    expect($insights['costs']['estimated_monthly'])->toBe(390.0)
+        ->and($insights['costs']['estimated_annual'])->toBe(4680.0)
+        ->and($topNames)->toBe(['Atlassian', 'Prod AWS'])
+        ->and(collect($insights['top_costs'])->firstWhere('name', 'Prod AWS')['type'])->toBe('cloud_tenant')
+        ->and($topNames)->not->toContain('Jira', 'Confluence', 'Closed AWS');
+});
+
 test('dashboard insights flag underutilized seats and unassigned hardware', function () {
     [, $organization] = actingAsOrganizationMember();
 

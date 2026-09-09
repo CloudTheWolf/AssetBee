@@ -10,6 +10,7 @@ use App\Enums\SoftwareSeatManagerType;
 use App\Enums\SoftwareStatus;
 use Database\Factories\SoftwareFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -127,6 +128,17 @@ class Software extends Model
     public function childSoftwares(): HasMany
     {
         return $this->hasMany(self::class, 'parent_software_id')->orderBy('name');
+    }
+
+    /**
+     * Top-level software only (excludes Atlassian product children and other nested rows).
+     *
+     * @param  Builder<Software>  $query
+     * @return Builder<Software>
+     */
+    public function scopeRoots(Builder $query): Builder
+    {
+        return $query->whereNull('parent_software_id');
     }
 
     /**
