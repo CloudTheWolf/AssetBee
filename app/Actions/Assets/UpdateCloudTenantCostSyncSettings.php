@@ -3,6 +3,7 @@
 namespace App\Actions\Assets;
 
 use App\Enums\CloudTenantCostSyncProvider;
+use App\Enums\CustomHttpAmountSource;
 use App\Models\CloudTenant;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
@@ -32,6 +33,10 @@ class UpdateCloudTenantCostSyncSettings
             'cost_sync_request.response_currency_path' => ['nullable', 'string', 'max:255'],
             'cost_sync_request.response_seats_path' => ['nullable', 'string', 'max:255'],
             'cost_sync_request.amount_period' => ['nullable', 'string', Rule::in(['month', 'as_reported'])],
+            'cost_sync_request.amount_source' => ['nullable', 'string', Rule::enum(CustomHttpAmountSource::class)],
+            'cost_sync_request.calculation_included_seats' => ['nullable', 'integer', 'min:0'],
+            'cost_sync_request.calculation_price_per_seat' => ['nullable', 'numeric', 'min:0'],
+            'cost_sync_request.calculation_currency' => ['nullable', 'string', 'size:3'],
             'bearer_token' => ['nullable', 'string', 'max:4096'],
             'username' => ['nullable', 'string', 'max:255'],
             'password' => ['nullable', 'string', 'max:255'],
@@ -94,7 +99,21 @@ class UpdateCloudTenantCostSyncSettings
                 if (blank($request['url'] ?? null)) {
                     $validator->errors()->add('cost_sync_request.url', __('A request URL is required.'));
                 }
-                if (blank($request['response_amount_path'] ?? null)) {
+
+                $amountSource = CustomHttpAmountSource::tryFrom((string) ($request['amount_source'] ?? CustomHttpAmountSource::Response->value))
+                    ?? CustomHttpAmountSource::Response;
+
+                if ($amountSource === CustomHttpAmountSource::Seats) {
+                    if (blank($request['response_seats_path'] ?? null)) {
+                        $validator->errors()->add('cost_sync_request.response_seats_path', __('A seats JSON path is required.'));
+                    }
+                    if (! is_numeric($request['calculation_price_per_seat'] ?? null)) {
+                        $validator->errors()->add('cost_sync_request.calculation_price_per_seat', __('A price per seat is required.'));
+                    }
+                    if (blank($request['calculation_currency'] ?? null)) {
+                        $validator->errors()->add('cost_sync_request.calculation_currency', __('A currency is required.'));
+                    }
+                } elseif (blank($request['response_amount_path'] ?? null)) {
                     $validator->errors()->add('cost_sync_request.response_amount_path', __('An amount JSON path is required.'));
                 }
             }

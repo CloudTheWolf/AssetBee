@@ -13,6 +13,7 @@ use App\Enums\AwsRegion;
 use App\Enums\CloudTenantCostSyncProvider;
 use App\Enums\CloudTenantProvider;
 use App\Enums\CloudTenantStatus;
+use App\Enums\CustomHttpAmountSource;
 use App\Models\CloudTenant;
 use App\Support\CurrentOrganization;
 use Flux\Flux;
@@ -95,6 +96,14 @@ new #[Title('Cloud Tenant')] class extends Component {
 
     public string $cost_amount_period = 'month';
 
+    public string $cost_amount_source = 'response';
+
+    public string $cost_calculation_included_seats = '0';
+
+    public string $cost_calculation_price_per_seat = '';
+
+    public string $cost_calculation_currency = 'GBP';
+
     /** @var list<array{name: string, value: string}> */
     public array $cost_request_headers = [];
 
@@ -154,6 +163,10 @@ new #[Title('Cloud Tenant')] class extends Component {
         $this->cost_response_currency_path = (string) $request['response_currency_path'];
         $this->cost_response_seats_path = (string) $request['response_seats_path'];
         $this->cost_amount_period = (string) $request['amount_period'];
+        $this->cost_amount_source = (string) $request['amount_source'];
+        $this->cost_calculation_included_seats = (string) $request['calculation_included_seats'];
+        $this->cost_calculation_price_per_seat = (string) $request['calculation_price_per_seat'];
+        $this->cost_calculation_currency = (string) $request['calculation_currency'];
         $this->cost_request_headers = collect($request['headers'] ?? [])
             ->map(fn ($header): array => [
                 'name' => (string) ($header['name'] ?? ''),
@@ -246,6 +259,14 @@ new #[Title('Cloud Tenant')] class extends Component {
                 'response_currency_path' => $this->cost_response_currency_path,
                 'response_seats_path' => $this->cost_response_seats_path,
                 'amount_period' => $this->cost_amount_period,
+                'amount_source' => $this->cost_amount_source,
+                'calculation_included_seats' => $this->cost_calculation_included_seats !== ''
+                    ? (int) $this->cost_calculation_included_seats
+                    : 0,
+                'calculation_price_per_seat' => $this->cost_calculation_price_per_seat !== ''
+                    ? (float) $this->cost_calculation_price_per_seat
+                    : null,
+                'calculation_currency' => strtoupper($this->cost_calculation_currency),
             ],
         ])->load(['virtualwares', 'costSnapshots']);
 
@@ -628,10 +649,22 @@ new #[Title('Cloud Tenant')] class extends Component {
                 @endcan
             </div>
             <flux:textarea wire:model="cost_request_body" rows="4" :label="__('Body')" :disabled="! auth()->user()->can('update', $cloudTenant)" />
+            <flux:select wire:model.live="cost_amount_source" :label="__('Amount source')" :disabled="! auth()->user()->can('update', $cloudTenant)">
+                @foreach (CustomHttpAmountSource::cases() as $source)
+                    <option value="{{ $source->value }}">{{ $source->label() }}</option>
+                @endforeach
+            </flux:select>
             <div class="grid gap-4 sm:grid-cols-2">
-                <flux:input wire:model="cost_response_amount_path" :label="__('Amount JSON path')" :disabled="! auth()->user()->can('update', $cloudTenant)" />
-                <flux:input wire:model="cost_response_currency_path" :label="__('Currency JSON path')" :disabled="! auth()->user()->can('update', $cloudTenant)" />
-                <flux:input wire:model="cost_response_seats_path" :label="__('Seats JSON path')" :disabled="! auth()->user()->can('update', $cloudTenant)" />
+                @if ($cost_amount_source === CustomHttpAmountSource::Seats->value)
+                    <flux:input wire:model="cost_response_seats_path" :label="__('Seats JSON path')" :disabled="! auth()->user()->can('update', $cloudTenant)" />
+                    <flux:input wire:model="cost_calculation_included_seats" type="number" min="0" step="1" :label="__('Included seats')" :description="__('Free seats subtracted before pricing, e.g. 3 in (seats - 3) × price.')" :disabled="! auth()->user()->can('update', $cloudTenant)" />
+                    <flux:input wire:model="cost_calculation_price_per_seat" type="number" min="0" step="0.01" :label="__('Price per seat')" :disabled="! auth()->user()->can('update', $cloudTenant)" />
+                    <flux:input wire:model="cost_calculation_currency" :label="__('Currency')" maxlength="3" :disabled="! auth()->user()->can('update', $cloudTenant)" />
+                @else
+                    <flux:input wire:model="cost_response_amount_path" :label="__('Amount JSON path')" :disabled="! auth()->user()->can('update', $cloudTenant)" />
+                    <flux:input wire:model="cost_response_currency_path" :label="__('Currency JSON path')" :disabled="! auth()->user()->can('update', $cloudTenant)" />
+                    <flux:input wire:model="cost_response_seats_path" :label="__('Seats JSON path')" :disabled="! auth()->user()->can('update', $cloudTenant)" />
+                @endif
                 <flux:select wire:model="cost_amount_period" :label="__('Amount period')" :disabled="! auth()->user()->can('update', $cloudTenant)">
                     <option value="month">{{ __('Current month') }}</option>
                     <option value="as_reported">{{ __('As reported') }}</option>

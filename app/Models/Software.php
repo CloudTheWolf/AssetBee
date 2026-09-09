@@ -244,6 +244,12 @@ class Software extends Model
             'response_currency_path' => (string) ($request['response_currency_path'] ?? 'currency'),
             'response_seats_path' => (string) ($request['response_seats_path'] ?? ''),
             'amount_period' => (string) ($request['amount_period'] ?? 'month'),
+            'amount_source' => (string) ($request['amount_source'] ?? 'response'),
+            'calculation_included_seats' => (string) ($request['calculation_included_seats'] ?? '0'),
+            'calculation_price_per_seat' => isset($request['calculation_price_per_seat'])
+                ? (string) $request['calculation_price_per_seat']
+                : '',
+            'calculation_currency' => (string) ($request['calculation_currency'] ?? $this->currency ?: 'GBP'),
         ];
     }
 
