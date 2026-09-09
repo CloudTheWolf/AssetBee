@@ -3,6 +3,7 @@ paths:
   - app/Support/SystemAuditRecorder.php
   - app/Support/OrganizationInventoryReports.php
   - app/Support/SimplePdf.php
+  - app/Support/OrganizationCostBreakdownReport.php
 ---
 
 # Support
@@ -18,3 +19,6 @@ PDFs use SimplePdf with a black header containing public/img/logo.png. Inventory
 
 ## Unknown antivirus freshness is not out of date
 Linux and macOS collectors often omit antivirus.upToDate (null) because there is no Security Center definition bit. Treat enabled products as protected unless upToDate is explicitly false. Only Windows-style false should produce “Antivirus is out of date.”
+
+## Cost breakdown nests children without double-counting
+Cost Breakdown nests active sub-products under parent software. Section totals use effectiveMonthlyCost (prefer parent amount, else sum children) so parent+children are never double-counted. Dedicated page/PDF — not an InventoryReport case.
