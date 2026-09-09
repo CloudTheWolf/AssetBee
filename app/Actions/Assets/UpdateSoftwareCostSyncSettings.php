@@ -95,11 +95,8 @@ class UpdateSoftwareCostSyncSettings
                 if (blank($input['organization_id'] ?? null)) {
                     $validator->errors()->add('organization_id', __('The Atlassian organization ID is required.'));
                 }
-                if (blank($input['email'] ?? null)) {
-                    $validator->errors()->add('email', __('The Atlassian account email is required.'));
-                }
                 if (! $software->hasCostSyncCredentials() && blank($input['api_token'] ?? null)) {
-                    $validator->errors()->add('api_token', __('The API token is required when saving credentials for the first time.'));
+                    $validator->errors()->add('api_token', __('The organization API key is required when saving credentials for the first time.'));
                 }
             }
 
@@ -143,7 +140,6 @@ class UpdateSoftwareCostSyncSettings
         return match ($provider) {
             SoftwareCostSyncProvider::Atlassian => [
                 'organization_id' => $validated['organization_id'],
-                'email' => $validated['email'],
                 'api_token' => filled($validated['api_token'] ?? null)
                     ? $validated['api_token']
                     : ($existing['api_token'] ?? null),

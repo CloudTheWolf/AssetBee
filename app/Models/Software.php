@@ -20,6 +20,7 @@ use Illuminate\Support\Carbon;
 /**
  * @property int $id
  * @property int $organization_id
+ * @property int|null $parent_software_id
  * @property string $name
  * @property string|null $vendor
  * @property SoftwareLicenseType $license_type
@@ -46,6 +47,7 @@ use Illuminate\Support\Carbon;
  */
 #[Fillable([
     'organization_id',
+    'parent_software_id',
     'name',
     'vendor',
     'license_type',
@@ -111,6 +113,22 @@ class Software extends Model
     }
 
     /**
+     * @return BelongsTo<Software, $this>
+     */
+    public function parentSoftware(): BelongsTo
+    {
+        return $this->belongsTo(self::class, 'parent_software_id');
+    }
+
+    /**
+     * @return HasMany<Software, $this>
+     */
+    public function childSoftwares(): HasMany
+    {
+        return $this->hasMany(self::class, 'parent_software_id')->orderBy('name');
+    }
+
+    /**
      * @return BelongsTo<Userware, $this>
      */
     public function seatManagerUserware(): BelongsTo
@@ -172,7 +190,6 @@ class Software extends Model
         return match ($this->cost_sync_provider) {
             SoftwareCostSyncProvider::Atlassian => [
                 'organization_id' => (string) ($credentials['organization_id'] ?? ''),
-                'email' => (string) ($credentials['email'] ?? ''),
                 'api_token' => '',
             ],
             SoftwareCostSyncProvider::GoogleWorkspace => [

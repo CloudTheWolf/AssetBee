@@ -27,24 +27,21 @@ class AtlassianCostFetcher implements FetchesAssetCosts
         /** @var Software $asset */
         $credentials = $asset->cost_sync_credentials ?? [];
         $organizationId = (string) ($credentials['organization_id'] ?? '');
-        $email = (string) ($credentials['email'] ?? '');
         $apiToken = (string) ($credentials['api_token'] ?? '');
 
-        if ($organizationId === '' || $email === '' || $apiToken === '') {
+        if ($organizationId === '' || $apiToken === '') {
             throw new RuntimeException(__('Atlassian cost sync credentials are incomplete.'));
         }
 
-        $response = Http::withBasicAuth($email, $apiToken)
+        $client = Http::withToken($apiToken)
             ->acceptJson()
-            ->timeout(30)
-            ->get("https://api.atlassian.com/admin/v1/orgs/{$organizationId}/billing-details");
+            ->timeout(30);
+
+        $response = $client->get("https://api.atlassian.com/admin/v1/orgs/{$organizationId}/billing-details");
 
         if (! $response->successful()) {
             // Fallback: licenses endpoint for seat counts when billing details are unavailable.
-            $licenses = Http::withBasicAuth($email, $apiToken)
-                ->acceptJson()
-                ->timeout(30)
-                ->get("https://api.atlassian.com/admin/v1/orgs/{$organizationId}/licenses");
+            $licenses = $client->get("https://api.atlassian.com/admin/v1/orgs/{$organizationId}/licenses");
 
             if (! $licenses->successful()) {
                 throw new RuntimeException(__('Atlassian Admin API request failed with status :status.', [

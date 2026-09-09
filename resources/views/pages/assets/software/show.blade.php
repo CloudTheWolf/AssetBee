@@ -35,6 +35,8 @@ new #[Title('Software')] class extends Component {
 
     public string $vendor = '';
 
+    public string $parent_software_id = '';
+
     public string $license_type = '';
 
     public string $total_seats = '';
@@ -81,8 +83,6 @@ new #[Title('Software')] class extends Component {
     public string $cost_sync_provider = 'none';
 
     public string $cost_organization_id = '';
-
-    public string $cost_email = '';
 
     public string $cost_api_token = '';
 
@@ -134,7 +134,15 @@ new #[Title('Software')] class extends Component {
         $this->authorize('view', $software);
         abort_unless($software->organization_id === CurrentOrganization::require()->id, 404);
 
-        $this->software = $software->load(['assignments.userware', 'assignments.key', 'keys.assignment.userware', 'seatManagerUserware', 'costSnapshots']);
+        $this->software = $software->load([
+            'assignments.userware',
+            'assignments.key',
+            'keys.assignment.userware',
+            'seatManagerUserware',
+            'costSnapshots',
+            'parentSoftware',
+            'childSoftwares',
+        ]);
         $this->fillForm();
         $this->fillCostSyncForm();
     }
@@ -143,6 +151,7 @@ new #[Title('Software')] class extends Component {
     {
         $this->name = $this->software->name;
         $this->vendor = (string) ($this->software->vendor ?? '');
+        $this->parent_software_id = (string) ($this->software->parent_software_id ?? '');
         $this->license_type = $this->software->license_type->value;
         $this->total_seats = (string) ($this->software->total_seats ?? '');
         $this->seat_manager_type = $this->software->seat_manager_type?->value ?? '';
@@ -163,7 +172,6 @@ new #[Title('Software')] class extends Component {
         $this->cost_sync_provider = $this->software->cost_sync_provider?->value ?? 'none';
         $defaults = $this->software->costSyncCredentialFormDefaults();
         $this->cost_organization_id = (string) ($defaults['organization_id'] ?? '');
-        $this->cost_email = (string) ($defaults['email'] ?? '');
         $this->cost_api_token = '';
         $this->cost_customer_id = (string) ($defaults['customer_id'] ?? '');
         $this->cost_service_account_email = (string) ($defaults['service_account_email'] ?? '');
@@ -232,6 +240,7 @@ new #[Title('Software')] class extends Component {
         $this->software = $updateSoftware->handle($this->software, [
             'name' => $this->name,
             'vendor' => $this->vendor !== '' ? $this->vendor : null,
+            'parent_software_id' => $this->parent_software_id !== '' ? (int) $this->parent_software_id : null,
             'license_type' => $this->license_type,
             'total_seats' => $this->total_seats !== '' ? (int) $this->total_seats : null,
             'seat_manager_type' => $this->seat_manager_type !== '' ? $this->seat_manager_type : null,
@@ -245,7 +254,14 @@ new #[Title('Software')] class extends Component {
             'currency' => $this->currency !== '' ? $this->currency : 'GBP',
             'next_billing_at' => $this->is_recurring && $this->next_billing_at !== '' ? $this->next_billing_at : null,
             'notes' => $this->notes !== '' ? $this->notes : null,
-        ])->load(['assignments.userware', 'assignments.key', 'keys.assignment.userware', 'seatManagerUserware']);
+        ])->load([
+            'assignments.userware',
+            'assignments.key',
+            'keys.assignment.userware',
+            'seatManagerUserware',
+            'parentSoftware',
+            'childSoftwares',
+        ]);
 
         $this->fillForm();
 
@@ -378,7 +394,6 @@ new #[Title('Software')] class extends Component {
         $this->software = $updateSoftwareCostSyncSettings->handle($this->software, [
             'cost_sync_provider' => $this->cost_sync_provider,
             'organization_id' => $this->cost_organization_id !== '' ? $this->cost_organization_id : null,
-            'email' => $this->cost_email !== '' ? $this->cost_email : null,
             'api_token' => $this->cost_api_token !== '' ? $this->cost_api_token : null,
             'customer_id' => $this->cost_customer_id !== '' ? $this->cost_customer_id : null,
             'service_account_email' => $this->cost_service_account_email !== '' ? $this->cost_service_account_email : null,
@@ -439,7 +454,15 @@ new #[Title('Software')] class extends Component {
             return;
         }
 
-        $this->software = $this->software->fresh()->load(['assignments.userware', 'assignments.key', 'keys.assignment.userware', 'seatManagerUserware', 'costSnapshots']);
+        $this->software = $this->software->fresh()->load([
+            'assignments.userware',
+            'assignments.key',
+            'keys.assignment.userware',
+            'seatManagerUserware',
+            'costSnapshots',
+            'parentSoftware',
+            'childSoftwares',
+        ]);
         $this->fillForm();
         $this->fillCostSyncForm();
 
@@ -447,6 +470,21 @@ new #[Title('Software')] class extends Component {
             variant: 'success',
             text: __('Synced :count cost periods.', ['count' => $result['snapshots']]),
         );
+    }
+
+    #[Computed]
+    public function parentSoftwareOptions()
+    {
+        if ($this->software->childSoftwares->isNotEmpty()) {
+            return collect();
+        }
+
+        return Software::query()
+            ->where('organization_id', CurrentOrganization::require()->id)
+            ->whereNull('parent_software_id')
+            ->whereKeyNot($this->software->id)
+            ->orderBy('name')
+            ->get(['id', 'name']);
     }
 
     #[Computed]
@@ -504,6 +542,10 @@ new #[Title('Software')] class extends Component {
             <flux:heading size="xl">{{ $software->name }}</flux:heading>
             <flux:text>
                 {{ $software->license_type->label() }}
+                @if ($software->parentSoftware)
+                    · {{ __('Part of') }}
+                    <a href="{{ route('assets.software.show', $software->parentSoftware) }}" class="text-accent" wire:navigate>{{ $software->parentSoftware->name }}</a>
+                @endif
                 @if ($software->license_type === SoftwareLicenseType::Seat)
                     · {{ $software->assignments->count() }} / {{ $software->total_seats }} {{ __('seats') }}
                 @endif
@@ -520,9 +562,34 @@ new #[Title('Software')] class extends Component {
         </div>
     </div>
 
+    @if ($software->childSoftwares->isNotEmpty())
+        <div class="rounded-xl border border-zinc-200 p-6 dark:border-zinc-700">
+            <flux:heading size="lg">{{ __('Sub-software') }}</flux:heading>
+            <flux:text class="mt-1">{{ __('Products under this suite, such as Jira and Confluence under Atlassian.') }}</flux:text>
+            <ul class="mt-4 space-y-2">
+                @foreach ($software->childSoftwares as $child)
+                    <li>
+                        <a href="{{ route('assets.software.show', $child) }}" class="font-medium text-accent" wire:navigate>{{ $child->name }}</a>
+                        @if ($child->vendor)
+                            <span class="text-sm text-zinc-500"> · {{ $child->vendor }}</span>
+                        @endif
+                    </li>
+                @endforeach
+            </ul>
+        </div>
+    @endif
+
     <form wire:submit="save" class="flex flex-col gap-6 rounded-xl border border-zinc-200 p-6 dark:border-zinc-700">
         <flux:input wire:model="name" :label="__('Name')" required :disabled="! auth()->user()->can('update', $software)" />
         <flux:input wire:model="vendor" :label="__('Vendor')" :disabled="! auth()->user()->can('update', $software)" />
+        @if ($software->childSoftwares->isEmpty())
+            <flux:select wire:model="parent_software_id" :label="__('Parent software')" :description="__('Optional. Nest this product under a suite such as Atlassian.')" :disabled="! auth()->user()->can('update', $software)">
+                <option value="">{{ __('None') }}</option>
+                @foreach ($this->parentSoftwareOptions as $parentOption)
+                    <option value="{{ $parentOption->id }}">{{ $parentOption->name }}</option>
+                @endforeach
+            </flux:select>
+        @endif
         <flux:select wire:model.live="license_type" :label="__('License type')" :disabled="! auth()->user()->can('update', $software)">
             @foreach (SoftwareLicenseType::cases() as $option)
                 <option value="{{ $option->value }}">{{ $option->label() }}</option>
@@ -610,9 +677,11 @@ new #[Title('Software')] class extends Component {
         </flux:select>
 
         @if ($cost_sync_provider === SoftwareCostSyncProvider::Atlassian->value)
+            <flux:text>
+                {{ __('Use an Atlassian organization API key (Admin → Settings → API keys), not an account email and personal API token.') }}
+            </flux:text>
             <flux:input wire:model="cost_organization_id" :label="__('Atlassian organization ID')" :disabled="! auth()->user()->can('update', $software)" />
-            <flux:input wire:model="cost_email" type="email" :label="__('Account email')" :disabled="! auth()->user()->can('update', $software)" />
-            <flux:input wire:model="cost_api_token" type="password" :label="__('API token')" :description="$software->hasCostSyncCredentials() ? __('Leave blank to keep the existing token.') : null" :disabled="! auth()->user()->can('update', $software)" />
+            <flux:input wire:model="cost_api_token" type="password" :label="__('Organization API key')" :description="$software->hasCostSyncCredentials() ? __('Leave blank to keep the existing key.') : null" :disabled="! auth()->user()->can('update', $software)" />
         @elseif ($cost_sync_provider === SoftwareCostSyncProvider::GoogleWorkspace->value)
             <div class="flex flex-wrap items-center justify-between gap-3">
                 <flux:text>{{ __('Connect with a service account that has domain-wide delegation.') }}</flux:text>

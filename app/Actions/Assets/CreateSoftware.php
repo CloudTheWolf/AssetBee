@@ -3,6 +3,7 @@
 namespace App\Actions\Assets;
 
 use App\Actions\Assets\Concerns\NormalizesSoftwareSeatManager;
+use App\Actions\Assets\Concerns\ValidatesSoftwareParent;
 use App\Enums\SoftwareBillingInterval;
 use App\Enums\SoftwareLicenseType;
 use App\Enums\SoftwareStatus;
@@ -15,6 +16,7 @@ use Illuminate\Validation\ValidationException;
 class CreateSoftware
 {
     use NormalizesSoftwareSeatManager;
+    use ValidatesSoftwareParent;
 
     /**
      * @param  array<string, mixed>  $input
@@ -29,6 +31,7 @@ class CreateSoftware
             'license_type' => ['required', Rule::enum(SoftwareLicenseType::class)],
             'total_seats' => ['nullable', 'integer', 'min:1'],
             ...$this->seatManagerRules($organization),
+            ...$this->parentSoftwareRules($organization),
             'status' => ['required', Rule::enum(SoftwareStatus::class)],
             'expires_at' => ['nullable', 'date'],
             'is_recurring' => ['sometimes', 'boolean'],
@@ -65,6 +68,7 @@ class CreateSoftware
         }
 
         $validated = $this->normalizeSeatManager($validated, $organization);
+        $validated = $this->normalizeParentSoftwareId($validated);
 
         return $organization->softwares()->create($validated);
     }

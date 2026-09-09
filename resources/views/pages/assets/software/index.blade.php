@@ -50,6 +50,8 @@ new #[Title('Software')] class extends Component {
 
     public string $notes = '';
 
+    public string $parent_software_id = '';
+
     public function mount(): void
     {
         $this->authorize('viewAny', Software::class);
@@ -82,6 +84,7 @@ new #[Title('Software')] class extends Component {
         $createSoftware->handle(CurrentOrganization::require(), [
             'name' => $this->name,
             'vendor' => $this->vendor !== '' ? $this->vendor : null,
+            'parent_software_id' => $this->parent_software_id !== '' ? (int) $this->parent_software_id : null,
             'license_type' => $this->license_type,
             'total_seats' => $this->total_seats !== '' ? (int) $this->total_seats : null,
             'status' => $this->createStatus,
@@ -94,7 +97,7 @@ new #[Title('Software')] class extends Component {
             'notes' => $this->notes !== '' ? $this->notes : null,
         ]);
 
-        $this->reset(['name', 'vendor', 'expires_at', 'billing_amount', 'next_billing_at', 'notes', 'is_recurring']);
+        $this->reset(['name', 'vendor', 'parent_software_id', 'expires_at', 'billing_amount', 'next_billing_at', 'notes', 'is_recurring']);
         $this->license_type = SoftwareLicenseType::Seat->value;
         $this->total_seats = '10';
         $this->createStatus = SoftwareStatus::Active->value;
@@ -113,13 +116,24 @@ new #[Title('Software')] class extends Component {
     }
 
     #[Computed]
+    public function parentSoftwareOptions()
+    {
+        return Software::query()
+            ->where('organization_id', CurrentOrganization::require()->id)
+            ->whereNull('parent_software_id')
+            ->orderBy('name')
+            ->get(['id', 'name']);
+    }
+
+    #[Computed]
     public function softwares()
     {
         $sortable = ['name', 'vendor', 'license_type', 'status', 'next_billing_at'];
         $sortBy = in_array($this->sortBy, $sortable, true) ? $this->sortBy : 'name';
 
         return Software::query()
-            ->withCount(['assignments', 'keys'])
+            ->with(['parentSoftware:id,name'])
+            ->withCount(['assignments', 'keys', 'childSoftwares'])
             ->where('organization_id', CurrentOrganization::require()->id)
             ->when($this->search !== '', function ($query) {
                 $query->where(function ($query) {
@@ -170,6 +184,11 @@ new #[Title('Software')] class extends Component {
                 <flux:table.row :key="$software->id">
                     <flux:table.cell>
                         <a href="{{ route('assets.software.show', $software) }}" class="font-medium text-accent" wire:navigate>{{ $software->name }}</a>
+                        @if ($software->parentSoftware)
+                            <div class="text-xs text-zinc-500">{{ __('Under') }} {{ $software->parentSoftware->name }}</div>
+                        @elseif ($software->child_softwares_count > 0)
+                            <div class="text-xs text-zinc-500">{{ trans_choice(':count sub-product|:count sub-products', $software->child_softwares_count, ['count' => $software->child_softwares_count]) }}</div>
+                        @endif
                         @if ($software->is_recurring && $software->next_billing_at)
                             <div class="text-xs text-zinc-500">{{ __('Next billing') }} {{ $software->next_billing_at->format('M j, Y') }}</div>
                         @endif
@@ -228,6 +247,12 @@ new #[Title('Software')] class extends Component {
             <flux:heading size="lg">{{ __('Add software') }}</flux:heading>
             <flux:input wire:model="name" :label="__('Name')" required />
             <flux:input wire:model="vendor" :label="__('Vendor')" />
+            <flux:select wire:model="parent_software_id" :label="__('Parent software')" :description="__('Optional. Nest under a suite such as Atlassian.')">
+                <option value="">{{ __('None') }}</option>
+                @foreach ($this->parentSoftwareOptions as $parentOption)
+                    <option value="{{ $parentOption->id }}">{{ $parentOption->name }}</option>
+                @endforeach
+            </flux:select>
             <flux:select wire:model.live="license_type" :label="__('License type')">
                 @foreach (App\Enums\SoftwareLicenseType::cases() as $option)
                     <option value="{{ $option->value }}">{{ $option->label() }}</option>

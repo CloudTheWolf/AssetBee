@@ -3,6 +3,7 @@
 namespace App\Actions\Assets;
 
 use App\Actions\Assets\Concerns\NormalizesSoftwareSeatManager;
+use App\Actions\Assets\Concerns\ValidatesSoftwareParent;
 use App\Enums\SoftwareBillingInterval;
 use App\Enums\SoftwareLicenseType;
 use App\Enums\SoftwareStatus;
@@ -10,10 +11,12 @@ use App\Models\Software;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
+use Illuminate\Validation\Validator as ValidatorContract;
 
 class UpdateSoftware
 {
     use NormalizesSoftwareSeatManager;
+    use ValidatesSoftwareParent;
 
     /**
      * @param  array<string, mixed>  $input
@@ -24,12 +27,13 @@ class UpdateSoftware
     {
         $organization = $software->organization;
 
-        $validated = Validator::make($input, [
+        $validator = Validator::make($input, [
             'name' => ['required', 'string', 'max:255'],
             'vendor' => ['nullable', 'string', 'max:255'],
             'license_type' => ['required', Rule::enum(SoftwareLicenseType::class)],
             'total_seats' => ['nullable', 'integer', 'min:1'],
             ...$this->seatManagerRules($organization),
+            ...$this->parentSoftwareRules($organization, $software),
             'status' => ['required', Rule::enum(SoftwareStatus::class)],
             'expires_at' => ['nullable', 'date'],
             'is_recurring' => ['sometimes', 'boolean'],
@@ -38,7 +42,13 @@ class UpdateSoftware
             'currency' => ['nullable', 'string', 'size:3'],
             'next_billing_at' => ['nullable', 'date'],
             'notes' => ['nullable', 'string'],
-        ])->validate();
+        ]);
+
+        $validator->after(function (ValidatorContract $validator) use ($software, $input): void {
+            $this->assertParentSoftwareAllowed($validator, $software, $input['parent_software_id'] ?? null);
+        });
+
+        $validated = $validator->validate();
 
         $licenseType = $validated['license_type'] instanceof SoftwareLicenseType
             ? $validated['license_type']
@@ -66,6 +76,7 @@ class UpdateSoftware
         }
 
         $validated = $this->normalizeSeatManager($validated, $organization);
+        $validated = $this->normalizeParentSoftwareId($validated);
 
         $software->update($validated);
 

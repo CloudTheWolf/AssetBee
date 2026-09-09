@@ -28,8 +28,7 @@ test('atlassian cost fetcher reads billing details', function () {
         'cost_sync_provider' => SoftwareCostSyncProvider::Atlassian,
         'cost_sync_credentials' => [
             'organization_id' => 'org-1',
-            'email' => 'admin@example.com',
-            'api_token' => 'token',
+            'api_token' => 'org-api-key',
         ],
     ]);
 
@@ -42,6 +41,11 @@ test('atlassian cost fetcher reads billing details', function () {
     expect($periods)->toHaveCount(1)
         ->and($periods[0]->amount)->toBe(199.5)
         ->and($periods[0]->seatCount)->toBe(25);
+
+    Http::assertSent(function ($request) {
+        return $request->url() === 'https://api.atlassian.com/admin/v1/orgs/org-1/billing-details'
+            && $request->hasHeader('Authorization', 'Bearer org-api-key');
+    });
 });
 
 test('cursor cost fetcher maps team billing payload', function () {

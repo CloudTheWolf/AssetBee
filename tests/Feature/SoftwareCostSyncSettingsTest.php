@@ -18,7 +18,6 @@ test('owners can save atlassian cost sync settings on software', function () {
     Livewire::test('pages::assets.software.show', ['software' => $software])
         ->set('cost_sync_provider', SoftwareCostSyncProvider::Atlassian->value)
         ->set('cost_organization_id', 'atlassian-org')
-        ->set('cost_email', 'admin@example.com')
         ->set('cost_api_token', 'secret-token')
         ->call('saveCostSync')
         ->assertHasNoErrors();
@@ -28,6 +27,7 @@ test('owners can save atlassian cost sync settings on software', function () {
     expect($software->cost_sync_provider)->toBe(SoftwareCostSyncProvider::Atlassian)
         ->and($software->cost_sync_credentials['organization_id'])->toBe('atlassian-org')
         ->and($software->cost_sync_credentials['api_token'])->toBe('secret-token')
+        ->and($software->cost_sync_credentials)->not->toHaveKey('email')
         ->and($organization->fresh()->cost_sync_enabled)->toBeTrue();
 });
 
