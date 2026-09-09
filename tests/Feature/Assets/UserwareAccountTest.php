@@ -24,6 +24,48 @@ test('userware show page lists assigned software', function () {
         ->assertSee(__('Assigned software'));
 });
 
+test('userware show page ignores assignments to soft-deleted software', function () {
+    [, $organization] = actingAsOrganizationMember();
+
+    $userware = Userware::factory()->create(['organization_id' => $organization->id]);
+    $software = Software::factory()->seatBased(5)->create([
+        'organization_id' => $organization->id,
+        'name' => 'Retired Suite',
+    ]);
+
+    app(AssignSoftwareSeat::class)->handle($software, $userware);
+    $software->delete();
+
+    Livewire::test('pages::assets.userware.show', ['userware' => $userware])
+        ->assertOk()
+        ->assertDontSee('Retired Suite')
+        ->assertSee(__('No software assigned.'));
+});
+
+test('userware show page handles accounts linked to soft-deleted software', function () {
+    [, $organization] = actingAsOrganizationMember();
+
+    $userware = Userware::factory()->create(['organization_id' => $organization->id]);
+    $software = Software::factory()->create([
+        'organization_id' => $organization->id,
+        'name' => 'Gone Soft',
+    ]);
+
+    UserwareAccount::factory()->forSoftware($software)->create([
+        'organization_id' => $organization->id,
+        'userware_id' => $userware->id,
+        'username' => 'gone.user',
+    ]);
+
+    $software->delete();
+
+    Livewire::test('pages::assets.userware.show', ['userware' => $userware])
+        ->assertOk()
+        ->assertDontSee('Gone Soft')
+        ->assertSee(__('Linked software unavailable'))
+        ->assertSee('gone.user');
+});
+
 test('owners can add a software-linked account to userware', function () {
     [, $organization] = actingAsOrganizationMember();
 

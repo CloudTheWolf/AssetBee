@@ -230,7 +230,7 @@ new #[Title('Userware')] class extends Component {
         <flux:text class="mt-1">{{ __('Licenses assigned to this identity.') }}</flux:text>
 
         <ul class="mt-4 divide-y divide-zinc-200 dark:divide-zinc-700">
-            @forelse ($userware->softwareAssignments as $assignment)
+            @forelse ($userware->softwareAssignments->filter(fn ($assignment) => $assignment->software !== null) as $assignment)
                 <li class="flex items-center justify-between gap-3 py-3">
                     <div class="min-w-0">
                         <a href="{{ route('assets.software.show', $assignment->software) }}" class="font-medium text-accent" wire:navigate>
@@ -271,18 +271,22 @@ new #[Title('Userware')] class extends Component {
             @forelse ($userware->accounts as $account)
                 <li class="flex items-start justify-between gap-3 py-3">
                     <div class="min-w-0">
-                        @if ($account->isLinkedToSoftware())
+                        @if ($account->software)
                             <a href="{{ route('assets.software.show', $account->software) }}" class="font-medium text-accent" wire:navigate>
                                 {{ $account->displayName() }}
                             </a>
                             <flux:text>{{ __('Linked software') }}</flux:text>
                         @else
                             <div class="font-medium">{{ $account->displayName() }}</div>
-                            <flux:text>
-                                <a href="{{ $account->site_url }}" target="_blank" rel="noopener noreferrer" class="text-accent">
-                                    {{ $account->site_url }}
-                                </a>
-                            </flux:text>
+                            @if ($account->site_url)
+                                <flux:text>
+                                    <a href="{{ $account->site_url }}" target="_blank" rel="noopener noreferrer" class="text-accent">
+                                        {{ $account->site_url }}
+                                    </a>
+                                </flux:text>
+                            @elseif ($account->isLinkedToSoftware())
+                                <flux:text>{{ __('Linked software unavailable') }}</flux:text>
+                            @endif
                         @endif
                         @if ($account->username)
                             <flux:text>{{ __('Username') }}: {{ $account->username }}</flux:text>
