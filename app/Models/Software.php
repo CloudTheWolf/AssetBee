@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\AtlassianCostProduct;
 use App\Enums\SoftwareBillingInterval;
 use App\Enums\SoftwareCostSyncProvider;
 use App\Enums\SoftwareLicenseType;
@@ -191,6 +192,7 @@ class Software extends Model
             SoftwareCostSyncProvider::Atlassian => [
                 'organization_id' => (string) ($credentials['organization_id'] ?? ''),
                 'api_token' => '',
+                'products' => AtlassianCostProduct::formDefaults($credentials),
             ],
             SoftwareCostSyncProvider::GoogleWorkspace => [
                 'customer_id' => (string) ($credentials['customer_id'] ?? ''),

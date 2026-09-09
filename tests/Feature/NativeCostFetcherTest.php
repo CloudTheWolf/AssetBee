@@ -13,22 +13,45 @@ use App\Services\Costs\GoogleWorkspaceCostFetcher;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Http;
 
-test('atlassian cost fetcher reads billing details', function () {
+test('atlassian cost fetcher counts billable seats from admin users', function () {
     Http::fake([
-        'https://api.atlassian.com/admin/v1/orgs/org-1/billing-details' => Http::response([
-            'currentBill' => [
-                'amount' => 199.5,
-                'currency' => 'USD',
+        'https://api.atlassian.com/admin/v1/orgs/org-1/users' => Http::response([
+            'data' => [
+                [
+                    'account_id' => '1',
+                    'account_status' => 'active',
+                    'access_billable' => true,
+                    'product_access' => [['key' => 'jira-software', 'name' => 'Jira']],
+                ],
+                [
+                    'account_id' => '2',
+                    'account_status' => 'active',
+                    'access_billable' => false,
+                    'product_access' => [],
+                ],
+                [
+                    'account_id' => '3',
+                    'account_status' => 'inactive',
+                    'access_billable' => true,
+                    'product_access' => [['key' => 'confluence', 'name' => 'Confluence']],
+                ],
             ],
-            'seats' => 25,
+            'links' => [
+                'next' => null,
+            ],
         ]),
     ]);
 
     $software = Software::factory()->create([
+        'currency' => 'USD',
         'cost_sync_provider' => SoftwareCostSyncProvider::Atlassian,
         'cost_sync_credentials' => [
             'organization_id' => 'org-1',
             'api_token' => 'org-api-key',
+            'products' => [
+                'jira' => ['price_per_seat' => 10],
+                'confluence' => ['price_per_seat' => 5],
+            ],
         ],
     ]);
 
@@ -39,13 +62,66 @@ test('atlassian cost fetcher reads billing details', function () {
     );
 
     expect($periods)->toHaveCount(1)
-        ->and($periods[0]->amount)->toBe(199.5)
-        ->and($periods[0]->seatCount)->toBe(25);
+        ->and($periods[0]->amount)->toBe(10.0)
+        ->and($periods[0]->seatCount)->toBe(1)
+        ->and($periods[0]->meta['source'])->toBe('atlassian_product_seats');
 
     Http::assertSent(function ($request) {
-        return $request->url() === 'https://api.atlassian.com/admin/v1/orgs/org-1/billing-details'
+        return $request->url() === 'https://api.atlassian.com/admin/v1/orgs/org-1/users'
             && $request->hasHeader('Authorization', 'Bearer org-api-key');
     });
+});
+
+test('atlassian cost fetcher follows cursor pagination for seat counts', function () {
+    Http::fake([
+        'https://api.atlassian.com/admin/v1/orgs/org-1/users' => Http::response([
+            'data' => [
+                [
+                    'account_id' => '1',
+                    'account_status' => 'active',
+                    'product_access' => [['key' => 'jira-software', 'name' => 'Jira']],
+                ],
+            ],
+            'links' => [
+                'next' => 'cursor-2',
+            ],
+        ]),
+        'https://api.atlassian.com/admin/v1/orgs/org-1/users?cursor=cursor-2' => Http::response([
+            'data' => [
+                [
+                    'account_id' => '2',
+                    'account_status' => 'active',
+                    'product_access' => [['key' => 'jira-software', 'name' => 'Jira']],
+                ],
+            ],
+            'links' => [
+                'next' => null,
+            ],
+        ]),
+    ]);
+
+    $software = Software::factory()->create([
+        'currency' => 'GBP',
+        'cost_sync_provider' => SoftwareCostSyncProvider::Atlassian,
+        'cost_sync_credentials' => [
+            'organization_id' => 'org-1',
+            'api_token' => 'org-api-key',
+            'products' => [
+                'jira' => ['price_per_seat' => 5],
+            ],
+        ],
+    ]);
+
+    $periods = app(AtlassianCostFetcher::class)->fetch(
+        $software,
+        CarbonImmutable::now()->subMonth(),
+        CarbonImmutable::now(),
+    );
+
+    expect($periods[0]->seatCount)->toBe(2)
+        ->and($periods[0]->amount)->toBe(10.0);
+
+    Http::assertSentCount(2);
 });
 
 test('cursor cost fetcher maps team billing payload', function () {

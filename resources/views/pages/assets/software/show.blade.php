@@ -10,6 +10,7 @@ use App\Actions\Assets\SyncAssetCosts;
 use App\Actions\Assets\UnassignSoftwareSeat;
 use App\Actions\Assets\UpdateSoftware;
 use App\Actions\Assets\UpdateSoftwareCostSyncSettings;
+use App\Enums\AtlassianCostProduct;
 use App\Enums\SoftwareBillingInterval;
 use App\Enums\SoftwareCostSyncProvider;
 use App\Enums\SoftwareLicenseType;
@@ -85,6 +86,9 @@ new #[Title('Software')] class extends Component {
     public string $cost_organization_id = '';
 
     public string $cost_api_token = '';
+
+    /** @var list<array{slug: string, label: string, price_per_seat: string, keys: string, name_contains: string, custom: bool}> */
+    public array $cost_atlassian_products = [];
 
     public string $cost_customer_id = '';
 
@@ -173,6 +177,9 @@ new #[Title('Software')] class extends Component {
         $defaults = $this->software->costSyncCredentialFormDefaults();
         $this->cost_organization_id = (string) ($defaults['organization_id'] ?? '');
         $this->cost_api_token = '';
+        $this->cost_atlassian_products = is_array($defaults['products'] ?? null)
+            ? array_values($defaults['products'])
+            : AtlassianCostProduct::formDefaults(null);
         $this->cost_customer_id = (string) ($defaults['customer_id'] ?? '');
         $this->cost_service_account_email = (string) ($defaults['service_account_email'] ?? '');
         $this->cost_service_account_json = '';
@@ -206,9 +213,28 @@ new #[Title('Software')] class extends Component {
 
     public function updatedCostSyncProvider(): void
     {
+        if ($this->cost_sync_provider === SoftwareCostSyncProvider::Atlassian->value && $this->cost_atlassian_products === []) {
+            $this->cost_atlassian_products = AtlassianCostProduct::formDefaults(null);
+        }
+
         if ($this->cost_request_headers === []) {
             $this->cost_request_headers = [['name' => '', 'value' => '']];
         }
+    }
+
+    public function addAtlassianAddon(): void
+    {
+        $this->cost_atlassian_products[] = AtlassianCostProduct::blankAddonFormRow();
+    }
+
+    public function removeAtlassianAddon(int $index): void
+    {
+        if (! isset($this->cost_atlassian_products[$index]) || ! ($this->cost_atlassian_products[$index]['custom'] ?? false)) {
+            return;
+        }
+
+        unset($this->cost_atlassian_products[$index]);
+        $this->cost_atlassian_products = array_values($this->cost_atlassian_products);
     }
 
     public function addCostRequestHeader(): void
@@ -395,6 +421,7 @@ new #[Title('Software')] class extends Component {
             'cost_sync_provider' => $this->cost_sync_provider,
             'organization_id' => $this->cost_organization_id !== '' ? $this->cost_organization_id : null,
             'api_token' => $this->cost_api_token !== '' ? $this->cost_api_token : null,
+            'products' => $this->cost_atlassian_products,
             'customer_id' => $this->cost_customer_id !== '' ? $this->cost_customer_id : null,
             'service_account_email' => $this->cost_service_account_email !== '' ? $this->cost_service_account_email : null,
             'service_account_json' => $this->cost_service_account_json !== '' ? $this->cost_service_account_json : null,
@@ -417,7 +444,15 @@ new #[Title('Software')] class extends Component {
                 'response_seats_path' => $this->cost_response_seats_path,
                 'amount_period' => $this->cost_amount_period,
             ],
-        ])->load(['assignments.userware', 'assignments.key', 'keys.assignment.userware', 'seatManagerUserware', 'costSnapshots']);
+        ])->load([
+            'assignments.userware',
+            'assignments.key',
+            'keys.assignment.userware',
+            'seatManagerUserware',
+            'costSnapshots',
+            'parentSoftware',
+            'childSoftwares',
+        ]);
 
         $this->fillForm();
         $this->fillCostSyncForm();
@@ -565,14 +600,28 @@ new #[Title('Software')] class extends Component {
     @if ($software->childSoftwares->isNotEmpty())
         <div class="rounded-xl border border-zinc-200 p-6 dark:border-zinc-700">
             <flux:heading size="lg">{{ __('Sub-software') }}</flux:heading>
-            <flux:text class="mt-1">{{ __('Products under this suite, such as Jira and Confluence under Atlassian.') }}</flux:text>
-            <ul class="mt-4 space-y-2">
+            <flux:text class="mt-1">{{ __('Product breakdown under this suite. Costs come from seats × price per seat on sync.') }}</flux:text>
+            <ul class="mt-4 divide-y divide-zinc-200 dark:divide-zinc-700">
                 @foreach ($software->childSoftwares as $child)
-                    <li>
-                        <a href="{{ route('assets.software.show', $child) }}" class="font-medium text-accent" wire:navigate>{{ $child->name }}</a>
-                        @if ($child->vendor)
-                            <span class="text-sm text-zinc-500"> · {{ $child->vendor }}</span>
-                        @endif
+                    <li class="flex flex-col gap-1 py-3 sm:flex-row sm:items-center sm:justify-between">
+                        <div>
+                            <a href="{{ route('assets.software.show', $child) }}" class="font-medium text-accent" wire:navigate>{{ $child->name }}</a>
+                            @if ($child->vendor)
+                                <span class="text-sm text-zinc-500"> · {{ $child->vendor }}</span>
+                            @endif
+                        </div>
+                        <div class="text-sm text-zinc-600 dark:text-zinc-300">
+                            @if ($child->total_seats !== null)
+                                {{ $child->total_seats }} {{ __('seats') }}
+                            @endif
+                            @if ($child->formattedBillingAmount())
+                                <span class="text-zinc-400">·</span>
+                                {{ $child->formattedBillingAmount() }}
+                                @if ($child->billing_interval)
+                                    / {{ strtolower($child->billing_interval->label()) }}
+                                @endif
+                            @endif
+                        </div>
                     </li>
                 @endforeach
             </ul>
@@ -678,10 +727,97 @@ new #[Title('Software')] class extends Component {
 
         @if ($cost_sync_provider === SoftwareCostSyncProvider::Atlassian->value)
             <flux:text>
-                {{ __('Use an Atlassian organization API key (Admin → Settings → API keys), not an account email and personal API token.') }}
+                {{ __('Use an organization API key (Admin → Settings → API keys). Sync counts users with product access, multiplies by your price per seat, and updates sub-software for each product.') }}
             </flux:text>
             <flux:input wire:model="cost_organization_id" :label="__('Atlassian organization ID')" :disabled="! auth()->user()->can('update', $software)" />
             <flux:input wire:model="cost_api_token" type="password" :label="__('Organization API key')" :description="$software->hasCostSyncCredentials() ? __('Leave blank to keep the existing key.') : null" :disabled="! auth()->user()->can('update', $software)" />
+            <div class="space-y-4 rounded-lg border border-zinc-200 p-4 dark:border-zinc-700">
+                <div>
+                    <flux:heading size="sm">{{ __('Atlassian products') }}</flux:heading>
+                    <flux:text>{{ __('Set price per seat in :currency. Product keys map to Admin API product_access values.', ['currency' => $currency]) }}</flux:text>
+                </div>
+                @foreach ($cost_atlassian_products as $index => $product)
+                    @continue(! empty($product['custom']))
+                    <div class="grid gap-3 sm:grid-cols-2" wire:key="atlassian-product-{{ $product['slug'] ?: $index }}">
+                        <flux:input
+                            wire:model="cost_atlassian_products.{{ $index }}.price_per_seat"
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            :label="$product['label']"
+                            :disabled="! auth()->user()->can('update', $software)"
+                        />
+                        <flux:input
+                            wire:model="cost_atlassian_products.{{ $index }}.keys"
+                            :label="__('Product keys')"
+                            :description="__('Comma-separated Admin API keys')"
+                            :disabled="! auth()->user()->can('update', $software)"
+                        />
+                        <input type="hidden" wire:model="cost_atlassian_products.{{ $index }}.slug" />
+                        <input type="hidden" wire:model="cost_atlassian_products.{{ $index }}.label" />
+                        <input type="hidden" wire:model="cost_atlassian_products.{{ $index }}.custom" />
+                        <input type="hidden" wire:model="cost_atlassian_products.{{ $index }}.name_contains" />
+                    </div>
+                @endforeach
+            </div>
+
+            <div class="space-y-4 rounded-lg border border-zinc-200 p-4 dark:border-zinc-700">
+                <div class="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                        <flux:heading size="sm">{{ __('Marketplace add-ons') }}</flux:heading>
+                        <flux:text>{{ __('Third-party apps such as Git Integration for Jira. Match by product key and/or name from Admin API product_access.') }}</flux:text>
+                    </div>
+                    @can('update', $software)
+                        <flux:button type="button" size="sm" wire:click="addAtlassianAddon">{{ __('Add add-on') }}</flux:button>
+                    @endcan
+                </div>
+
+                @foreach ($cost_atlassian_products as $index => $product)
+                    @continue(empty($product['custom']))
+                    <div class="space-y-3 rounded-lg border border-zinc-200 p-4 dark:border-zinc-700" wire:key="atlassian-addon-{{ $product['slug'] ?: $index }}">
+                        <div class="flex items-start justify-between gap-3">
+                            <flux:input
+                                wire:model="cost_atlassian_products.{{ $index }}.label"
+                                :label="__('Add-on name')"
+                                :disabled="! auth()->user()->can('update', $software)"
+                                class="flex-1"
+                            />
+                            @can('update', $software)
+                                <flux:button type="button" size="sm" variant="ghost" wire:click="removeAtlassianAddon({{ $index }})" class="mt-7">{{ __('Remove') }}</flux:button>
+                            @endcan
+                        </div>
+                        <div class="grid gap-3 sm:grid-cols-3">
+                            <flux:input
+                                wire:model="cost_atlassian_products.{{ $index }}.price_per_seat"
+                                type="number"
+                                step="0.01"
+                                min="0"
+                                :label="__('Price per seat')"
+                                :disabled="! auth()->user()->can('update', $software)"
+                            />
+                            <flux:input
+                                wire:model="cost_atlassian_products.{{ $index }}.keys"
+                                :label="__('Product keys')"
+                                :description="__('Comma-separated')"
+                                :disabled="! auth()->user()->can('update', $software)"
+                            />
+                            <flux:input
+                                wire:model="cost_atlassian_products.{{ $index }}.name_contains"
+                                :label="__('Name contains')"
+                                :description="__('Fallback match on product name')"
+                                :disabled="! auth()->user()->can('update', $software)"
+                            />
+                        </div>
+                        <input type="hidden" wire:model="cost_atlassian_products.{{ $index }}.slug" />
+                        <input type="hidden" wire:model="cost_atlassian_products.{{ $index }}.custom" />
+                    </div>
+                @endforeach
+
+                @if (collect($cost_atlassian_products)->contains(fn (array $product): bool => ! empty($product['custom'])))
+                @else
+                    <flux:text>{{ __('No Marketplace add-ons configured yet.') }}</flux:text>
+                @endif
+            </div>
         @elseif ($cost_sync_provider === SoftwareCostSyncProvider::GoogleWorkspace->value)
             <div class="flex flex-wrap items-center justify-between gap-3">
                 <flux:text>{{ __('Connect with a service account that has domain-wide delegation.') }}</flux:text>

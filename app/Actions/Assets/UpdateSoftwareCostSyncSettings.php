@@ -2,6 +2,7 @@
 
 namespace App\Actions\Assets;
 
+use App\Enums\AtlassianCostProduct;
 use App\Enums\SoftwareCostSyncProvider;
 use App\Models\Software;
 use Illuminate\Support\Facades\Validator;
@@ -46,6 +47,13 @@ class UpdateSoftwareCostSyncSettings
             'cost_sync_request.response_currency_path' => ['nullable', 'string', 'max:255'],
             'cost_sync_request.response_seats_path' => ['nullable', 'string', 'max:255'],
             'cost_sync_request.amount_period' => ['nullable', 'string', Rule::in(['month', 'as_reported'])],
+            'products' => ['nullable', 'array'],
+            'products.*.slug' => ['nullable', 'string', 'max:100'],
+            'products.*.label' => ['nullable', 'string', 'max:255'],
+            'products.*.price_per_seat' => ['nullable', 'numeric', 'min:0'],
+            'products.*.keys' => ['nullable', 'string', 'max:500'],
+            'products.*.name_contains' => ['nullable', 'string', 'max:255'],
+            'products.*.custom' => ['nullable', 'boolean'],
         ]);
 
         $provider = SoftwareCostSyncProvider::from((string) $input['cost_sync_provider']);
@@ -98,6 +106,39 @@ class UpdateSoftwareCostSyncSettings
                 if (! $software->hasCostSyncCredentials() && blank($input['api_token'] ?? null)) {
                     $validator->errors()->add('api_token', __('The organization API key is required when saving credentials for the first time.'));
                 }
+
+                $hasPricedProduct = false;
+                foreach ($input['products'] ?? [] as $index => $product) {
+                    if (! is_array($product)) {
+                        continue;
+                    }
+
+                    if (is_numeric($product['price_per_seat'] ?? null) && (float) $product['price_per_seat'] > 0) {
+                        $hasPricedProduct = true;
+                    }
+
+                    $isCustom = filter_var($product['custom'] ?? false, FILTER_VALIDATE_BOOLEAN);
+                    if (! $isCustom) {
+                        continue;
+                    }
+
+                    if (blank($product['label'] ?? null)) {
+                        $validator->errors()->add("products.$index.label", __('Add-on name is required.'));
+                    }
+
+                    $hasKeys = filled($product['keys'] ?? null);
+                    $hasNameMatch = filled($product['name_contains'] ?? null);
+                    if (! $hasKeys && ! $hasNameMatch) {
+                        $validator->errors()->add(
+                            "products.$index.keys",
+                            __('Provide a product key or a name match for Marketplace add-ons.'),
+                        );
+                    }
+                }
+
+                if (! $hasPricedProduct) {
+                    $validator->errors()->add('products', __('Set a price per seat for at least one Atlassian product or add-on.'));
+                }
             }
 
             if ($provider === SoftwareCostSyncProvider::GoogleWorkspace) {
@@ -143,6 +184,7 @@ class UpdateSoftwareCostSyncSettings
                 'api_token' => filled($validated['api_token'] ?? null)
                     ? $validated['api_token']
                     : ($existing['api_token'] ?? null),
+                ...$this->mergeAtlassianProducts($existing, $validated['products'] ?? []),
             ],
             SoftwareCostSyncProvider::GoogleWorkspace => [
                 'customer_id' => $validated['customer_id'],
@@ -175,5 +217,119 @@ class UpdateSoftwareCostSyncSettings
             ],
             default => null,
         };
+    }
+
+    /**
+     * @param  array<string, mixed>  $existing
+     * @return array{products: array<string, array<string, mixed>>, addons: list<array<string, mixed>>}
+     */
+    protected function mergeAtlassianProducts(array $existing, mixed $inputProducts): array
+    {
+        $existingProducts = is_array($existing['products'] ?? null) ? $existing['products'] : [];
+        $existingAddonsBySlug = [];
+
+        foreach (AtlassianCostProduct::addonConfigsFromCredentials($existing) as $addon) {
+            $existingAddonsBySlug[$addon['slug']] = $addon;
+        }
+
+        $inputRows = is_array($inputProducts) ? $inputProducts : [];
+        $mergedProducts = [];
+        $mergedAddons = [];
+        $usedAddonSlugs = [];
+
+        foreach ($inputRows as $product) {
+            if (! is_array($product)) {
+                continue;
+            }
+
+            $isCustom = filter_var($product['custom'] ?? false, FILTER_VALIDATE_BOOLEAN);
+
+            if ($isCustom) {
+                $label = trim((string) ($product['label'] ?? ''));
+                if ($label === '') {
+                    continue;
+                }
+
+                $slug = trim((string) ($product['slug'] ?? ''));
+                if ($slug === '' || isset($usedAddonSlugs[$slug]) || AtlassianCostProduct::tryFrom($slug) !== null) {
+                    $slug = AtlassianCostProduct::slugForAddonLabel($label);
+                    $base = $slug;
+                    $suffix = 2;
+                    while (isset($usedAddonSlugs[$slug])) {
+                        $slug = $base.'_'.$suffix;
+                        $suffix++;
+                    }
+                }
+
+                $previous = $existingAddonsBySlug[$slug] ?? [];
+                $keys = AtlassianCostProduct::normalizeKeys($product['keys'] ?? ($previous['keys'] ?? []));
+                $nameContains = trim((string) ($product['name_contains'] ?? ''));
+                if ($nameContains === '') {
+                    $nameContains = is_string($previous['name_contains'] ?? null)
+                        ? (string) $previous['name_contains']
+                        : $label;
+                }
+
+                $price = array_key_exists('price_per_seat', $product) && blank($product['price_per_seat'])
+                    ? 0.0
+                    : (is_numeric($product['price_per_seat'] ?? null)
+                        ? (float) $product['price_per_seat']
+                        : (float) ($previous['price_per_seat'] ?? 0));
+
+                $mergedAddons[] = [
+                    'slug' => $slug,
+                    'label' => $label,
+                    'price_per_seat' => $price,
+                    'keys' => $keys,
+                    'name_contains' => $nameContains,
+                    'child_software_id' => $previous['child_software_id'] ?? null,
+                ];
+                $usedAddonSlugs[$slug] = true;
+
+                continue;
+            }
+
+            $slug = (string) ($product['slug'] ?? '');
+            $enum = AtlassianCostProduct::tryFrom($slug);
+            if ($enum === null) {
+                continue;
+            }
+
+            $previous = is_array($existingProducts[$slug] ?? null) ? $existingProducts[$slug] : [];
+            $resolved = $enum->resolvedConfig(array_merge($previous, $product));
+
+            if (array_key_exists('price_per_seat', $product) && blank($product['price_per_seat'])) {
+                $resolved['price_per_seat'] = 0.0;
+            }
+
+            if (array_key_exists('keys', $product) && filled($product['keys'])) {
+                $resolved['keys'] = AtlassianCostProduct::normalizeKeys($product['keys']);
+            }
+
+            $mergedProducts[$slug] = [
+                'price_per_seat' => $resolved['price_per_seat'],
+                'keys' => $resolved['keys'],
+                'child_software_id' => $resolved['child_software_id'],
+            ];
+        }
+
+        foreach (AtlassianCostProduct::cases() as $product) {
+            if (isset($mergedProducts[$product->value])) {
+                continue;
+            }
+
+            $previous = is_array($existingProducts[$product->value] ?? null) ? $existingProducts[$product->value] : [];
+            $resolved = $product->resolvedConfig($previous);
+            $mergedProducts[$product->value] = [
+                'price_per_seat' => $resolved['price_per_seat'],
+                'keys' => $resolved['keys'],
+                'child_software_id' => $resolved['child_software_id'],
+            ];
+        }
+
+        return [
+            'products' => $mergedProducts,
+            'addons' => $mergedAddons,
+        ];
     }
 }

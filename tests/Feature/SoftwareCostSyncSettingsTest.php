@@ -19,6 +19,7 @@ test('owners can save atlassian cost sync settings on software', function () {
         ->set('cost_sync_provider', SoftwareCostSyncProvider::Atlassian->value)
         ->set('cost_organization_id', 'atlassian-org')
         ->set('cost_api_token', 'secret-token')
+        ->set('cost_atlassian_products.0.price_per_seat', '7.50')
         ->call('saveCostSync')
         ->assertHasNoErrors();
 
@@ -28,6 +29,7 @@ test('owners can save atlassian cost sync settings on software', function () {
         ->and($software->cost_sync_credentials['organization_id'])->toBe('atlassian-org')
         ->and($software->cost_sync_credentials['api_token'])->toBe('secret-token')
         ->and($software->cost_sync_credentials)->not->toHaveKey('email')
+        ->and((float) $software->cost_sync_credentials['products']['jira']['price_per_seat'])->toBe(7.5)
         ->and($organization->fresh()->cost_sync_enabled)->toBeTrue();
 });
 
