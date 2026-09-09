@@ -222,10 +222,20 @@ class OrganizationDashboardInsights
 
         $snapshots = CostSnapshot::query()
             ->where('organization_id', $organization->id)
-            ->whereBetween('period_start', [$windowStart->toDateString(), $windowEnd->toDateString()])
+            ->whereBetween('period_start', [
+                $windowStart->copy()->subMonthNoOverflow()->toDateString(),
+                $windowEnd->toDateString(),
+            ])
             ->get()
             ->filter(fn (CostSnapshot $snapshot): bool => $this->currencyCode($snapshot->currency) === strtoupper($currency))
             ->values();
+
+        $billingFallback = round($this->projectedMonthTotal($recurring, $cloudCosts), 2);
+        $monthBeforeWindow = $currentMonthStart->copy()->subMonthsNoOverflow(6);
+        $baseline = round($this->pastMonthTotal($snapshots, $recurring, $cloudCosts, $monthBeforeWindow), 2);
+        if ($baseline <= 0) {
+            $baseline = $billingFallback;
+        }
 
         foreach ($months as $key => $month) {
             $monthStart = Carbon::createFromFormat('Y-m-d', $key.'-01')->startOfMonth();
@@ -237,7 +247,7 @@ class OrganizationDashboardInsights
             }
 
             if ($month['mode'] === 'estimated' || $month['mode'] === 'both') {
-                $estimated = round($this->projectedMonthTotal($recurring, $cloudCosts), 2);
+                $estimated = $baseline;
             }
 
             $total = match ($month['mode']) {
@@ -249,6 +259,12 @@ class OrganizationDashboardInsights
             $months[$key]['actual'] = $actual;
             $months[$key]['estimated'] = $estimated;
             $months[$key]['total'] = $total;
+
+            $baseline = match ($month['mode']) {
+                'actual' => ($actual !== null && $actual > 0) ? $actual : $baseline,
+                'both', 'estimated' => ($estimated !== null && $estimated > 0) ? $estimated : $baseline,
+                default => $baseline,
+            };
         }
 
         $max = collect($months)->max('total') ?: 0.0;

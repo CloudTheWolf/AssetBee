@@ -101,9 +101,9 @@ test('dashboard insights include cloud tenant and synced licence costs', functio
         ->and($pastForecast['estimated'])->toBeNull()
         ->and($currentForecast['mode'])->toBe('both')
         ->and($currentForecast['actual'])->toBe(90.0)
-        ->and($currentForecast['estimated'])->toBe(125.0)
+        ->and($currentForecast['estimated'])->toBe(163.0)
         ->and($futureForecast['mode'])->toBe('estimated')
-        ->and($futureForecast['estimated'])->toBe(125.0)
+        ->and($futureForecast['estimated'])->toBe(163.0)
         ->and(collect($insights['top_costs'])->pluck('name')->all())
         ->toContain('Synced Licence', 'Prod AWS')
         ->and(collect($insights['top_costs'])->firstWhere('name', 'Prod AWS')['type'])->toBe('cloud_tenant')
@@ -118,17 +118,41 @@ test('previous month stays provisional until the fifth of the following month', 
 
     [, $organization] = actingAsOrganizationMember();
 
-    Software::factory()->recurring('monthly', 50.00)->create([
+    $software = Software::factory()->recurring('monthly', 50.00)->create([
         'organization_id' => $organization->id,
         'currency' => 'GBP',
         'next_billing_at' => now()->startOfMonth()->addDays(10)->toDateString(),
     ]);
 
-    CloudTenant::factory()->aws()->create([
+    $tenant = CloudTenant::factory()->aws()->create([
         'organization_id' => $organization->id,
         'billing_amount' => 75.00,
         'billing_interval' => SoftwareBillingInterval::Monthly,
         'currency' => 'GBP',
+    ]);
+
+    $july = now()->startOfMonth()->subMonthsNoOverflow(2);
+
+    CostSnapshot::factory()->create([
+        'organization_id' => $organization->id,
+        'costable_type' => Software::class,
+        'costable_id' => $software->id,
+        'period_start' => $july->toDateString(),
+        'period_end' => $july->copy()->endOfMonth()->toDateString(),
+        'amount' => 60.00,
+        'currency' => 'GBP',
+        'provider' => CostSyncSource::Atlassian,
+    ]);
+
+    CostSnapshot::factory()->create([
+        'organization_id' => $organization->id,
+        'costable_type' => CloudTenant::class,
+        'costable_id' => $tenant->id,
+        'period_start' => $july->toDateString(),
+        'period_end' => $july->copy()->endOfMonth()->toDateString(),
+        'amount' => 110.00,
+        'currency' => 'GBP',
+        'provider' => CostSyncSource::Aws,
     ]);
 
     $insights = app(OrganizationDashboardInsights::class)->for($organization);
@@ -137,7 +161,7 @@ test('previous month stays provisional until the fifth of the following month', 
     $previous = collect($insights['monthly_forecast'])->firstWhere('key', $previousKey);
 
     expect($previous['mode'])->toBe('both')
-        ->and($previous['estimated'])->toBe(125.0)
+        ->and($previous['estimated'])->toBe(170.0)
         ->and($previous['actual'])->not->toBeNull();
 
     Carbon::setTestNow(Carbon::parse('2026-09-06 12:00:00'));

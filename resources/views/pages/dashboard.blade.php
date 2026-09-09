@@ -71,7 +71,7 @@ new #[Title('Dashboard')] class extends Component {
         <div class="rounded-xl border border-zinc-200 p-5 dark:border-zinc-700">
             <div class="mb-4">
                 <flux:heading size="lg">{{ __('Estimated spend (12 months)') }}</flux:heading>
-                <flux:text>{{ __('Software and cloud costs. Actuals finalize after the 5th of the following month.') }}</flux:text>
+                <flux:text>{{ __('Software and cloud costs. Estimates use the previous month\'s actuals; actuals finalize after the 5th.') }}</flux:text>
             </div>
 
             @if (collect($insights['monthly_forecast'])->sum('total') > 0)
