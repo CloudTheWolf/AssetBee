@@ -15,4 +15,7 @@ parameters:
     ignoreErrors:
         -
             identifier: trait.unused
+            path: app/Livewire/Concerns/ControlsAssetTables.php
+        -
+            identifier: trait.unused
             path: app/Livewire/Concerns/DisplaysCollectedInventory.php
