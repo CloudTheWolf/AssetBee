@@ -86,16 +86,10 @@ class CursorCostFetcher implements FetchesAssetCosts
 
         if ($subscriptionCycleStartMs !== null && $subscriptionCycleStartMs > 0) {
             $periodStart = CarbonImmutable::createFromTimestampMs($subscriptionCycleStartMs)->startOfDay();
-            $periodEnd = now()->startOfDay();
-            if ($periodEnd->lessThan($periodStart)) {
-                $periodEnd = $periodStart;
-            }
+            $periodEnd = $periodStart->addMonthNoOverflow()->subDay()->startOfDay();
         } else {
             $periodStart = CarbonImmutable::parse($to)->startOfMonth()->startOfDay();
-            $periodEnd = CarbonImmutable::parse($to)->endOfMonth()->startOfDay();
-            if ($periodEnd->greaterThan(now())) {
-                $periodEnd = now()->startOfDay();
-            }
+            $periodEnd = $periodStart->endOfMonth()->startOfDay();
         }
 
         return [

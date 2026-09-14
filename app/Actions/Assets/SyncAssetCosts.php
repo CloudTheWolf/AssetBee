@@ -75,6 +75,10 @@ class SyncAssetCosts
         }
     }
 
+    /**
+     * Keep a single snapshot per asset and calendar month. Providers rewrite the
+     * open month with a new period end, which would otherwise insert a duplicate row.
+     */
     protected function upsertSnapshot(Software|CloudTenant $asset, FetchedCostPeriod $period): void
     {
         CostSnapshot::query()->updateOrCreate(
@@ -94,6 +98,17 @@ class SyncAssetCosts
                 'synced_at' => now(),
             ],
         );
+
+        CostSnapshot::query()
+            ->where('costable_type', $asset::class)
+            ->where('costable_id', $asset->id)
+            ->whereDate('period_start', '>=', $period->periodStart->copy()->startOfMonth()->toDateString())
+            ->whereDate('period_start', '<=', $period->periodStart->copy()->endOfMonth()->toDateString())
+            ->where(function ($query) use ($period): void {
+                $query->whereDate('period_start', '!=', $period->periodStart->toDateString())
+                    ->orWhereDate('period_end', '!=', $period->periodEnd->toDateString());
+            })
+            ->delete();
     }
 
     /**

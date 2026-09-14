@@ -91,14 +91,11 @@ class CustomHttpCostFetcher implements FetchesAssetCosts
             [$amount, $currency, $meta] = $this->amountFromResponse($request, $payload, $seatCount);
         }
 
-        $periodEnd = $to->copy()->startOfDay();
+        $periodEnd = $to->copy()->endOfMonth()->startOfDay();
         $periodStart = $from->copy()->startOfMonth()->startOfDay();
         if (($request['amount_period'] ?? 'month') === 'month') {
             $periodStart = $to->copy()->startOfMonth()->startOfDay();
-            $periodEnd = $to->copy()->endOfMonth()->startOfDay();
-            if ($periodEnd->greaterThan(now())) {
-                $periodEnd = now()->startOfDay();
-            }
+            $periodEnd = $periodStart->endOfMonth()->startOfDay();
         }
 
         return [

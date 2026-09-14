@@ -71,7 +71,7 @@ new #[Title('Dashboard')] class extends Component {
         <div class="rounded-xl border border-zinc-200 p-5 dark:border-zinc-700">
             <div class="mb-4">
                 <flux:heading size="lg">{{ __('Estimated spend (12 months)') }}</flux:heading>
-                <flux:text>{{ __('Software and cloud costs. Estimates use the previous month\'s actuals; actuals finalize after the 5th.') }}</flux:text>
+                <flux:text>{{ __('Software and cloud costs. Estimates use the previous month\'s actuals; actuals finalize after the 5th. Hover a month for the three largest costs.') }}</flux:text>
             </div>
 
             @if (collect($insights['monthly_forecast'])->sum('total') > 0)
@@ -99,17 +99,9 @@ new #[Title('Dashboard')] class extends Component {
                                 <div class="border-t border-zinc-200 dark:border-zinc-700"></div>
                             </div>
                             @foreach ($insights['monthly_forecast'] as $month)
-                                @php
-                                    $tooltip = match ($month['mode']) {
-                                        'both' => __('Actual :actual · Est. :estimated', [
-                                            'actual' => $month['formatted_actual'],
-                                            'estimated' => $month['formatted_estimated'],
-                                        ]),
-                                        'actual' => __('Actual :amount', ['amount' => $month['formatted_actual']]),
-                                        default => __('Est. :amount', ['amount' => $month['formatted_estimated']]),
-                                    };
-                                @endphp
-                                <div class="relative z-10 flex h-full flex-1 items-end" title="{{ $tooltip }}">
+                                <div @class([
+                                    'group relative z-10 flex h-full flex-1 items-end hover:z-30',
+                                ])>
                                     <div
                                         class="flex w-full flex-col justify-end overflow-hidden rounded-t-md"
                                         style="height: {{ max($month['percent'], $month['total'] > 0 ? 4 : 0) }}%"
@@ -125,6 +117,32 @@ new #[Title('Dashboard')] class extends Component {
                                                 class="w-full bg-accent/80 dark:bg-accent/70"
                                                 style="height: {{ $month['actual_segment_percent'] }}%"
                                             ></div>
+                                        @endif
+                                    </div>
+                                    <div @class([
+                                        'pointer-events-none absolute bottom-full z-30 mb-2 hidden w-56 rounded-lg border border-zinc-200 bg-white p-2.5 text-left text-xs shadow-lg group-hover:block dark:border-zinc-700 dark:bg-zinc-900',
+                                        'left-0' => $loop->index < 3,
+                                        'right-0' => $loop->index > 8,
+                                        'left-1/2 -translate-x-1/2' => $loop->index >= 3 && $loop->index <= 8,
+                                    ])>
+                                        <div class="font-medium text-zinc-900 dark:text-zinc-100">{{ $month['label'] }}</div>
+                                        @if ($month['formatted_actual'])
+                                            <div class="mt-1.5 font-medium text-zinc-700 dark:text-zinc-200">{{ __('Actual :amount', ['amount' => $month['formatted_actual']]) }}</div>
+                                            @foreach ($month['top_actual'] as $line)
+                                                <div class="mt-0.5 flex items-baseline justify-between gap-2 text-zinc-500">
+                                                    <span class="truncate">{{ $line['name'] }}</span>
+                                                    <span class="shrink-0 tabular-nums">{{ $line['formatted'] }}</span>
+                                                </div>
+                                            @endforeach
+                                        @endif
+                                        @if ($month['formatted_estimated'])
+                                            <div class="mt-1.5 font-medium text-zinc-700 dark:text-zinc-200">{{ __('Est. :amount', ['amount' => $month['formatted_estimated']]) }}</div>
+                                            @foreach ($month['top_estimated'] as $line)
+                                                <div class="mt-0.5 flex items-baseline justify-between gap-2 text-zinc-500">
+                                                    <span class="truncate">{{ $line['name'] }}</span>
+                                                    <span class="shrink-0 tabular-nums">{{ $line['formatted'] }}</span>
+                                                </div>
+                                            @endforeach
                                         @endif
                                     </div>
                                 </div>

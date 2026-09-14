@@ -122,6 +122,52 @@ test('syncing cloud tenant costs updates current billing fields', function () {
         ->and($tenant->cost_synced_at)->not->toBeNull();
 });
 
+test('syncing the same month again replaces the open snapshot instead of duplicating it', function () {
+    [, $organization] = actingAsOrganizationMember();
+
+    $software = Software::factory()->create([
+        'organization_id' => $organization->id,
+        'license_type' => SoftwareLicenseType::Subscription,
+        'cost_sync_provider' => SoftwareCostSyncProvider::Atlassian,
+        'cost_sync_credentials' => [
+            'organization_id' => 'org-1',
+            'email' => 'admin@example.com',
+            'api_token' => 'token',
+        ],
+        'currency' => 'USD',
+    ]);
+
+    $monthStart = CarbonImmutable::now()->startOfMonth();
+
+    CostSnapshot::factory()->create([
+        'organization_id' => $organization->id,
+        'costable_type' => Software::class,
+        'costable_id' => $software->id,
+        'period_start' => $monthStart->toDateString(),
+        'period_end' => $monthStart->addDays(3)->toDateString(),
+        'amount' => 100_000.00,
+        'currency' => 'USD',
+        'provider' => CostSyncSource::Atlassian,
+    ]);
+
+    $this->fakeFetcher->periods = [
+        new FetchedCostPeriod(
+            periodStart: $monthStart,
+            periodEnd: $monthStart->endOfMonth()->startOfDay(),
+            amount: 140.00,
+            currency: 'USD',
+            provider: CostSyncSource::Atlassian,
+        ),
+    ];
+
+    app(SyncAssetCosts::class)->handle($software);
+
+    $snapshots = CostSnapshot::query()->where('costable_id', $software->id)->get();
+
+    expect($snapshots)->toHaveCount(1)
+        ->and((float) $snapshots->first()->amount)->toBe(140.0);
+});
+
 test('failed cost sync stores the error message', function () {
     [, $organization] = actingAsOrganizationMember();
 

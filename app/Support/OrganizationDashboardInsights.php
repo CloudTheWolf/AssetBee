@@ -44,7 +44,9 @@ class OrganizationDashboardInsights
      *         formatted_estimated: string|null,
      *         percent: float,
      *         actual_segment_percent: float,
-     *         estimated_segment_percent: float
+     *         estimated_segment_percent: float,
+     *         top_actual: list<array{name: string, amount: float, formatted: string}>,
+     *         top_estimated: list<array{name: string, amount: float, formatted: string}>
      *     }>,
      *     monthly_forecast_y_axis: list<array{label: string}>,
      *     top_costs: list<array{id: int, type: string, name: string, vendor: string|null, monthly: float, formatted: string, percent: float}>,
@@ -220,7 +222,9 @@ class OrganizationDashboardInsights
      *         formatted_estimated: string|null,
      *         percent: float,
      *         actual_segment_percent: float,
-     *         estimated_segment_percent: float
+     *         estimated_segment_percent: float,
+     *         top_actual: list<array{name: string, amount: float, formatted: string}>,
+     *         top_estimated: list<array{name: string, amount: float, formatted: string}>
      *     }>,
      *     y_axis: list<array{label: string}>
      * }
@@ -249,6 +253,7 @@ class OrganizationDashboardInsights
         $softwareIndex = $this->softwareIndex($recurring);
 
         $snapshots = CostSnapshot::query()
+            ->with('costable')
             ->where('organization_id', $organization->id)
             ->whereBetween('period_start', [
                 $windowStart->copy()->subMonthNoOverflow()->toDateString(),
@@ -260,22 +265,30 @@ class OrganizationDashboardInsights
 
         $billingFallback = round($this->projectedMonthTotal($recurring, $cloudCosts), 2);
         $monthBeforeWindow = $currentMonthStart->copy()->subMonthsNoOverflow(6);
-        $baseline = round($this->pastMonthTotal($snapshots, $recurring, $cloudCosts, $softwareIndex, $monthBeforeWindow), 2);
+        $baselineBreakdown = $this->pastMonthBreakdown($snapshots, $recurring, $cloudCosts, $softwareIndex, $monthBeforeWindow);
+        $baseline = round($baselineBreakdown['total'], 2);
+        $baselineLines = $baselineBreakdown['lines'];
         if ($baseline <= 0) {
             $baseline = $billingFallback;
+            $baselineLines = $this->pastMonthBreakdown(collect(), $recurring, $cloudCosts, $softwareIndex, $currentMonthStart)['lines'];
         }
 
         foreach ($months as $key => $month) {
             $monthStart = Carbon::createFromFormat('Y-m-d', $key.'-01')->startOfMonth();
             $actual = null;
             $estimated = null;
+            $actualLines = [];
+            $estimatedLines = [];
 
             if ($month['mode'] === 'actual' || $month['mode'] === 'both') {
-                $actual = round($this->pastMonthTotal($snapshots, $recurring, $cloudCosts, $softwareIndex, $monthStart), 2);
+                $breakdown = $this->pastMonthBreakdown($snapshots, $recurring, $cloudCosts, $softwareIndex, $monthStart);
+                $actual = round($breakdown['total'], 2);
+                $actualLines = $breakdown['lines'];
             }
 
             if ($month['mode'] === 'estimated' || $month['mode'] === 'both') {
                 $estimated = $baseline;
+                $estimatedLines = $baselineLines;
             }
 
             $total = match ($month['mode']) {
@@ -286,13 +299,14 @@ class OrganizationDashboardInsights
 
             $months[$key]['actual'] = $actual;
             $months[$key]['estimated'] = $estimated;
+            $months[$key]['actual_lines'] = $actualLines;
+            $months[$key]['estimated_lines'] = $estimatedLines;
             $months[$key]['total'] = $total;
 
-            $baseline = match ($month['mode']) {
-                'actual' => ($actual !== null && $actual > 0) ? $actual : $baseline,
-                'both', 'estimated' => ($estimated !== null && $estimated > 0) ? $estimated : $baseline,
-                default => $baseline,
-            };
+            if ($month['mode'] === 'actual' && $actual !== null && $actual > 0) {
+                $baseline = $actual;
+                $baselineLines = $actualLines;
+            }
         }
 
         $dataMax = (float) (collect($months)->max('total') ?: 0.0);
@@ -342,6 +356,8 @@ class OrganizationDashboardInsights
                         'percent' => $columnPercent,
                         'actual_segment_percent' => $actualSegment,
                         'estimated_segment_percent' => $estimatedSegment,
+                        'top_actual' => $this->topCostLines($month['actual_lines'], $currency),
+                        'top_estimated' => $this->topCostLines($month['estimated_lines'], $currency),
                     ];
                 })
                 ->values()
@@ -375,24 +391,26 @@ class OrganizationDashboardInsights
     }
 
     /**
+     * One snapshot per asset for the month. Daily syncs rewrite the current
+     * period with a new end date, so summing every row would multiply the estimate.
+     *
      * @param  Collection<int, CostSnapshot>  $snapshots
      * @param  Collection<int, Software>  $recurring
      * @param  Collection<int, CloudTenant>  $cloudCosts
      * @param  Collection<int, Software>  $softwareIndex
+     * @return array{total: float, lines: list<array{name: string, amount: float}>}
      */
-    private function pastMonthTotal(
+    private function pastMonthBreakdown(
         Collection $snapshots,
         Collection $recurring,
         Collection $cloudCosts,
         Collection $softwareIndex,
         CarbonInterface $monthStart,
-    ): float {
-        $monthKey = $monthStart->format('Y-m');
-        $monthSnapshots = $snapshots->filter(
-            fn (CostSnapshot $snapshot): bool => $snapshot->period_start->format('Y-m') === $monthKey,
-        );
+    ): array {
+        $monthSnapshots = $this->latestSnapshotsForMonth($snapshots, $monthStart->format('Y-m'));
 
         $total = 0.0;
+        $lines = [];
         $coveredRoots = [];
         $coveredCloud = [];
         /** @var array<int, array{parent: float|null, children: float}> $rootAmounts */
@@ -400,14 +418,24 @@ class OrganizationDashboardInsights
 
         foreach ($monthSnapshots as $snapshot) {
             if ($snapshot->costable_type === CloudTenant::class) {
-                $total += (float) $snapshot->amount;
+                $amount = (float) $snapshot->amount;
+                $total += $amount;
                 $coveredCloud[$snapshot->costable_id] = true;
+                $lines[] = [
+                    'name' => $this->cloudSnapshotName($snapshot, $cloudCosts),
+                    'amount' => $amount,
+                ];
 
                 continue;
             }
 
             if ($snapshot->costable_type !== Software::class) {
-                $total += (float) $snapshot->amount;
+                $amount = (float) $snapshot->amount;
+                $total += $amount;
+                $lines[] = [
+                    'name' => $this->costableName($snapshot) ?? __('Other'),
+                    'amount' => $amount,
+                ];
 
                 continue;
             }
@@ -429,10 +457,16 @@ class OrganizationDashboardInsights
 
         foreach ($rootAmounts as $rootId => $parts) {
             $parentAmount = $parts['parent'];
-            $total += ($parentAmount !== null && $parentAmount > 0)
+            $amount = ($parentAmount !== null && $parentAmount > 0)
                 ? $parentAmount
                 : $parts['children'];
+            $total += $amount;
             $coveredRoots[$rootId] = true;
+            $root = $softwareIndex->get($rootId);
+            $lines[] = [
+                'name' => $root instanceof Software ? $root->name : __('Software'),
+                'amount' => $amount,
+            ];
         }
 
         foreach ($recurring as $software) {
@@ -440,7 +474,12 @@ class OrganizationDashboardInsights
                 continue;
             }
 
-            $total += $this->effectiveMonthlyCost($software);
+            $amount = $this->effectiveMonthlyCost($software);
+            $total += $amount;
+            $lines[] = [
+                'name' => $software->name,
+                'amount' => $amount,
+            ];
         }
 
         foreach ($cloudCosts as $tenant) {
@@ -448,10 +487,89 @@ class OrganizationDashboardInsights
                 continue;
             }
 
-            $total += $tenant->monthlyCost() ?? 0.0;
+            $amount = $tenant->monthlyCost() ?? 0.0;
+            $total += $amount;
+            $lines[] = [
+                'name' => $tenant->name,
+                'amount' => $amount,
+            ];
         }
 
-        return $total;
+        return [
+            'total' => $total,
+            'lines' => $lines,
+        ];
+    }
+
+    /**
+     * @param  Collection<int, CostSnapshot>  $snapshots
+     * @return Collection<int, CostSnapshot>
+     */
+    private function latestSnapshotsForMonth(Collection $snapshots, string $monthKey): Collection
+    {
+        return $snapshots
+            ->filter(fn (CostSnapshot $snapshot): bool => $snapshot->period_start->format('Y-m') === $monthKey)
+            ->groupBy(fn (CostSnapshot $snapshot): string => $snapshot->costable_type.'#'.$snapshot->costable_id)
+            ->map(function (Collection $group): CostSnapshot {
+                /** @var CostSnapshot $latest */
+                $latest = $group->sortBy(fn (CostSnapshot $snapshot): string => $snapshot->period_end->toDateString()
+                    .'|'.($snapshot->synced_at?->utc()->format('Y-m-d H:i:s') ?? '')
+                    .'|'.str_pad((string) $snapshot->id, 12, '0', STR_PAD_LEFT))->last();
+
+                return $latest;
+            })
+            ->values();
+    }
+
+    /**
+     * @param  Collection<int, CloudTenant>  $cloudCosts
+     */
+    private function cloudSnapshotName(CostSnapshot $snapshot, Collection $cloudCosts): string
+    {
+        $tenant = $cloudCosts->firstWhere('id', $snapshot->costable_id);
+        if ($tenant instanceof CloudTenant) {
+            return $tenant->name;
+        }
+
+        return $this->costableName($snapshot) ?? __('Cloud');
+    }
+
+    private function costableName(CostSnapshot $snapshot): ?string
+    {
+        $costable = $snapshot->costable;
+
+        if (! $costable instanceof Software && ! $costable instanceof CloudTenant) {
+            return null;
+        }
+
+        return $costable->name !== '' ? $costable->name : null;
+    }
+
+    /**
+     * @param  list<array{name: string, amount: float}>  $lines
+     * @return list<array{name: string, amount: float, formatted: string}>
+     */
+    private function topCostLines(array $lines, string $currency): array
+    {
+        $lines = array_values(array_filter(
+            $lines,
+            fn (array $line): bool => $line['amount'] > 0 && $line['name'] !== '',
+        ));
+
+        usort($lines, fn (array $left, array $right): int => $right['amount'] <=> $left['amount']);
+
+        return array_map(
+            function (array $line) use ($currency): array {
+                $amount = round($line['amount'], 2);
+
+                return [
+                    'name' => $line['name'],
+                    'amount' => $amount,
+                    'formatted' => $this->formatMoney($currency, $amount),
+                ];
+            },
+            array_slice($lines, 0, 3),
+        );
     }
 
     /**

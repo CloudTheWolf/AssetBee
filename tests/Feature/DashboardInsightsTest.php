@@ -385,6 +385,79 @@ test('dashboard insights flag underutilized seats and unassigned hardware', func
         ->and($insights['underutilized_seats'][0]['unused'])->toBe(9);
 });
 
+test('monthly forecast uses the latest snapshot per asset instead of summing daily sync duplicates', function () {
+    Carbon::setTestNow(Carbon::parse('2026-09-15 12:00:00'));
+
+    [, $organization] = actingAsOrganizationMember();
+
+    $software = Software::factory()->recurring('monthly', 250.00)->create([
+        'organization_id' => $organization->id,
+        'name' => 'Atlassian',
+        'currency' => 'GBP',
+    ]);
+
+    $pastMonth = now()->startOfMonth()->subMonthNoOverflow();
+
+    foreach ([1, 10, 20] as $day) {
+        CostSnapshot::factory()->create([
+            'organization_id' => $organization->id,
+            'costable_type' => Software::class,
+            'costable_id' => $software->id,
+            'period_start' => $pastMonth->toDateString(),
+            'period_end' => $pastMonth->copy()->day($day)->toDateString(),
+            'amount' => $day === 20 ? 10_000.00 : 100_000.00,
+            'currency' => 'GBP',
+            'provider' => CostSyncSource::Atlassian,
+            'synced_at' => $pastMonth->copy()->day($day),
+        ]);
+    }
+
+    $insights = app(OrganizationDashboardInsights::class)->for($organization);
+    $pastForecast = collect($insights['monthly_forecast'])->firstWhere('key', $pastMonth->format('Y-m'));
+    $currentForecast = collect($insights['monthly_forecast'])->firstWhere('key', now()->format('Y-m'));
+
+    expect($pastForecast['actual'])->toBe(10_000.0)
+        ->and($pastForecast['top_actual'][0]['name'])->toBe('Atlassian')
+        ->and($pastForecast['top_actual'][0]['formatted'])->toBe('GBP 10,000.00')
+        ->and($currentForecast['estimated'])->toBe(10_000.0)
+        ->and($currentForecast['top_estimated'][0]['name'])->toBe('Atlassian')
+        ->and($currentForecast['top_estimated'][0]['amount'])->toBe(10_000.0)
+        ->and($currentForecast['estimated'])->not->toBe(210_000.0);
+
+    Carbon::setTestNow();
+});
+
+test('month hover breakdown lists the three largest costs', function () {
+    Carbon::setTestNow(Carbon::parse('2026-09-15 12:00:00'));
+
+    [, $organization] = actingAsOrganizationMember();
+
+    foreach ([
+        'Alpha Suite' => 400.00,
+        'Beta Cloud' => 300.00,
+        'Gamma Licence' => 200.00,
+        'Delta Seats' => 50.00,
+    ] as $name => $amount) {
+        Software::factory()->recurring('monthly', $amount)->create([
+            'organization_id' => $organization->id,
+            'name' => $name,
+            'currency' => 'GBP',
+        ]);
+    }
+
+    $insights = app(OrganizationDashboardInsights::class)->for($organization);
+    $currentForecast = collect($insights['monthly_forecast'])->firstWhere('key', now()->format('Y-m'));
+
+    expect($currentForecast['top_estimated'])->toHaveCount(3)
+        ->and(collect($currentForecast['top_estimated'])->pluck('name')->all())
+        ->toBe(['Alpha Suite', 'Beta Cloud', 'Gamma Licence'])
+        ->and($currentForecast['top_actual'])->toHaveCount(3)
+        ->and(collect($currentForecast['top_actual'])->pluck('name')->all())
+        ->toBe(['Alpha Suite', 'Beta Cloud', 'Gamma Licence']);
+
+    Carbon::setTestNow();
+});
+
 test('dashboard page shows estimated spend labels', function () {
     [, $organization] = actingAsOrganizationMember();
 
@@ -398,6 +471,7 @@ test('dashboard page shows estimated spend labels', function () {
         ->assertOk()
         ->assertSee(__('Est. monthly spend'))
         ->assertSee(__('Estimated spend (12 months)'))
+        ->assertSee(__('Hover a month for the three largest costs.'))
         ->assertSee(__('Actual'))
         ->assertSee(__('Estimated'))
         ->assertSee(__('Top costs by month'))

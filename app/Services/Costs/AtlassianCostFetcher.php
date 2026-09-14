@@ -72,10 +72,7 @@ class AtlassianCostFetcher implements FetchesAssetCosts
         }
 
         $periodStart = CarbonImmutable::parse($to)->startOfMonth()->startOfDay();
-        $periodEnd = CarbonImmutable::parse($to)->endOfMonth()->startOfDay();
-        if ($periodEnd->greaterThan(now())) {
-            $periodEnd = now()->startOfDay();
-        }
+        $periodEnd = $periodStart->endOfMonth()->startOfDay();
 
         return [
             new FetchedCostPeriod(
