@@ -5,9 +5,11 @@ use App\Actions\Assets\DeleteVirtualware;
 use App\Enums\VirtualwareCategory;
 use App\Enums\VirtualwareProvider;
 use App\Enums\VirtualwareStatus;
+use App\Livewire\Concerns\ControlsAssetTables;
 use App\Models\Virtualware;
 use App\Support\CurrentOrganization;
 use Flux\Flux;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Title;
@@ -16,6 +18,7 @@ use Livewire\WithPagination;
 
 new #[Title('Virtualware')] class extends Component {
     use AuthorizesRequests;
+    use ControlsAssetTables;
     use WithPagination;
 
     public string $search = '';
@@ -27,10 +30,6 @@ new #[Title('Virtualware')] class extends Component {
     public string $vpcFilter = '';
 
     public string $status = '';
-
-    public string $sortBy = 'name';
-
-    public string $sortDirection = 'asc';
 
     public string $name = '';
 
@@ -74,14 +73,27 @@ new #[Title('Virtualware')] class extends Component {
         $this->resetPage();
     }
 
-    public function sort(string $column): void
+    /**
+     * @return list<string>
+     */
+    protected function sortableColumns(): array
     {
-        if ($this->sortBy === $column) {
-            $this->sortDirection = $this->sortDirection === 'asc' ? 'desc' : 'asc';
-        } else {
-            $this->sortBy = $column;
-            $this->sortDirection = 'asc';
-        }
+        return ['name', 'provider', 'region', 'vpc_id', 'status', 'placement', 'assigned_to'];
+    }
+
+    /**
+     * Sort by the placement label: cloud tenant name, otherwise host hardware name.
+     *
+     * @param  Builder<Virtualware>  $query
+     */
+    protected function orderByPlacement(Builder $query, string $direction): void
+    {
+        $placementName = 'coalesce((select name from cloud_tenants where cloud_tenants.id = virtualwares.cloud_tenant_id and cloud_tenants.deleted_at is null limit 1), (select name from hardwares where hardwares.id = virtualwares.host_hardware_id and hardwares.deleted_at is null limit 1))';
+
+        $query
+            ->orderByRaw($placementName.' is null')
+            ->orderByRaw($placementName.' '.$direction)
+            ->orderBy('virtualwares.id');
     }
 
     public function create(CreateVirtualware $createVirtualware): void
@@ -140,10 +152,10 @@ new #[Title('Virtualware')] class extends Component {
     #[Computed]
     public function virtualwares()
     {
-        $sortable = ['name', 'provider', 'category', 'status', 'region', 'vpc_id'];
-        $sortBy = in_array($this->sortBy, $sortable, true) ? $this->sortBy : 'name';
+        $sortBy = $this->currentSortColumn();
+        $direction = $this->currentSortDirection();
 
-        return Virtualware::query()
+        $virtualwares = Virtualware::query()
             ->with(['assignedUserware', 'hostHardware', 'cloudTenant'])
             ->where('organization_id', CurrentOrganization::require()->id)
             ->when($this->search !== '', function ($query) {
@@ -155,9 +167,17 @@ new #[Title('Virtualware')] class extends Component {
             ->when($this->providerFilter !== '', fn ($query) => $query->where('provider', $this->providerFilter))
             ->when($this->regionFilter !== '', fn ($query) => $query->where('region', $this->regionFilter))
             ->when($this->vpcFilter !== '', fn ($query) => $query->where('vpc_id', $this->vpcFilter))
-            ->when($this->status !== '', fn ($query) => $query->where('status', $this->status))
-            ->orderBy($sortBy, $this->sortDirection === 'desc' ? 'desc' : 'asc')
-            ->paginate(10);
+            ->when($this->status !== '', fn ($query) => $query->where('status', $this->status));
+
+        if ($sortBy === 'assigned_to') {
+            $this->orderByAssignedUserware($virtualwares, $direction);
+        } elseif ($sortBy === 'placement') {
+            $this->orderByPlacement($virtualwares, $direction);
+        } else {
+            $virtualwares->orderBy($sortBy, $direction)->orderBy('id');
+        }
+
+        return $virtualwares->paginate($this->rowsPerPage());
     }
 }; ?>
 
@@ -200,6 +220,7 @@ new #[Title('Virtualware')] class extends Component {
                 <option value="{{ $statusOption->value }}">{{ $statusOption->label() }}</option>
             @endforeach
         </flux:select>
+        <x-asset-table-per-page class="lg:w-40" />
     </div>
 
     <flux:table :paginate="$this->virtualwares">
@@ -209,8 +230,8 @@ new #[Title('Virtualware')] class extends Component {
             <flux:table.column sortable :sorted="$sortBy === 'region'" :direction="$sortDirection" wire:click="sort('region')">{{ __('Region') }}</flux:table.column>
             <flux:table.column sortable :sorted="$sortBy === 'vpc_id'" :direction="$sortDirection" wire:click="sort('vpc_id')">{{ __('VPC / VNet') }}</flux:table.column>
             <flux:table.column sortable :sorted="$sortBy === 'status'" :direction="$sortDirection" wire:click="sort('status')">{{ __('Status') }}</flux:table.column>
-            <flux:table.column>{{ __('Placement') }}</flux:table.column>
-            <flux:table.column>{{ __('Assigned to') }}</flux:table.column>
+            <flux:table.column sortable :sorted="$sortBy === 'placement'" :direction="$sortDirection" wire:click="sort('placement')">{{ __('Placement') }}</flux:table.column>
+            <flux:table.column sortable :sorted="$sortBy === 'assigned_to'" :direction="$sortDirection" wire:click="sort('assigned_to')">{{ __('Assigned to') }}</flux:table.column>
             <flux:table.column></flux:table.column>
         </flux:table.columns>
         <flux:table.rows>

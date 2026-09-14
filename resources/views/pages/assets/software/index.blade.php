@@ -5,9 +5,11 @@ use App\Actions\Assets\DeleteSoftware;
 use App\Enums\SoftwareBillingInterval;
 use App\Enums\SoftwareLicenseType;
 use App\Enums\SoftwareStatus;
+use App\Livewire\Concerns\ControlsAssetTables;
 use App\Models\Software;
 use App\Support\CurrentOrganization;
 use Flux\Flux;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Title;
@@ -16,15 +18,12 @@ use Livewire\WithPagination;
 
 new #[Title('Software')] class extends Component {
     use AuthorizesRequests;
+    use ControlsAssetTables;
     use WithPagination;
 
     public string $search = '';
 
     public string $status = '';
-
-    public string $sortBy = 'name';
-
-    public string $sortDirection = 'asc';
 
     public string $name = '';
 
@@ -67,14 +66,28 @@ new #[Title('Software')] class extends Component {
         $this->resetPage();
     }
 
-    public function sort(string $column): void
+    /**
+     * @return list<string>
+     */
+    protected function sortableColumns(): array
     {
-        if ($this->sortBy === $column) {
-            $this->sortDirection = $this->sortDirection === 'asc' ? 'desc' : 'asc';
-        } else {
-            $this->sortBy = $column;
-            $this->sortDirection = 'asc';
-        }
+        return ['name', 'vendor', 'license_type', 'seats', 'status'];
+    }
+
+    /**
+     * Sort by the number shown in Seats / Billing: seat capacity, key count, or billing amount.
+     *
+     * @param  Builder<Software>  $query
+     */
+    protected function orderBySeatsOrBilling(Builder $query, string $direction): void
+    {
+        $sortExpression = 'case when softwares.license_type = ? then softwares.total_seats when softwares.license_type = ? then (select count(*) from software_keys where software_keys.software_id = softwares.id) when softwares.is_recurring = 1 then softwares.billing_amount end';
+        $bindings = [SoftwareLicenseType::Seat->value, SoftwareLicenseType::Key->value];
+
+        $query
+            ->orderByRaw($sortExpression.' is null', $bindings)
+            ->orderByRaw($sortExpression.' '.$direction, $bindings)
+            ->orderBy('softwares.id');
     }
 
     public function create(CreateSoftware $createSoftware): void
@@ -128,10 +141,10 @@ new #[Title('Software')] class extends Component {
     #[Computed]
     public function softwares()
     {
-        $sortable = ['name', 'vendor', 'license_type', 'status', 'next_billing_at'];
-        $sortBy = in_array($this->sortBy, $sortable, true) ? $this->sortBy : 'name';
+        $sortBy = $this->currentSortColumn();
+        $direction = $this->currentSortDirection();
 
-        return Software::query()
+        $softwares = Software::query()
             ->with(['parentSoftware:id,name'])
             ->withCount(['assignments', 'keys', 'childSoftwares'])
             ->where('organization_id', CurrentOrganization::require()->id)
@@ -141,9 +154,15 @@ new #[Title('Software')] class extends Component {
                         ->orWhere('vendor', 'like', '%'.$this->search.'%');
                 });
             })
-            ->when($this->status !== '', fn ($query) => $query->where('status', $this->status))
-            ->orderBy($sortBy, $this->sortDirection === 'desc' ? 'desc' : 'asc')
-            ->paginate(10);
+            ->when($this->status !== '', fn ($query) => $query->where('status', $this->status));
+
+        if ($sortBy === 'seats') {
+            $this->orderBySeatsOrBilling($softwares, $direction);
+        } else {
+            $softwares->orderBy($sortBy, $direction)->orderBy('id');
+        }
+
+        return $softwares->paginate($this->rowsPerPage());
     }
 }; ?>
 
@@ -168,6 +187,7 @@ new #[Title('Software')] class extends Component {
                 <option value="{{ $statusOption->value }}">{{ $statusOption->label() }}</option>
             @endforeach
         </flux:select>
+        <x-asset-table-per-page />
     </div>
 
     <flux:table :paginate="$this->softwares">
@@ -175,7 +195,7 @@ new #[Title('Software')] class extends Component {
             <flux:table.column sortable :sorted="$sortBy === 'name'" :direction="$sortDirection" wire:click="sort('name')">{{ __('Name') }}</flux:table.column>
             <flux:table.column sortable :sorted="$sortBy === 'vendor'" :direction="$sortDirection" wire:click="sort('vendor')">{{ __('Vendor') }}</flux:table.column>
             <flux:table.column sortable :sorted="$sortBy === 'license_type'" :direction="$sortDirection" wire:click="sort('license_type')">{{ __('License') }}</flux:table.column>
-            <flux:table.column>{{ __('Seats / Billing') }}</flux:table.column>
+            <flux:table.column sortable :sorted="$sortBy === 'seats'" :direction="$sortDirection" wire:click="sort('seats')">{{ __('Seats / Billing') }}</flux:table.column>
             <flux:table.column sortable :sorted="$sortBy === 'status'" :direction="$sortDirection" wire:click="sort('status')">{{ __('Status') }}</flux:table.column>
             <flux:table.column></flux:table.column>
         </flux:table.columns>

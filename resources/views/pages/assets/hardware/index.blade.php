@@ -6,6 +6,7 @@ use App\Enums\BitLockerStatus;
 use App\Enums\HardwareCategory;
 use App\Enums\HardwareOperatingSystem;
 use App\Enums\HardwareStatus;
+use App\Livewire\Concerns\ControlsAssetTables;
 use App\Models\Hardware;
 use App\Support\CurrentOrganization;
 use Flux\Flux;
@@ -18,6 +19,7 @@ use Livewire\WithPagination;
 
 new #[Title('Hardware')] class extends Component {
     use AuthorizesRequests;
+    use ControlsAssetTables;
     use WithPagination;
 
     #[Session]
@@ -28,10 +30,6 @@ new #[Title('Hardware')] class extends Component {
 
     #[Session]
     public string $status = '';
-
-    public string $sortBy = 'name';
-
-    public string $sortDirection = 'asc';
 
     public string $name = '';
 
@@ -100,14 +98,12 @@ new #[Title('Hardware')] class extends Component {
         }
     }
 
-    public function sort(string $column): void
+    /**
+     * @return list<string>
+     */
+    protected function sortableColumns(): array
     {
-        if ($this->sortBy === $column) {
-            $this->sortDirection = $this->sortDirection === 'asc' ? 'desc' : 'asc';
-        } else {
-            $this->sortBy = $column;
-            $this->sortDirection = 'asc';
-        }
+        return ['name', 'asset_tag', 'category', 'status', 'assigned_to'];
     }
 
     public function create(CreateHardware $createHardware): void
@@ -196,10 +192,10 @@ new #[Title('Hardware')] class extends Component {
     #[Computed]
     public function hardwares()
     {
-        $sortable = ['name', 'asset_tag', 'category', 'status'];
-        $sortBy = in_array($this->sortBy, $sortable, true) ? $this->sortBy : 'name';
+        $sortBy = $this->currentSortColumn();
+        $direction = $this->currentSortDirection();
 
-        return Hardware::query()
+        $hardwares = Hardware::query()
             ->with('assignedUserware')
             ->where('organization_id', CurrentOrganization::require()->id)
             ->when($this->search !== '', function ($query) {
@@ -210,9 +206,15 @@ new #[Title('Hardware')] class extends Component {
                 });
             })
             ->when($this->type !== '', fn ($query) => $query->where('category', $this->type))
-            ->when($this->status !== '', fn ($query) => $query->where('status', $this->status))
-            ->orderBy($sortBy, $this->sortDirection === 'desc' ? 'desc' : 'asc')
-            ->paginate(10);
+            ->when($this->status !== '', fn ($query) => $query->where('status', $this->status));
+
+        if ($sortBy === 'assigned_to') {
+            $this->orderByAssignedUserware($hardwares, $direction);
+        } else {
+            $hardwares->orderBy($sortBy, $direction)->orderBy('id');
+        }
+
+        return $hardwares->paginate($this->rowsPerPage());
     }
 }; ?>
 
@@ -243,6 +245,7 @@ new #[Title('Hardware')] class extends Component {
                 <option value="{{ $statusOption->value }}">{{ $statusOption->label() }}</option>
             @endforeach
         </flux:select>
+        <x-asset-table-per-page />
     </div>
 
     <flux:table :paginate="$this->hardwares">
@@ -251,7 +254,7 @@ new #[Title('Hardware')] class extends Component {
             <flux:table.column sortable :sorted="$sortBy === 'asset_tag'" :direction="$sortDirection" wire:click="sort('asset_tag')">{{ __('Asset tag') }}</flux:table.column>
             <flux:table.column sortable :sorted="$sortBy === 'category'" :direction="$sortDirection" wire:click="sort('category')">{{ __('Category') }}</flux:table.column>
             <flux:table.column sortable :sorted="$sortBy === 'status'" :direction="$sortDirection" wire:click="sort('status')">{{ __('Status') }}</flux:table.column>
-            <flux:table.column>{{ __('Assigned to') }}</flux:table.column>
+            <flux:table.column sortable :sorted="$sortBy === 'assigned_to'" :direction="$sortDirection" wire:click="sort('assigned_to')">{{ __('Assigned to') }}</flux:table.column>
             <flux:table.column></flux:table.column>
         </flux:table.columns>
         <flux:table.rows>

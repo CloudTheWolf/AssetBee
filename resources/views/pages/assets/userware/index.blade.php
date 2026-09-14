@@ -4,6 +4,7 @@ use App\Actions\Assets\CreateUserware;
 use App\Actions\Assets\DeleteUserware;
 use App\Actions\Assets\ImportUserwareFromCsv;
 use App\Enums\UserwareStatus;
+use App\Livewire\Concerns\ControlsAssetTables;
 use App\Models\Userware;
 use App\Support\CurrentOrganization;
 use Flux\Flux;
@@ -17,16 +18,13 @@ use Livewire\WithPagination;
 
 new #[Title('Userware')] class extends Component {
     use AuthorizesRequests;
+    use ControlsAssetTables;
     use WithFileUploads;
     use WithPagination;
 
     public string $search = '';
 
     public string $status = '';
-
-    public string $sortBy = 'name';
-
-    public string $sortDirection = 'asc';
 
     public string $name = '';
 
@@ -57,14 +55,12 @@ new #[Title('Userware')] class extends Component {
         $this->resetPage();
     }
 
-    public function sort(string $column): void
+    /**
+     * @return list<string>
+     */
+    protected function sortableColumns(): array
     {
-        if ($this->sortBy === $column) {
-            $this->sortDirection = $this->sortDirection === 'asc' ? 'desc' : 'asc';
-        } else {
-            $this->sortBy = $column;
-            $this->sortDirection = 'asc';
-        }
+        return ['name', 'email', 'department', 'status'];
     }
 
     public function create(CreateUserware $createUserware): void
@@ -121,9 +117,6 @@ new #[Title('Userware')] class extends Component {
     #[Computed]
     public function userwares()
     {
-        $sortable = ['name', 'email', 'department', 'status'];
-        $sortBy = in_array($this->sortBy, $sortable, true) ? $this->sortBy : 'name';
-
         return Userware::query()
             ->where('organization_id', CurrentOrganization::require()->id)
             ->when($this->search !== '', function ($query) {
@@ -134,8 +127,9 @@ new #[Title('Userware')] class extends Component {
                 });
             })
             ->when($this->status !== '', fn ($query) => $query->where('status', $this->status))
-            ->orderBy($sortBy, $this->sortDirection === 'desc' ? 'desc' : 'asc')
-            ->paginate(10);
+            ->orderBy($this->currentSortColumn(), $this->currentSortDirection())
+            ->orderBy('id')
+            ->paginate($this->rowsPerPage());
     }
 }; ?>
 
@@ -166,6 +160,7 @@ new #[Title('Userware')] class extends Component {
                 <option value="{{ $statusOption->value }}">{{ $statusOption->label() }}</option>
             @endforeach
         </flux:select>
+        <x-asset-table-per-page />
     </div>
 
     <flux:table :paginate="$this->userwares">

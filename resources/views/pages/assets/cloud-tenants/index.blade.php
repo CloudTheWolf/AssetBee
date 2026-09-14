@@ -4,6 +4,7 @@ use App\Actions\Assets\CreateCloudTenant;
 use App\Actions\Assets\DeleteCloudTenant;
 use App\Enums\CloudTenantProvider;
 use App\Enums\CloudTenantStatus;
+use App\Livewire\Concerns\ControlsAssetTables;
 use App\Models\CloudTenant;
 use App\Support\CurrentOrganization;
 use Flux\Flux;
@@ -15,15 +16,12 @@ use Livewire\WithPagination;
 
 new #[Title('Cloud Tenants')] class extends Component {
     use AuthorizesRequests;
+    use ControlsAssetTables;
     use WithPagination;
 
     public string $search = '';
 
     public string $status = '';
-
-    public string $sortBy = 'name';
-
-    public string $sortDirection = 'asc';
 
     public string $name = '';
 
@@ -52,14 +50,12 @@ new #[Title('Cloud Tenants')] class extends Component {
         $this->resetPage();
     }
 
-    public function sort(string $column): void
+    /**
+     * @return list<string>
+     */
+    protected function sortableColumns(): array
     {
-        if ($this->sortBy === $column) {
-            $this->sortDirection = $this->sortDirection === 'asc' ? 'desc' : 'asc';
-        } else {
-            $this->sortBy = $column;
-            $this->sortDirection = 'asc';
-        }
+        return ['name', 'provider', 'domain', 'virtualwares', 'status'];
     }
 
     public function create(CreateCloudTenant $createCloudTenant): void
@@ -93,10 +89,10 @@ new #[Title('Cloud Tenants')] class extends Component {
     #[Computed]
     public function cloudTenants()
     {
-        $sortable = ['name', 'provider', 'status', 'domain'];
-        $sortBy = in_array($this->sortBy, $sortable, true) ? $this->sortBy : 'name';
+        $sortBy = $this->currentSortColumn();
+        $direction = $this->currentSortDirection();
 
-        return CloudTenant::query()
+        $tenants = CloudTenant::query()
             ->withCount('virtualwares')
             ->where('organization_id', CurrentOrganization::require()->id)
             ->when($this->search !== '', function ($query) {
@@ -106,9 +102,15 @@ new #[Title('Cloud Tenants')] class extends Component {
                         ->orWhere('external_id', 'like', '%'.$this->search.'%');
                 });
             })
-            ->when($this->status !== '', fn ($query) => $query->where('status', $this->status))
-            ->orderBy($sortBy, $this->sortDirection === 'desc' ? 'desc' : 'asc')
-            ->paginate(10);
+            ->when($this->status !== '', fn ($query) => $query->where('status', $this->status));
+
+        if ($sortBy === 'virtualwares') {
+            $tenants->orderBy('virtualwares_count', $direction);
+        } else {
+            $tenants->orderBy($sortBy, $direction);
+        }
+
+        return $tenants->orderBy('id')->paginate($this->rowsPerPage());
     }
 }; ?>
 
@@ -133,6 +135,7 @@ new #[Title('Cloud Tenants')] class extends Component {
                 <option value="{{ $statusOption->value }}">{{ $statusOption->label() }}</option>
             @endforeach
         </flux:select>
+        <x-asset-table-per-page />
     </div>
 
     <flux:table :paginate="$this->cloudTenants">
@@ -140,7 +143,7 @@ new #[Title('Cloud Tenants')] class extends Component {
             <flux:table.column sortable :sorted="$sortBy === 'name'" :direction="$sortDirection" wire:click="sort('name')">{{ __('Name') }}</flux:table.column>
             <flux:table.column sortable :sorted="$sortBy === 'provider'" :direction="$sortDirection" wire:click="sort('provider')">{{ __('Provider') }}</flux:table.column>
             <flux:table.column sortable :sorted="$sortBy === 'domain'" :direction="$sortDirection" wire:click="sort('domain')">{{ __('Domain') }}</flux:table.column>
-            <flux:table.column>{{ __('Virtualware') }}</flux:table.column>
+            <flux:table.column sortable :sorted="$sortBy === 'virtualwares'" :direction="$sortDirection" wire:click="sort('virtualwares')">{{ __('Virtualware') }}</flux:table.column>
             <flux:table.column sortable :sorted="$sortBy === 'status'" :direction="$sortDirection" wire:click="sort('status')">{{ __('Status') }}</flux:table.column>
             <flux:table.column></flux:table.column>
         </flux:table.columns>
