@@ -2,6 +2,7 @@
 
 use App\Actions\Assets\CreateHardware;
 use App\Actions\Assets\DeleteHardware;
+use App\Actions\Assets\ImportHardwareFromCsv;
 use App\Enums\BitLockerStatus;
 use App\Enums\HardwareCategory;
 use App\Enums\HardwareOperatingSystem;
@@ -15,11 +16,14 @@ use Livewire\Attributes\Computed;
 use Livewire\Attributes\Session;
 use Livewire\Attributes\Title;
 use Livewire\Component;
+use Livewire\Features\SupportFileUploads\TemporaryUploadedFile;
+use Livewire\WithFileUploads;
 use Livewire\WithPagination;
 
 new #[Title('Hardware')] class extends Component {
     use AuthorizesRequests;
     use ControlsAssetTables;
+    use WithFileUploads;
     use WithPagination;
 
     #[Session]
@@ -58,6 +62,8 @@ new #[Title('Hardware')] class extends Component {
     public string $bitlocker_recovery_key = '';
 
     public bool $is_vm_host = false;
+
+    public ?TemporaryUploadedFile $importFile = null;
 
     public function mount(): void
     {
@@ -131,6 +137,28 @@ new #[Title('Hardware')] class extends Component {
 
         Flux::modal('create-hardware')->close();
         Flux::toast(variant: 'success', text: __('Hardware created.'));
+    }
+
+    public function import(ImportHardwareFromCsv $importHardwareFromCsv): void
+    {
+        $this->authorize('create', Hardware::class);
+
+        $this->validate([
+            'importFile' => ['required', 'file', 'extensions:csv,txt', 'max:10240'],
+        ]);
+
+        $result = $importHardwareFromCsv->handle(CurrentOrganization::require(), $this->importFile);
+
+        $this->reset('importFile');
+
+        Flux::modal('import-hardware')->close();
+        Flux::toast(
+            variant: 'success',
+            text: __('Imported :created devices (:skipped skipped).', [
+                'created' => $result['created'],
+                'skipped' => $result['skipped'],
+            ]),
+        );
     }
 
     public function delete(Hardware $hardware, DeleteHardware $deleteHardware): void
@@ -225,9 +253,14 @@ new #[Title('Hardware')] class extends Component {
             <flux:text>{{ __('Physical devices across your organization.') }}</flux:text>
         </div>
         @can('create', App\Models\Hardware::class)
-            <flux:modal.trigger name="create-hardware">
-                <flux:button variant="primary" icon="plus">{{ __('Add hardware') }}</flux:button>
-            </flux:modal.trigger>
+            <div class="flex flex-wrap gap-2">
+                <flux:modal.trigger name="import-hardware">
+                    <flux:button variant="ghost" icon="arrow-up-tray" data-test="import-hardware">{{ __('Import CSV') }}</flux:button>
+                </flux:modal.trigger>
+                <flux:modal.trigger name="create-hardware">
+                    <flux:button variant="primary" icon="plus">{{ __('Add hardware') }}</flux:button>
+                </flux:modal.trigger>
+            </div>
         @endcan
     </div>
 
@@ -309,6 +342,26 @@ new #[Title('Hardware')] class extends Component {
             @endforelse
         </flux:table.rows>
     </flux:table>
+
+    @can('create', App\Models\Hardware::class)
+        <flux:modal name="import-hardware" class="max-w-lg">
+            <form wire:submit="import" class="space-y-6">
+                <div>
+                    <flux:heading size="lg">{{ __('Import hardware') }}</flux:heading>
+                    <flux:text>{{ __('Upload a CSV with Device Name, Name, Email, OS, and Serial Number columns. Existing serial numbers are skipped, and rows without a serial number or email are skipped.') }}</flux:text>
+                </div>
+
+                <flux:input type="file" wire:model="importFile" accept=".csv,text/csv" :label="__('CSV file')" required />
+
+                <div class="flex justify-end gap-2">
+                    <flux:modal.close>
+                        <flux:button variant="ghost">{{ __('Cancel') }}</flux:button>
+                    </flux:modal.close>
+                    <flux:button variant="primary" type="submit" data-test="confirm-import-hardware">{{ __('Import') }}</flux:button>
+                </div>
+            </form>
+        </flux:modal>
+    @endcan
 
     <flux:modal name="create-hardware" class="max-w-lg">
         <form wire:submit="create" class="space-y-6">
