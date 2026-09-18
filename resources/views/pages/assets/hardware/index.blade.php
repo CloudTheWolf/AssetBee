@@ -41,6 +41,9 @@ new #[Title('Hardware')] class extends Component {
     #[Session]
     public string $status = '';
 
+    #[Session]
+    public string $assignee = '';
+
     /** @var list<int|string> */
     public array $selected = [];
 
@@ -96,6 +99,11 @@ new #[Title('Hardware')] class extends Component {
     }
 
     public function updatingStatus(): void
+    {
+        $this->resetPage();
+    }
+
+    public function updatingAssignee(): void
     {
         $this->resetPage();
     }
@@ -354,12 +362,36 @@ new #[Title('Hardware')] class extends Component {
     }
 
     #[Computed]
+    public function assigneeOptions(): array
+    {
+        return [
+            [
+                'value' => '',
+                'label' => __('All assignees'),
+                'keywords' => __('all assignees'),
+            ],
+            [
+                'value' => 'unassigned',
+                'label' => __('Unassigned'),
+                'keywords' => __('unassigned none'),
+            ],
+            ...$this->identities
+                ->map(fn (Userware $identity): array => [
+                    'value' => (string) $identity->id,
+                    'label' => $identity->name,
+                    'keywords' => trim($identity->name.' '.$identity->email),
+                ])
+                ->all(),
+        ];
+    }
+
+    #[Computed]
     public function identities()
     {
         return Userware::query()
             ->where('organization_id', CurrentOrganization::require()->id)
             ->orderBy('name')
-            ->get();
+            ->get(['id', 'name', 'email']);
     }
 
     #[Computed]
@@ -379,7 +411,12 @@ new #[Title('Hardware')] class extends Component {
                 });
             })
             ->when($this->type !== '', fn ($query) => $query->where('category', $this->type))
-            ->when($this->status !== '', fn ($query) => $query->where('status', $this->status));
+            ->when($this->status !== '', fn ($query) => $query->where('status', $this->status))
+            ->when($this->assignee === 'unassigned', fn ($query) => $query->whereNull('assigned_userware_id'))
+            ->when(
+                $this->assignee !== '' && $this->assignee !== 'unassigned',
+                fn ($query) => $query->where('assigned_userware_id', (int) $this->assignee),
+            );
 
         if ($sortBy === 'assigned_to') {
             $this->orderByAssignedUserware($hardwares, $direction);
@@ -409,8 +446,8 @@ new #[Title('Hardware')] class extends Component {
         @endcan
     </div>
 
-    <div class="flex flex-col gap-3 sm:flex-row">
-        <flux:input wire:model.live.debounce.300ms="search" :placeholder="__('Search name, asset tag, serial...')" class="flex-1" />
+    <div class="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+        <flux:input wire:model.live.debounce.300ms="search" :placeholder="__('Search name, asset tag, serial...')" class="flex-1 sm:min-w-56" />
         <flux:select wire:model.live="type" class="sm:w-48">
             <option value="">{{ __('All types') }}</option>
             @foreach (App\Enums\HardwareCategory::cases() as $typeOption)
@@ -423,6 +460,13 @@ new #[Title('Hardware')] class extends Component {
                 <option value="{{ $statusOption->value }}">{{ $statusOption->label() }}</option>
             @endforeach
         </flux:select>
+        <x-searchable-select
+            wire:model.live="assignee"
+            :options="$this->assigneeOptions"
+            :placeholder="__('All assignees')"
+            :search-placeholder="__('Search assignees...')"
+            class="sm:w-64"
+        />
         <x-asset-table-per-page />
     </div>
 
