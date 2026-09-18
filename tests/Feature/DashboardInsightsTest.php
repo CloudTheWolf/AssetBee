@@ -39,6 +39,52 @@ test('dashboard insights estimate monthly and annual software spend', function (
         ->and($insights['upcoming_renewals'])->not->toBeEmpty();
 });
 
+test('upcoming renewals list child products with their own renewal dates', function () {
+    [, $organization] = actingAsOrganizationMember();
+
+    $suite = Software::factory()->recurring('monthly', 300.00)->create([
+        'organization_id' => $organization->id,
+        'name' => 'Atlassian',
+        'vendor' => 'Atlassian',
+        'currency' => 'GBP',
+        'next_billing_at' => now()->addDays(3)->toDateString(),
+    ]);
+
+    Software::factory()->recurring('monthly', 180.00)->create([
+        'organization_id' => $organization->id,
+        'parent_software_id' => $suite->id,
+        'name' => 'Jira',
+        'vendor' => 'Atlassian',
+        'currency' => 'GBP',
+        'next_billing_at' => now()->addDays(5)->toDateString(),
+    ]);
+
+    Software::factory()->recurring('monthly', 120.00)->create([
+        'organization_id' => $organization->id,
+        'parent_software_id' => $suite->id,
+        'name' => 'Confluence',
+        'vendor' => 'Atlassian',
+        'currency' => 'GBP',
+        'next_billing_at' => now()->addDays(20)->toDateString(),
+    ]);
+
+    Software::factory()->recurring('monthly', 50.00)->create([
+        'organization_id' => $organization->id,
+        'name' => 'Standalone App',
+        'currency' => 'GBP',
+        'next_billing_at' => now()->addDays(10)->toDateString(),
+    ]);
+
+    $insights = app(OrganizationDashboardInsights::class)->for($organization);
+    $renewals = collect($insights['upcoming_renewals']);
+
+    expect($renewals->pluck('name')->all())->toBe(['Jira', 'Standalone App', 'Confluence'])
+        ->and($renewals->pluck('name')->all())->not->toContain('Atlassian')
+        ->and($renewals->firstWhere('name', 'Jira')['formatted_amount'])->toBe('GBP 180.00')
+        ->and($renewals->firstWhere('name', 'Confluence')['next_billing_at'])
+        ->toBe(now()->addDays(20)->toDateString());
+});
+
 test('dashboard insights include cloud tenant and synced licence costs', function () {
     Carbon::setTestNow(Carbon::parse('2026-09-15 12:00:00'));
 
@@ -453,9 +499,29 @@ test('month hover breakdown lists the three largest costs', function () {
         ->toBe(['Alpha Suite', 'Beta Cloud', 'Gamma Licence'])
         ->and($currentForecast['top_actual'])->toHaveCount(3)
         ->and(collect($currentForecast['top_actual'])->pluck('name')->all())
-        ->toBe(['Alpha Suite', 'Beta Cloud', 'Gamma Licence']);
+        ->toBe(['Alpha Suite', 'Beta Cloud', 'Gamma Licence'])
+        ->and($insights['monthly_forecast_trend_points'])->not->toBeEmpty()
+        ->and($insights['monthly_forecast_trend_points'])->toContain(',');
 
     Carbon::setTestNow();
+});
+
+test('top costs by month lists at most five items', function () {
+    [, $organization] = actingAsOrganizationMember();
+
+    foreach (range(1, 7) as $index) {
+        Software::factory()->recurring('monthly', 100.00 - $index)->create([
+            'organization_id' => $organization->id,
+            'name' => "Cost {$index}",
+            'currency' => 'GBP',
+        ]);
+    }
+
+    $insights = app(OrganizationDashboardInsights::class)->for($organization);
+
+    expect($insights['top_costs'])->toHaveCount(5)
+        ->and(collect($insights['top_costs'])->pluck('name')->all())
+        ->toBe(['Cost 1', 'Cost 2', 'Cost 3', 'Cost 4', 'Cost 5']);
 });
 
 test('dashboard page shows estimated spend labels', function () {
@@ -474,6 +540,7 @@ test('dashboard page shows estimated spend labels', function () {
         ->assertSee(__('Hover a month for the three largest costs.'))
         ->assertSee(__('Actual'))
         ->assertSee(__('Estimated'))
+        ->assertSee(__('Trend'))
         ->assertSee(__('Top costs by month'))
         ->assertSee('Visible Spend')
         ->assertSee('GBP 50.00')

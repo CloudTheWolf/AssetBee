@@ -49,6 +49,7 @@ class OrganizationDashboardInsights
      *         top_estimated: list<array{name: string, amount: float, formatted: string}>
      *     }>,
      *     monthly_forecast_y_axis: list<array{label: string}>,
+     *     monthly_forecast_trend_points: string,
      *     top_costs: list<array{id: int, type: string, name: string, vendor: string|null, monthly: float, formatted: string, percent: float}>,
      *     upcoming_renewals: list<array{id: int, name: string, amount: float, formatted_amount: string, currency: string, next_billing_at: string}>,
      *     expiring_licenses: list<array{id: int, name: string, expires_at: string}>,
@@ -134,6 +135,7 @@ class OrganizationDashboardInsights
             ],
             'monthly_forecast' => $forecast['months'],
             'monthly_forecast_y_axis' => $forecast['y_axis'],
+            'monthly_forecast_trend_points' => $forecast['trend_points'],
             'top_costs' => $this->topCosts($recurring, $cloudCosts),
             'upcoming_renewals' => $this->upcomingRenewals($recurring),
             'expiring_licenses' => $this->expiringLicenses($organization),
@@ -226,7 +228,8 @@ class OrganizationDashboardInsights
      *         top_actual: list<array{name: string, amount: float, formatted: string}>,
      *         top_estimated: list<array{name: string, amount: float, formatted: string}>
      *     }>,
-     *     y_axis: list<array{label: string}>
+     *     y_axis: list<array{label: string}>,
+     *     trend_points: string
      * }
      */
     private function monthlyForecast(
@@ -312,62 +315,89 @@ class OrganizationDashboardInsights
         $dataMax = (float) (collect($months)->max('total') ?: 0.0);
         $axisMax = $this->niceAxisMax($dataMax);
 
-        return [
-            'months' => array_values(collect($months)
-                ->map(function (array $month) use ($currency, $axisMax): array {
-                    $total = round((float) $month['total'], 2);
-                    $actual = $month['actual'];
-                    $estimated = $month['estimated'];
-                    $columnPercent = $axisMax > 0 ? round(($total / $axisMax) * 100, 1) : 0.0;
+        $mappedMonths = array_values(collect($months)
+            ->map(function (array $month) use ($currency, $axisMax): array {
+                $total = round((float) $month['total'], 2);
+                $actual = $month['actual'];
+                $estimated = $month['estimated'];
+                $columnPercent = $axisMax > 0 ? round(($total / $axisMax) * 100, 1) : 0.0;
 
-                    $actualSegment = 0.0;
-                    $estimatedSegment = 0.0;
+                $actualSegment = 0.0;
+                $estimatedSegment = 0.0;
 
-                    if ($total > 0) {
-                        if ($month['mode'] === 'actual') {
+                if ($total > 0) {
+                    if ($month['mode'] === 'actual') {
+                        $actualSegment = 100.0;
+                    } elseif ($month['mode'] === 'estimated') {
+                        $estimatedSegment = 100.0;
+                    } else {
+                        $actualValue = (float) ($actual ?? 0.0);
+                        $estimatedValue = (float) ($estimated ?? 0.0);
+                        $actualSegment = round(min($actualValue, $total) / $total * 100, 1);
+                        $estimatedSegment = round(max($estimatedValue - $actualValue, 0.0) / $total * 100, 1);
+
+                        if ($actualSegment + $estimatedSegment < 100 && $estimatedValue >= $actualValue) {
+                            $estimatedSegment = round(100 - $actualSegment, 1);
+                        } elseif ($actualSegment + $estimatedSegment < 100) {
                             $actualSegment = 100.0;
-                        } elseif ($month['mode'] === 'estimated') {
-                            $estimatedSegment = 100.0;
-                        } else {
-                            $actualValue = (float) ($actual ?? 0.0);
-                            $estimatedValue = (float) ($estimated ?? 0.0);
-                            $actualSegment = round(min($actualValue, $total) / $total * 100, 1);
-                            $estimatedSegment = round(max($estimatedValue - $actualValue, 0.0) / $total * 100, 1);
-
-                            if ($actualSegment + $estimatedSegment < 100 && $estimatedValue >= $actualValue) {
-                                $estimatedSegment = round(100 - $actualSegment, 1);
-                            } elseif ($actualSegment + $estimatedSegment < 100) {
-                                $actualSegment = 100.0;
-                                $estimatedSegment = 0.0;
-                            }
+                            $estimatedSegment = 0.0;
                         }
                     }
+                }
 
-                    return [
-                        'key' => $month['key'],
-                        'label' => $month['label'],
-                        'mode' => $month['mode'],
-                        'actual' => $actual,
-                        'estimated' => $estimated,
-                        'total' => $total,
-                        'formatted' => $this->formatMoney($currency, $total),
-                        'formatted_actual' => $actual === null ? null : $this->formatMoney($currency, $actual),
-                        'formatted_estimated' => $estimated === null ? null : $this->formatMoney($currency, $estimated),
-                        'percent' => $columnPercent,
-                        'actual_segment_percent' => $actualSegment,
-                        'estimated_segment_percent' => $estimatedSegment,
-                        'top_actual' => $this->topCostLines($month['actual_lines'], $currency),
-                        'top_estimated' => $this->topCostLines($month['estimated_lines'], $currency),
-                    ];
-                })
-                ->values()
-                ->all()),
+                return [
+                    'key' => $month['key'],
+                    'label' => $month['label'],
+                    'mode' => $month['mode'],
+                    'actual' => $actual,
+                    'estimated' => $estimated,
+                    'total' => $total,
+                    'formatted' => $this->formatMoney($currency, $total),
+                    'formatted_actual' => $actual === null ? null : $this->formatMoney($currency, $actual),
+                    'formatted_estimated' => $estimated === null ? null : $this->formatMoney($currency, $estimated),
+                    'percent' => $columnPercent,
+                    'actual_segment_percent' => $actualSegment,
+                    'estimated_segment_percent' => $estimatedSegment,
+                    'top_actual' => $this->topCostLines($month['actual_lines'], $currency),
+                    'top_estimated' => $this->topCostLines($month['estimated_lines'], $currency),
+                ];
+            })
+            ->values()
+            ->all());
+
+        return [
+            'months' => $mappedMonths,
             'y_axis' => [
                 ['label' => $this->formatMoney($currency, $axisMax)],
                 ['label' => $this->formatMoney($currency, round($axisMax / 2, 2))],
                 ['label' => $this->formatMoney($currency, 0.0)],
             ],
+            'trend_points' => $this->forecastTrendPoints($mappedMonths),
         ];
+    }
+
+    /**
+     * SVG polyline points (viewBox 0 0 100 100) through each month column center at its total height.
+     *
+     * @param  list<array{percent: float}>  $months
+     */
+    private function forecastTrendPoints(array $months): string
+    {
+        $count = count($months);
+
+        if ($count === 0) {
+            return '';
+        }
+
+        $points = [];
+
+        foreach ($months as $index => $month) {
+            $x = round((($index + 0.5) / $count) * 100, 2);
+            $y = round(100 - (float) $month['percent'], 2);
+            $points[] = $x.','.$y;
+        }
+
+        return implode(' ', $points);
     }
 
     /**
@@ -690,7 +720,7 @@ class OrganizationDashboardInsights
         $rows = $softwareRows
             ->concat($cloudRows)
             ->sortByDesc('monthly')
-            ->take(8)
+            ->take(5)
             ->values();
 
         $max = $rows->max('monthly') ?: 0.0;
@@ -705,6 +735,8 @@ class OrganizationDashboardInsights
     }
 
     /**
+     * Prefer child products when they have their own renewal dates so suites can renew on different days.
+     *
      * @param  Collection<int, Software>  $recurring
      * @return list<array{id: int, name: string, amount: float, formatted_amount: string, currency: string, next_billing_at: string}>
      */
@@ -712,7 +744,21 @@ class OrganizationDashboardInsights
     {
         $limit = now()->addDays(60)->endOfDay();
 
-        return array_values($recurring
+        $candidates = $recurring
+            ->flatMap(function (Software $software): Collection {
+                $childrenWithRenewals = $software->childSoftwares
+                    ->filter(fn (Software $child): bool => $child->status === SoftwareStatus::Active
+                        && $child->next_billing_at !== null);
+
+                if ($childrenWithRenewals->isNotEmpty()) {
+                    return $childrenWithRenewals->values();
+                }
+
+                return collect([$software]);
+            })
+            ->values();
+
+        return array_values($candidates
             ->filter(fn (Software $software): bool => $software->next_billing_at !== null
                 && $software->next_billing_at->lte($limit))
             ->sortBy('next_billing_at')

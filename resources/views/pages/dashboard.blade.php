@@ -67,129 +67,146 @@ new #[Title('Dashboard')] class extends Component {
         </div>
     </div>
 
-    <div class="grid gap-4 xl:grid-cols-2">
-        <div class="rounded-xl border border-zinc-200 p-5 dark:border-zinc-700">
-            <div class="mb-4">
-                <flux:heading size="lg">{{ __('Estimated spend (12 months)') }}</flux:heading>
-                <flux:text>{{ __('Software and cloud costs. Estimates use the previous month\'s actuals; actuals finalize after the 5th. Hover a month for the three largest costs.') }}</flux:text>
-            </div>
+    <div class="rounded-xl border border-zinc-200 p-5 dark:border-zinc-700">
+        <div class="mb-4">
+            <flux:heading size="lg">{{ __('Estimated spend (12 months)') }}</flux:heading>
+            <flux:text>{{ __('Software and cloud costs. Estimates use the previous month\'s actuals; actuals finalize after the 5th. Hover a month for the three largest costs.') }}</flux:text>
+        </div>
 
-            @if (collect($insights['monthly_forecast'])->sum('total') > 0)
-                <div class="mb-3 flex flex-wrap items-center gap-4 text-xs text-zinc-500">
-                    <span class="inline-flex items-center gap-1.5">
-                        <span class="size-2.5 rounded-sm bg-accent/80 dark:bg-accent/70"></span>
-                        {{ __('Actual') }}
-                    </span>
-                    <span class="inline-flex items-center gap-1.5">
-                        <span class="size-2.5 rounded-sm bg-zinc-300 dark:bg-zinc-600"></span>
-                        {{ __('Estimated') }}
-                    </span>
+        @if (collect($insights['monthly_forecast'])->sum('total') > 0)
+            <div class="mb-3 flex flex-wrap items-center gap-4 text-xs text-zinc-500">
+                <span class="inline-flex items-center gap-1.5">
+                    <span class="size-2.5 rounded-sm bg-accent/80 dark:bg-accent/70"></span>
+                    {{ __('Actual') }}
+                </span>
+                <span class="inline-flex items-center gap-1.5">
+                    <span class="size-2.5 rounded-sm bg-zinc-300 dark:bg-zinc-600"></span>
+                    {{ __('Estimated') }}
+                </span>
+                <span class="inline-flex items-center gap-1.5">
+                    <span class="h-0 w-4 border-t-2 border-dashed border-zinc-500 dark:border-zinc-400"></span>
+                    {{ __('Trend') }}
+                </span>
+            </div>
+            <div class="flex gap-3">
+                <div class="flex h-40 shrink-0 flex-col justify-between py-0.5 text-right text-xs tabular-nums text-zinc-500">
+                    @foreach ($insights['monthly_forecast_y_axis'] as $tick)
+                        <span>{{ $tick['label'] }}</span>
+                    @endforeach
                 </div>
-                <div class="flex gap-3">
-                    <div class="flex h-40 shrink-0 flex-col justify-between py-0.5 text-right text-xs tabular-nums text-zinc-500">
-                        @foreach ($insights['monthly_forecast_y_axis'] as $tick)
-                            <span>{{ $tick['label'] }}</span>
+                <div class="flex min-w-0 flex-1 flex-col">
+                    <div class="relative flex h-40 items-end gap-2 border-l border-zinc-200 pl-2 dark:border-zinc-700">
+                        <div class="pointer-events-none absolute inset-y-0 left-0 right-0 flex flex-col justify-between py-0.5">
+                            <div class="border-t border-dashed border-zinc-200 dark:border-zinc-700"></div>
+                            <div class="border-t border-dashed border-zinc-200 dark:border-zinc-700"></div>
+                            <div class="border-t border-zinc-200 dark:border-zinc-700"></div>
+                        </div>
+                        @if ($insights['monthly_forecast_trend_points'] !== '')
+                            <svg class="pointer-events-none absolute inset-0 z-20 h-full w-full overflow-visible" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+                                <polyline
+                                    fill="none"
+                                    stroke="currentColor"
+                                    class="text-zinc-500 dark:text-zinc-400"
+                                    stroke-width="1.5"
+                                    stroke-dasharray="3 2"
+                                    stroke-linecap="round"
+                                    stroke-linejoin="round"
+                                    vector-effect="non-scaling-stroke"
+                                    points="{{ $insights['monthly_forecast_trend_points'] }}"
+                                />
+                            </svg>
+                        @endif
+                        @foreach ($insights['monthly_forecast'] as $month)
+                            <div @class([
+                                'group relative z-10 flex h-full flex-1 items-end hover:z-30',
+                            ])>
+                                <div
+                                    class="flex w-full flex-col justify-end overflow-hidden rounded-t-md"
+                                    style="height: {{ max($month['percent'], $month['total'] > 0 ? 4 : 0) }}%"
+                                >
+                                    @if ($month['estimated_segment_percent'] > 0)
+                                        <div
+                                            class="w-full bg-zinc-300 dark:bg-zinc-600"
+                                            style="height: {{ $month['estimated_segment_percent'] }}%"
+                                        ></div>
+                                    @endif
+                                    @if ($month['actual_segment_percent'] > 0)
+                                        <div
+                                            class="w-full bg-accent/80 dark:bg-accent/70"
+                                            style="height: {{ $month['actual_segment_percent'] }}%"
+                                        ></div>
+                                    @endif
+                                </div>
+                                <div @class([
+                                    'pointer-events-none absolute bottom-full z-30 mb-2 hidden w-56 rounded-lg border border-zinc-200 bg-white p-2.5 text-left text-xs shadow-lg group-hover:block dark:border-zinc-700 dark:bg-zinc-900',
+                                    'left-0' => $loop->index < 3,
+                                    'right-0' => $loop->index > 8,
+                                    'left-1/2 -translate-x-1/2' => $loop->index >= 3 && $loop->index <= 8,
+                                ])>
+                                    <div class="font-medium text-zinc-900 dark:text-zinc-100">{{ $month['label'] }}</div>
+                                    @if ($month['formatted_actual'])
+                                        <div class="mt-1.5 font-medium text-zinc-700 dark:text-zinc-200">{{ __('Actual :amount', ['amount' => $month['formatted_actual']]) }}</div>
+                                        @foreach ($month['top_actual'] as $line)
+                                            <div class="mt-0.5 flex items-baseline justify-between gap-2 text-zinc-500">
+                                                <span class="truncate">{{ $line['name'] }}</span>
+                                                <span class="shrink-0 tabular-nums">{{ $line['formatted'] }}</span>
+                                            </div>
+                                        @endforeach
+                                    @endif
+                                    @if ($month['formatted_estimated'])
+                                        <div class="mt-1.5 font-medium text-zinc-700 dark:text-zinc-200">{{ __('Est. :amount', ['amount' => $month['formatted_estimated']]) }}</div>
+                                        @foreach ($month['top_estimated'] as $line)
+                                            <div class="mt-0.5 flex items-baseline justify-between gap-2 text-zinc-500">
+                                                <span class="truncate">{{ $line['name'] }}</span>
+                                                <span class="shrink-0 tabular-nums">{{ $line['formatted'] }}</span>
+                                            </div>
+                                        @endforeach
+                                    @endif
+                                </div>
+                            </div>
                         @endforeach
                     </div>
-                    <div class="flex min-w-0 flex-1 flex-col">
-                        <div class="relative flex h-40 items-end gap-2 border-l border-zinc-200 pl-2 dark:border-zinc-700">
-                            <div class="pointer-events-none absolute inset-y-0 left-0 right-0 flex flex-col justify-between py-0.5">
-                                <div class="border-t border-dashed border-zinc-200 dark:border-zinc-700"></div>
-                                <div class="border-t border-dashed border-zinc-200 dark:border-zinc-700"></div>
-                                <div class="border-t border-zinc-200 dark:border-zinc-700"></div>
-                            </div>
-                            @foreach ($insights['monthly_forecast'] as $month)
-                                <div @class([
-                                    'group relative z-10 flex h-full flex-1 items-end hover:z-30',
-                                ])>
-                                    <div
-                                        class="flex w-full flex-col justify-end overflow-hidden rounded-t-md"
-                                        style="height: {{ max($month['percent'], $month['total'] > 0 ? 4 : 0) }}%"
-                                    >
-                                        @if ($month['estimated_segment_percent'] > 0)
-                                            <div
-                                                class="w-full bg-zinc-300 dark:bg-zinc-600"
-                                                style="height: {{ $month['estimated_segment_percent'] }}%"
-                                            ></div>
-                                        @endif
-                                        @if ($month['actual_segment_percent'] > 0)
-                                            <div
-                                                class="w-full bg-accent/80 dark:bg-accent/70"
-                                                style="height: {{ $month['actual_segment_percent'] }}%"
-                                            ></div>
-                                        @endif
-                                    </div>
-                                    <div @class([
-                                        'pointer-events-none absolute bottom-full z-30 mb-2 hidden w-56 rounded-lg border border-zinc-200 bg-white p-2.5 text-left text-xs shadow-lg group-hover:block dark:border-zinc-700 dark:bg-zinc-900',
-                                        'left-0' => $loop->index < 3,
-                                        'right-0' => $loop->index > 8,
-                                        'left-1/2 -translate-x-1/2' => $loop->index >= 3 && $loop->index <= 8,
-                                    ])>
-                                        <div class="font-medium text-zinc-900 dark:text-zinc-100">{{ $month['label'] }}</div>
-                                        @if ($month['formatted_actual'])
-                                            <div class="mt-1.5 font-medium text-zinc-700 dark:text-zinc-200">{{ __('Actual :amount', ['amount' => $month['formatted_actual']]) }}</div>
-                                            @foreach ($month['top_actual'] as $line)
-                                                <div class="mt-0.5 flex items-baseline justify-between gap-2 text-zinc-500">
-                                                    <span class="truncate">{{ $line['name'] }}</span>
-                                                    <span class="shrink-0 tabular-nums">{{ $line['formatted'] }}</span>
-                                                </div>
-                                            @endforeach
-                                        @endif
-                                        @if ($month['formatted_estimated'])
-                                            <div class="mt-1.5 font-medium text-zinc-700 dark:text-zinc-200">{{ __('Est. :amount', ['amount' => $month['formatted_estimated']]) }}</div>
-                                            @foreach ($month['top_estimated'] as $line)
-                                                <div class="mt-0.5 flex items-baseline justify-between gap-2 text-zinc-500">
-                                                    <span class="truncate">{{ $line['name'] }}</span>
-                                                    <span class="shrink-0 tabular-nums">{{ $line['formatted'] }}</span>
-                                                </div>
-                                            @endforeach
-                                        @endif
-                                    </div>
-                                </div>
-                            @endforeach
-                        </div>
-                        <div class="mt-2 flex gap-2 pl-2">
-                            @foreach ($insights['monthly_forecast'] as $month)
-                                <div class="flex-1 text-center text-xs text-zinc-500">{{ $month['label'] }}</div>
-                            @endforeach
-                        </div>
+                    <div class="mt-2 flex gap-2 pl-2">
+                        @foreach ($insights['monthly_forecast'] as $month)
+                            <div class="flex-1 text-center text-xs text-zinc-500">{{ $month['label'] }}</div>
+                        @endforeach
                     </div>
                 </div>
-            @else
-                <flux:text>{{ __('Add recurring billing or sync licence and cloud costs to see a spend forecast.') }}</flux:text>
-            @endif
-        </div>
-
-        <div class="rounded-xl border border-zinc-200 p-5 dark:border-zinc-700">
-            <div class="mb-4">
-                <flux:heading size="lg">{{ __('Top costs by month') }}</flux:heading>
-                <flux:text>{{ __('Top-level software suites and cloud tenants, normalized to monthly.') }}</flux:text>
             </div>
+        @else
+            <flux:text>{{ __('Add recurring billing or sync licence and cloud costs to see a spend forecast.') }}</flux:text>
+        @endif
+    </div>
 
-            @forelse ($insights['top_costs'] as $cost)
-                @php
-                    $costUrl = $cost['type'] === 'cloud_tenant'
-                        ? route('assets.cloud-tenants.show', $cost['id'])
-                        : route('assets.software.show', $cost['id']);
-                @endphp
-                <a href="{{ $costUrl }}" wire:navigate class="mb-3 block last:mb-0">
-                    <div class="mb-1 flex items-center justify-between gap-3">
-                        <div class="min-w-0">
-                            <div class="truncate font-medium">{{ $cost['name'] }}</div>
-                            @if ($cost['vendor'])
-                                <flux:text class="truncate">{{ $cost['vendor'] }}</flux:text>
-                            @endif
-                        </div>
-                        <div class="shrink-0 tabular-nums text-sm font-medium">{{ $cost['formatted'] }}</div>
-                    </div>
-                    <div class="h-2 overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
-                        <div class="h-full rounded-full bg-accent" style="width: {{ $cost['percent'] }}%"></div>
-                    </div>
-                </a>
-            @empty
-                <flux:text>{{ __('No recurring or synced costs recorded yet.') }}</flux:text>
-            @endforelse
+    <div class="rounded-xl border border-zinc-200 p-5 dark:border-zinc-700">
+        <div class="mb-4">
+            <flux:heading size="lg">{{ __('Top costs by month') }}</flux:heading>
+            <flux:text>{{ __('Top-level software suites and cloud tenants, normalized to monthly.') }}</flux:text>
         </div>
+
+        @forelse ($insights['top_costs'] as $cost)
+            @php
+                $costUrl = $cost['type'] === 'cloud_tenant'
+                    ? route('assets.cloud-tenants.show', $cost['id'])
+                    : route('assets.software.show', $cost['id']);
+            @endphp
+            <a href="{{ $costUrl }}" wire:navigate class="mb-3 block last:mb-0">
+                <div class="mb-1 flex items-center justify-between gap-3">
+                    <div class="min-w-0">
+                        <div class="truncate font-medium">{{ $cost['name'] }}</div>
+                        @if ($cost['vendor'])
+                            <flux:text class="truncate">{{ $cost['vendor'] }}</flux:text>
+                        @endif
+                    </div>
+                    <div class="shrink-0 tabular-nums text-sm font-medium">{{ $cost['formatted'] }}</div>
+                </div>
+                <div class="h-2 overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
+                    <div class="h-full rounded-full bg-accent" style="width: {{ $cost['percent'] }}%"></div>
+                </div>
+            </a>
+        @empty
+            <flux:text>{{ __('No recurring or synced costs recorded yet.') }}</flux:text>
+        @endforelse
     </div>
 
     <div class="grid gap-4 lg:grid-cols-3">
