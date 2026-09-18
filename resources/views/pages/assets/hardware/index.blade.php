@@ -1,5 +1,8 @@
 <?php
 
+use App\Actions\Assets\BulkAssignHardware;
+use App\Actions\Assets\BulkDeleteHardware;
+use App\Actions\Assets\BulkUpdateHardwareStatus;
 use App\Actions\Assets\CreateHardware;
 use App\Actions\Assets\DeleteHardware;
 use App\Actions\Assets\ImportHardwareFromCsv;
@@ -9,9 +12,12 @@ use App\Enums\HardwareOperatingSystem;
 use App\Enums\HardwareStatus;
 use App\Livewire\Concerns\ControlsAssetTables;
 use App\Models\Hardware;
+use App\Models\Userware;
 use App\Support\CurrentOrganization;
 use Flux\Flux;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
+use Illuminate\Support\Collection;
+use Illuminate\Validation\ValidationException;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Session;
 use Livewire\Attributes\Title;
@@ -34,6 +40,11 @@ new #[Title('Hardware')] class extends Component {
 
     #[Session]
     public string $status = '';
+
+    /** @var list<int|string> */
+    public array $selected = [];
+
+    public bool $selectPage = false;
 
     public string $name = '';
 
@@ -65,6 +76,10 @@ new #[Title('Hardware')] class extends Component {
 
     public ?TemporaryUploadedFile $importFile = null;
 
+    public string $bulkStatus = 'available';
+
+    public string $bulkAssignedUserwareId = '';
+
     public function mount(): void
     {
         $this->authorize('viewAny', Hardware::class);
@@ -83,6 +98,35 @@ new #[Title('Hardware')] class extends Component {
     public function updatingStatus(): void
     {
         $this->resetPage();
+    }
+
+    public function updatedSelectPage(bool $value): void
+    {
+        $pageIds = $this->hardwares
+            ->getCollection()
+            ->pluck('id')
+            ->map(fn (int $id): string => (string) $id)
+            ->all();
+
+        if ($value) {
+            $this->selected = array_values(array_unique([
+                ...array_map(fn (mixed $id): string => (string) $id, $this->selected),
+                ...$pageIds,
+            ]));
+
+            return;
+        }
+
+        $this->selected = array_values(array_diff(
+            array_map(fn (mixed $id): string => (string) $id, $this->selected),
+            $pageIds,
+        ));
+    }
+
+    public function clearSelection(): void
+    {
+        $this->selected = [];
+        $this->selectPage = false;
     }
 
     public function updatedCategory(): void
@@ -109,7 +153,7 @@ new #[Title('Hardware')] class extends Component {
      */
     protected function sortableColumns(): array
     {
-        return ['name', 'asset_tag', 'category', 'status', 'assigned_to'];
+        return ['name', 'asset_tag', 'serial_number', 'category', 'status', 'assigned_to'];
     }
 
     public function create(CreateHardware $createHardware): void
@@ -158,6 +202,61 @@ new #[Title('Hardware')] class extends Component {
                 'created' => $result['created'],
                 'skipped' => $result['skipped'],
             ]),
+        );
+    }
+
+    public function bulkUpdateStatus(BulkUpdateHardwareStatus $bulkUpdateHardwareStatus): void
+    {
+        $hardwares = $this->authorizeSelectedHardwares('update');
+
+        $result = $bulkUpdateHardwareStatus->handle($hardwares, $this->bulkStatus);
+
+        $this->clearSelection();
+        $this->bulkStatus = HardwareStatus::Available->value;
+
+        Flux::modal('bulk-change-status')->close();
+        Flux::toast(
+            variant: 'success',
+            text: __('Updated status for :count devices.', ['count' => $result['updated']]),
+        );
+    }
+
+    public function bulkAssign(BulkAssignHardware $bulkAssignHardware): void
+    {
+        $hardwares = $this->authorizeSelectedHardwares('assign');
+
+        $userware = $this->bulkAssignedUserwareId !== ''
+            ? Userware::query()
+                ->where('organization_id', CurrentOrganization::require()->id)
+                ->findOrFail($this->bulkAssignedUserwareId)
+            : null;
+
+        $result = $bulkAssignHardware->handle($hardwares, $userware);
+
+        $this->clearSelection();
+        $this->bulkAssignedUserwareId = '';
+
+        Flux::modal('bulk-assign')->close();
+        Flux::toast(
+            variant: 'success',
+            text: __('Assigned :assigned devices (:skipped skipped).', [
+                'assigned' => $result['assigned'],
+                'skipped' => $result['skipped'],
+            ]),
+        );
+    }
+
+    public function bulkDelete(BulkDeleteHardware $bulkDeleteHardware): void
+    {
+        $hardwares = $this->authorizeSelectedHardwares('delete');
+
+        $result = $bulkDeleteHardware->handle($hardwares);
+
+        $this->clearSelection();
+
+        Flux::toast(
+            variant: 'success',
+            text: __('Deleted :count devices.', ['count' => $result['deleted']]),
         );
     }
 
@@ -215,6 +314,52 @@ new #[Title('Hardware')] class extends Component {
     protected function selectedOperatingSystem(): ?HardwareOperatingSystem
     {
         return HardwareOperatingSystem::tryFrom($this->operating_system);
+    }
+
+    /**
+     * @return Collection<int, Hardware>
+     *
+     * @throws ValidationException
+     */
+    protected function authorizeSelectedHardwares(string $ability): Collection
+    {
+        $ids = collect($this->selected)
+            ->map(fn (mixed $id): int => (int) $id)
+            ->filter(fn (int $id): bool => $id > 0)
+            ->unique()
+            ->values();
+
+        if ($ids->isEmpty()) {
+            throw ValidationException::withMessages([
+                'selected' => __('Select at least one device.'),
+            ]);
+        }
+
+        $hardwares = CurrentOrganization::require()
+            ->hardwares()
+            ->whereIn('id', $ids->all())
+            ->get();
+
+        if ($hardwares->isEmpty()) {
+            throw ValidationException::withMessages([
+                'selected' => __('Select at least one device.'),
+            ]);
+        }
+
+        foreach ($hardwares as $hardware) {
+            $this->authorize($ability, $hardware);
+        }
+
+        return $hardwares;
+    }
+
+    #[Computed]
+    public function identities()
+    {
+        return Userware::query()
+            ->where('organization_id', CurrentOrganization::require()->id)
+            ->orderBy('name')
+            ->get();
     }
 
     #[Computed]
@@ -281,10 +426,41 @@ new #[Title('Hardware')] class extends Component {
         <x-asset-table-per-page />
     </div>
 
+    @if (count($selected) > 0)
+        <div class="flex flex-col gap-3 rounded-xl border border-zinc-200 bg-zinc-50 p-4 sm:flex-row sm:items-center sm:justify-between dark:border-zinc-700 dark:bg-zinc-900" data-test="hardware-bulk-actions">
+            <flux:text>{{ __(':count selected', ['count' => count($selected)]) }}</flux:text>
+            <div class="flex flex-wrap gap-2">
+                <flux:modal.trigger name="bulk-change-status">
+                    <flux:button variant="ghost" size="sm" icon="arrow-path" data-test="bulk-change-status">{{ __('Change status') }}</flux:button>
+                </flux:modal.trigger>
+                <flux:modal.trigger name="bulk-assign">
+                    <flux:button variant="ghost" size="sm" icon="user-plus" data-test="bulk-assign">{{ __('Assign') }}</flux:button>
+                </flux:modal.trigger>
+                <flux:button
+                    variant="danger"
+                    size="sm"
+                    icon="trash"
+                    wire:click="bulkDelete"
+                    wire:confirm="{{ __('Delete the selected hardware?') }}"
+                    data-test="bulk-delete"
+                >
+                    {{ __('Delete') }}
+                </flux:button>
+                <flux:button variant="ghost" size="sm" wire:click="clearSelection">{{ __('Clear') }}</flux:button>
+            </div>
+        </div>
+    @endif
+
     <flux:table :paginate="$this->hardwares">
         <flux:table.columns>
+            @can('create', App\Models\Hardware::class)
+                <flux:table.column class="w-10">
+                    <flux:checkbox wire:model.live="selectPage" />
+                </flux:table.column>
+            @endcan
             <flux:table.column sortable :sorted="$sortBy === 'name'" :direction="$sortDirection" wire:click="sort('name')">{{ __('Name') }}</flux:table.column>
             <flux:table.column sortable :sorted="$sortBy === 'asset_tag'" :direction="$sortDirection" wire:click="sort('asset_tag')">{{ __('Asset tag') }}</flux:table.column>
+            <flux:table.column sortable :sorted="$sortBy === 'serial_number'" :direction="$sortDirection" wire:click="sort('serial_number')">{{ __('Serial') }}</flux:table.column>
             <flux:table.column sortable :sorted="$sortBy === 'category'" :direction="$sortDirection" wire:click="sort('category')">{{ __('Category') }}</flux:table.column>
             <flux:table.column sortable :sorted="$sortBy === 'status'" :direction="$sortDirection" wire:click="sort('status')">{{ __('Status') }}</flux:table.column>
             <flux:table.column sortable :sorted="$sortBy === 'assigned_to'" :direction="$sortDirection" wire:click="sort('assigned_to')">{{ __('Assigned to') }}</flux:table.column>
@@ -293,6 +469,11 @@ new #[Title('Hardware')] class extends Component {
         <flux:table.rows>
             @forelse ($this->hardwares as $hardware)
                 <flux:table.row :key="$hardware->id">
+                    @can('update', $hardware)
+                        <flux:table.cell>
+                            <flux:checkbox wire:model.live="selected" value="{{ $hardware->id }}" />
+                        </flux:table.cell>
+                    @endcan
                     <flux:table.cell>
                         <a href="{{ route('assets.hardware.show', $hardware) }}" class="font-medium text-accent" wire:navigate>{{ $hardware->name }}</a>
                         <div class="text-xs text-zinc-500">
@@ -308,6 +489,7 @@ new #[Title('Hardware')] class extends Component {
                         </div>
                     </flux:table.cell>
                     <flux:table.cell class="whitespace-nowrap">{{ $hardware->asset_tag ?? '—' }}</flux:table.cell>
+                    <flux:table.cell class="whitespace-nowrap">{{ $hardware->serial_number ?? '—' }}</flux:table.cell>
                     <flux:table.cell>{{ $hardware->category->label() }}</flux:table.cell>
                     <flux:table.cell class="py-0">
                         <flux:badge size="sm" :color="$hardware->status->color()">{{ $hardware->status->label() }}</flux:badge>
@@ -332,7 +514,7 @@ new #[Title('Hardware')] class extends Component {
                 </flux:table.row>
             @empty
                 <flux:table.row>
-                    <flux:table.cell colspan="6">
+                    <flux:table.cell colspan="{{ auth()->user()->can('create', App\Models\Hardware::class) ? 8 : 7 }}">
                         <div class="py-10 text-center">
                             <flux:heading size="sm">{{ __('No hardware found') }}</flux:heading>
                             <flux:text class="mt-1">{{ __('Add a device to start tracking physical assets.') }}</flux:text>
@@ -344,6 +526,51 @@ new #[Title('Hardware')] class extends Component {
     </flux:table>
 
     @can('create', App\Models\Hardware::class)
+        <flux:modal name="bulk-change-status" class="max-w-lg">
+            <form wire:submit="bulkUpdateStatus" class="space-y-6">
+                <div>
+                    <flux:heading size="lg">{{ __('Change status') }}</flux:heading>
+                    <flux:text>{{ __('Set a new status for the selected devices.') }}</flux:text>
+                </div>
+
+                <flux:select wire:model="bulkStatus" :label="__('Status')" required>
+                    @foreach (App\Enums\HardwareStatus::cases() as $option)
+                        <option value="{{ $option->value }}">{{ $option->label() }}</option>
+                    @endforeach
+                </flux:select>
+
+                <div class="flex justify-end gap-2">
+                    <flux:modal.close>
+                        <flux:button variant="ghost">{{ __('Cancel') }}</flux:button>
+                    </flux:modal.close>
+                    <flux:button variant="primary" type="submit" data-test="confirm-bulk-change-status">{{ __('Update status') }}</flux:button>
+                </div>
+            </form>
+        </flux:modal>
+
+        <flux:modal name="bulk-assign" class="max-w-lg">
+            <form wire:submit="bulkAssign" class="space-y-6">
+                <div>
+                    <flux:heading size="lg">{{ __('Assign hardware') }}</flux:heading>
+                    <flux:text>{{ __('Assign the selected devices to an identity, or leave unassigned.') }}</flux:text>
+                </div>
+
+                <flux:select wire:model="bulkAssignedUserwareId" :label="__('Assigned identity')">
+                    <option value="">{{ __('Unassigned') }}</option>
+                    @foreach ($this->identities as $identity)
+                        <option value="{{ $identity->id }}">{{ $identity->name }} ({{ $identity->email }})</option>
+                    @endforeach
+                </flux:select>
+
+                <div class="flex justify-end gap-2">
+                    <flux:modal.close>
+                        <flux:button variant="ghost">{{ __('Cancel') }}</flux:button>
+                    </flux:modal.close>
+                    <flux:button variant="primary" type="submit" data-test="confirm-bulk-assign">{{ __('Assign') }}</flux:button>
+                </div>
+            </form>
+        </flux:modal>
+
         <flux:modal name="import-hardware" class="max-w-lg">
             <form wire:submit="import" class="space-y-6">
                 <div>

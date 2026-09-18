@@ -30,6 +30,20 @@ test('hardware list can be filtered by type', function () {
         ->assertDontSee('filter-other-server');
 });
 
+test('hardware list shows serial numbers', function () {
+    [, $organization] = actingAsOrganizationMember();
+
+    Hardware::factory()->create([
+        'organization_id' => $organization->id,
+        'name' => 'serial-visible-laptop',
+        'serial_number' => 'SN-VISIBLE-001',
+    ]);
+
+    Livewire::test('pages::assets.hardware.index')
+        ->assertSee('Serial')
+        ->assertSee('SN-VISIBLE-001');
+});
+
 test('hardware list filters persist in the session between visits', function () {
     actingAsOrganizationMember();
 
