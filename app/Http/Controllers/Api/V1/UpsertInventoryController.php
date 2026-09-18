@@ -119,12 +119,18 @@ class UpsertInventoryController extends Controller
         array $payload,
         string $serialNumber,
     ): void {
+        $deviceName = trim((string) data_get($payload, 'deviceName.value'));
+
         $attributes = [
             'inventory_collected_at' => $payload['collectedAtUtc'],
             'inventory_payload' => $payload,
         ];
 
-        if ($serialNumber !== '' && ! filled($asset->serial_number)) {
+        if ($deviceName !== '') {
+            $attributes['name'] = $deviceName;
+        }
+
+        if ($serialNumber !== '') {
             $attributes['serial_number'] = $serialNumber;
         }
 

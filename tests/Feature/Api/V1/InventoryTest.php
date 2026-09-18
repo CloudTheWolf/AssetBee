@@ -431,7 +431,7 @@ test('inventory endpoint updates existing virtualware by name without changing t
         ->assertJsonPath('data.id', $virtualware->id)
         ->assertJsonPath('data.type', 'virtualware')
         ->assertJsonPath('data.provider', 'aws')
-        ->assertJsonPath('data.name', 'aws-wus-utl-iac1')
+        ->assertJsonPath('data.name', 'AWS-WUS-UTL-IAC1')
         ->assertJsonPath('data.serialNumber', 'PF5FH9HR');
 
     expect(Virtualware::query()->count())->toBe(1)
@@ -442,6 +442,7 @@ test('inventory endpoint updates existing virtualware by name without changing t
     expect($virtualware->provider)->toBe(VirtualwareProvider::Aws)
         ->and($virtualware->instance_type)->toBe('t3.medium')
         ->and($virtualware->private_ip)->toBe('10.0.0.12')
+        ->and($virtualware->name)->toBe('AWS-WUS-UTL-IAC1')
         ->and($virtualware->serial_number)->toBe('PF5FH9HR')
         ->and(data_get($virtualware->inventory_payload, 'type'))->toBe('virtualware');
 });
@@ -544,7 +545,7 @@ test('virtualware show page displays searchable sbom inventory', function () {
         ->and($component->instance()->filteredSbomTargets[0]['components'][0]['name'])->toBe('openssl');
 });
 
-test('inventory endpoint updates by serial number within the api key organization', function () {
+test('inventory endpoint updates name and serial by serial number within the api key organization', function () {
     $organization = Organization::factory()->create();
     [, $plainTextKey] = OrganizationApiKey::issue($organization, 'Collector');
 
@@ -556,15 +557,18 @@ test('inventory endpoint updates by serial number within the api key organizatio
         ->putJson('/api/v1/inventory', inventoryPayload([
             'collectedAtUtc' => '2026-08-06T11:50:48+00:00',
             'deviceName' => ['status' => 'available', 'value' => 'RENAMED-DEVICE'],
+            'serialNumber' => ['status' => 'available', 'value' => 'PF5FH9HR'],
         ]))
         ->assertOk()
         ->assertJsonPath('data.id', $firstResponse->json('data.id'))
-        ->assertJsonPath('data.name', 'UKMICHAELH25');
+        ->assertJsonPath('data.name', 'RENAMED-DEVICE')
+        ->assertJsonPath('data.serialNumber', 'PF5FH9HR');
 
     $hardware = Hardware::query()->sole();
 
     expect(Hardware::query()->count())->toBe(1)
-        ->and($hardware->name)->toBe('UKMICHAELH25')
+        ->and($hardware->name)->toBe('RENAMED-DEVICE')
+        ->and($hardware->serial_number)->toBe('PF5FH9HR')
         ->and(data_get($hardware->inventory_payload, 'deviceName.value'))->toBe('RENAMED-DEVICE');
 });
 
