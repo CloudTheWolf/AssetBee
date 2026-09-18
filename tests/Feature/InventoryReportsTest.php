@@ -1,10 +1,12 @@
 <?php
 
 use App\Enums\BitLockerStatus;
+use App\Enums\HardwareCategory;
 use App\Enums\HardwareOperatingSystem;
 use App\Enums\HardwareStatus;
 use App\Enums\InventoryReport;
 use App\Enums\OrganizationRole;
+use App\Enums\VirtualwareCategory;
 use App\Models\Hardware;
 use App\Models\Organization;
 use App\Models\Virtualware;
@@ -17,7 +19,11 @@ test('organization members can view the reports index', function () {
         ->assertOk()
         ->assertSee(__('Pending updates'))
         ->assertSee(__('Missing antivirus'))
-        ->assertSee(__('Unencrypted disks'));
+        ->assertSee(__('Unencrypted disks'))
+        ->assertSee(__('Laptops & desktops'))
+        ->assertSee(__('Full device inventory (SOC 2)'))
+        ->assertSee(__('Untracked devices'))
+        ->assertSee(__('Untracked servers & virtualware'));
 });
 
 test('guests cannot view reports', function () {
@@ -268,12 +274,27 @@ test('the missing recovery keys report lists encrypted hardware without a stored
         ->assertDontSee('Keyed Laptop');
 });
 
-test('the unassigned devices report includes available hardware and virtualware', function () {
+test('the unassigned devices report includes available laptops and desktops only', function () {
     [, $organization] = actingAsOrganizationMember();
 
     Hardware::factory()->create([
         'organization_id' => $organization->id,
         'name' => 'Spare Laptop',
+        'category' => HardwareCategory::Laptop,
+        'status' => HardwareStatus::Available,
+        'assigned_userware_id' => null,
+    ]);
+    Hardware::factory()->create([
+        'organization_id' => $organization->id,
+        'name' => 'Spare Desktop',
+        'category' => HardwareCategory::Desktop,
+        'status' => HardwareStatus::Available,
+        'assigned_userware_id' => null,
+    ]);
+    Hardware::factory()->create([
+        'organization_id' => $organization->id,
+        'name' => 'Spare Server',
+        'category' => HardwareCategory::Server,
         'status' => HardwareStatus::Available,
         'assigned_userware_id' => null,
     ]);
@@ -286,7 +307,171 @@ test('the unassigned devices report includes available hardware and virtualware'
     $this->get(route('reports.show', InventoryReport::UnassignedDevices->value))
         ->assertOk()
         ->assertSee('Spare Laptop')
-        ->assertSee('Spare VM');
+        ->assertSee('Spare Desktop')
+        ->assertDontSee('Spare Server')
+        ->assertDontSee('Spare VM');
+});
+
+test('the laptops and desktops report lists devices with drone link status', function () {
+    [, $organization] = actingAsOrganizationMember();
+
+    Hardware::factory()->create([
+        'organization_id' => $organization->id,
+        'name' => 'Linked Laptop',
+        'category' => HardwareCategory::Laptop,
+        'inventory_collected_at' => now(),
+        'inventory_payload' => inventoryPayload(),
+    ]);
+    Hardware::factory()->create([
+        'organization_id' => $organization->id,
+        'name' => 'Unlinked Desktop',
+        'category' => HardwareCategory::Desktop,
+        'inventory_collected_at' => null,
+        'inventory_payload' => null,
+    ]);
+    Hardware::factory()->create([
+        'organization_id' => $organization->id,
+        'name' => 'Office Server',
+        'category' => HardwareCategory::Server,
+        'inventory_collected_at' => now(),
+        'inventory_payload' => inventoryPayload(['hardwareType' => ['status' => 'available', 'value' => 'server']]),
+    ]);
+    Virtualware::factory()->create([
+        'organization_id' => $organization->id,
+        'name' => 'Should Not Appear VM',
+    ]);
+
+    $this->get(route('reports.show', InventoryReport::LaptopsDesktopsDrone->value))
+        ->assertOk()
+        ->assertSee(__('Laptops & desktops'))
+        ->assertSee('Linked Laptop')
+        ->assertSee(__('Linked to Drone'))
+        ->assertSee('Unlinked Desktop')
+        ->assertSee(__('Not linked to Drone'))
+        ->assertDontSee('Office Server')
+        ->assertDontSee('Should Not Appear VM');
+});
+
+test('the full device soc2 report lists hardware and virtualware with device types', function () {
+    [, $organization] = actingAsOrganizationMember();
+
+    Hardware::factory()->create([
+        'organization_id' => $organization->id,
+        'name' => 'Soc2 Laptop',
+        'category' => HardwareCategory::Laptop,
+        'status' => HardwareStatus::InUse,
+    ]);
+    Hardware::factory()->create([
+        'organization_id' => $organization->id,
+        'name' => 'Soc2 Server',
+        'category' => HardwareCategory::Server,
+        'status' => HardwareStatus::Available,
+    ]);
+    Virtualware::factory()->create([
+        'organization_id' => $organization->id,
+        'name' => 'Soc2 Virtual Machine',
+        'category' => VirtualwareCategory::Vm,
+    ]);
+    Hardware::factory()->create([
+        'organization_id' => Organization::factory(),
+        'name' => 'Foreign Device',
+        'category' => HardwareCategory::Laptop,
+    ]);
+
+    $this->get(route('reports.show', InventoryReport::FullDevicesSoc2->value))
+        ->assertOk()
+        ->assertSee(__('Full device inventory (SOC 2)'))
+        ->assertSee('Soc2 Laptop')
+        ->assertSee(__('Laptop'))
+        ->assertSee('Soc2 Server')
+        ->assertSee(__('Server'))
+        ->assertSee('Soc2 Virtual Machine')
+        ->assertSee(__('VM'))
+        ->assertDontSee('Foreign Device');
+});
+
+test('the untracked devices report lists stale or never-collected laptops and desktops', function () {
+    [, $organization] = actingAsOrganizationMember();
+
+    Hardware::factory()->create([
+        'organization_id' => $organization->id,
+        'name' => 'Manual Laptop',
+        'category' => HardwareCategory::Laptop,
+        'inventory_collected_at' => null,
+        'inventory_payload' => null,
+    ]);
+    Hardware::factory()->create([
+        'organization_id' => $organization->id,
+        'name' => 'Stale Desktop',
+        'category' => HardwareCategory::Desktop,
+        'inventory_collected_at' => now()->subDays(45),
+        'inventory_payload' => inventoryPayload(),
+    ]);
+    Hardware::factory()->create([
+        'organization_id' => $organization->id,
+        'name' => 'Fresh Laptop',
+        'category' => HardwareCategory::Laptop,
+        'inventory_collected_at' => now()->subDays(5),
+        'inventory_payload' => inventoryPayload(),
+    ]);
+    Hardware::factory()->create([
+        'organization_id' => $organization->id,
+        'name' => 'Stale Server',
+        'category' => HardwareCategory::Server,
+        'inventory_collected_at' => null,
+        'inventory_payload' => null,
+    ]);
+
+    $this->get(route('reports.show', InventoryReport::UntrackedDevices->value))
+        ->assertOk()
+        ->assertSee(__('Untracked devices'))
+        ->assertSee('Manual Laptop')
+        ->assertSee(__('Never collected.'))
+        ->assertSee('Stale Desktop')
+        ->assertDontSee('Fresh Laptop')
+        ->assertDontSee('Stale Server');
+});
+
+test('the untracked servers and virtualware report lists stale or never-collected servers and virtualware', function () {
+    [, $organization] = actingAsOrganizationMember();
+
+    Hardware::factory()->create([
+        'organization_id' => $organization->id,
+        'name' => 'Manual Server',
+        'category' => HardwareCategory::Server,
+        'inventory_collected_at' => null,
+        'inventory_payload' => null,
+    ]);
+    Virtualware::factory()->create([
+        'organization_id' => $organization->id,
+        'name' => 'Stale VM',
+        'category' => VirtualwareCategory::Vm,
+        'inventory_collected_at' => now()->subDays(45),
+        'inventory_payload' => inventoryPayload(['type' => 'virtualware']),
+    ]);
+    Hardware::factory()->create([
+        'organization_id' => $organization->id,
+        'name' => 'Fresh Server',
+        'category' => HardwareCategory::Server,
+        'inventory_collected_at' => now()->subDays(5),
+        'inventory_payload' => inventoryPayload(['hardwareType' => ['status' => 'available', 'value' => 'server']]),
+    ]);
+    Hardware::factory()->create([
+        'organization_id' => $organization->id,
+        'name' => 'Stale Laptop',
+        'category' => HardwareCategory::Laptop,
+        'inventory_collected_at' => null,
+        'inventory_payload' => null,
+    ]);
+
+    $this->get(route('reports.show', InventoryReport::UntrackedServersAndVirtualware->value))
+        ->assertOk()
+        ->assertSee(__('Untracked servers & virtualware'))
+        ->assertSee('Manual Server')
+        ->assertSee(__('Never collected.'))
+        ->assertSee('Stale VM')
+        ->assertDontSee('Fresh Server')
+        ->assertDontSee('Stale Laptop');
 });
 
 test('reports index shows matching counts', function () {
@@ -357,6 +542,34 @@ test('members can download a branded report pdf', function () {
         ->and($contents)->toContain('Needs Patching')
         ->and($contents)->toContain('Critical Patch KB999')
         ->and($contents)->not->toContain('016148-202037');
+});
+
+test('the laptops and desktops pdf includes drone link breakdown counts', function () {
+    [, $organization] = actingAsOrganizationMember();
+
+    Hardware::factory()->create([
+        'organization_id' => $organization->id,
+        'name' => 'Linked Laptop',
+        'category' => HardwareCategory::Laptop,
+        'inventory_collected_at' => now(),
+        'inventory_payload' => inventoryPayload(),
+    ]);
+    Hardware::factory()->create([
+        'organization_id' => $organization->id,
+        'name' => 'Unlinked Desktop',
+        'category' => HardwareCategory::Desktop,
+        'inventory_collected_at' => null,
+        'inventory_payload' => null,
+    ]);
+
+    $contents = $this->get(route('reports.pdf', InventoryReport::LaptopsDesktopsDrone->value))
+        ->assertOk()
+        ->streamedContent();
+
+    expect($contents)->toContain('Linked Laptop')
+        ->and($contents)->toContain('Unlinked Desktop')
+        ->and($contents)->toContain('Linked to Drone')
+        ->and($contents)->toContain('Not linked to Drone');
 });
 
 test('report pdf downloads do not include other organization devices', function () {

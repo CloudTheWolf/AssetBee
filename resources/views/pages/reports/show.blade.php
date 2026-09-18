@@ -49,6 +49,7 @@ new #[Title('Report')] class extends Component
                         $row['name'],
                         $row['serial_number'],
                         $row['assigned_to'],
+                        $row['category_label'],
                         $row['detail'],
                     ])));
 
@@ -108,9 +109,7 @@ new #[Title('Report')] class extends Component
                             <flux:text>{{ $row['serial_number'] }}</flux:text>
                         @endif
                     </flux:table.cell>
-                    <flux:table.cell>
-                        {{ $row['asset_type'] === 'hardware' ? __('Hardware') : __('Virtualware') }}
-                    </flux:table.cell>
+                    <flux:table.cell>{{ $row['category_label'] }}</flux:table.cell>
                     <flux:table.cell>{{ $row['assigned_to'] ?? '—' }}</flux:table.cell>
                     <flux:table.cell>{{ $row['detail'] }}</flux:table.cell>
                 </flux:table.row>

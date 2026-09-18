@@ -12,7 +12,7 @@ paths:
 Audit rows are metadata only (action, actor snapshot, target type/id, summary name/email/domain/asset tag, IP). Never copy secrets, notes, inventory payloads, tokens, or hashes. Record when there is an authenticated user or organization API key; skip SystemAudit and non-App models. Org owners/admins view org-scoped entries via OrganizationPolicy::viewAuditLog and the organizations.audit-log page.
 
 ## Inventory reports filter decrypted payloads in PHP
-Inventory reports (pending updates, missing AV, encryption, stale inventory, recovery keys, unassigned) are computed in PHP from decrypted inventory payloads. Do not query encrypted inventory_payload in SQL. Keep findings metadata-only: no recovery keys or inventory blobs in the UI.
+Inventory reports (pending updates, missing AV, encryption, stale inventory, recovery keys, unassigned laptops/desktops, laptops/desktops Drone link, full SOC 2 device inventory, untracked laptop/desktop devices, untracked servers & virtualware) are computed in PHP from decrypted inventory payloads. Do not query encrypted inventory_payload in SQL. Keep findings metadata-only: no recovery keys or inventory blobs in the UI. “Linked to Drone” means inventory_collected_at is set. Untracked means no inventory_collected_at or inventory older than 30 days.
 
 ## PDFs use branded SimplePdf headers
 PDFs use SimplePdf with a black header containing public/img/logo.png. Inventory report PDFs are metadata-only: names, types, assignment, and finding summaries; never recovery keys or inventory payloads.
@@ -22,3 +22,6 @@ Linux and macOS collectors often omit antivirus.upToDate (null) because there is
 
 ## Cost breakdown nests children without double-counting
 Cost Breakdown nests active sub-products under parent software. Section totals use effectiveMonthlyCost (prefer parent amount, else sum children) so parent+children are never double-counted. Dedicated page/PDF — not an InventoryReport case.
+
+## Drone link and SOC2 device inventory reports
+LaptopsDesktopsDrone includes only HardwareCategory Laptop/Desktop. Linked to Drone means inventory_collected_at is set. FullDevicesSoc2 includes all hardware and virtualware; Type column uses category labels (Laptop, Desktop, Server, VM, etc.). UntrackedDevices is laptop/desktop hardware with stale or missing Drone inventory (including manually added). UntrackedServersAndVirtualware is HardwareCategory Server plus all virtualware with stale or missing Drone inventory. UnassignedDevices is laptop/desktop only.

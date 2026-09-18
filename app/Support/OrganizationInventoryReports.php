@@ -3,6 +3,7 @@
 namespace App\Support;
 
 use App\Enums\BitLockerStatus;
+use App\Enums\HardwareCategory;
 use App\Enums\HardwareStatus;
 use App\Enums\InventoryReport;
 use App\Enums\VirtualwareStatus;
@@ -55,8 +56,15 @@ class OrganizationInventoryReports
             __('Organization').': '.$organization->name,
             __('Generated').': '.now()->timezone((string) config('app.timezone'))->toDayDateTimeString(),
             __('Devices').': '.$rows->count(),
-            '',
         ];
+
+        if ($report === InventoryReport::LaptopsDesktopsDrone) {
+            $linked = $rows->where('is_linked_to_drone', true)->count();
+            $lines[] = __('Linked to Drone').': '.$linked;
+            $lines[] = __('Not linked to Drone').': '.($rows->count() - $linked);
+        }
+
+        $lines[] = '';
 
         if ($rows->isEmpty()) {
             $lines[] = __('No devices match this report.');
@@ -68,12 +76,11 @@ class OrganizationInventoryReports
         $lines[] = '';
 
         foreach ($rows as $row) {
-            $type = $row['asset_type'] === 'hardware' ? __('Hardware') : __('Virtualware');
             $assigned = is_string($row['assigned_to']) && $row['assigned_to'] !== ''
                 ? $row['assigned_to']
                 : '—';
 
-            $lines[] = $row['name'].' | '.$type.' | '.$assigned.' | '.$row['detail'];
+            $lines[] = $row['name'].' | '.$row['category_label'].' | '.$assigned.' | '.$row['detail'];
 
             if (is_string($row['serial_number']) && $row['serial_number'] !== '') {
                 $lines[] = '  '.$row['serial_number'];
@@ -119,6 +126,9 @@ class OrganizationInventoryReports
             'collected_at' => $hardware->inventory_collected_at,
             'url' => route('assets.hardware.show', $hardware),
             'status_label' => $hardware->status->label(),
+            'category' => $hardware->category,
+            'category_label' => $hardware->category->label(),
+            'is_linked_to_drone' => $hardware->inventory_collected_at !== null,
             'payload' => $payload,
             'is_windows' => $hardware->operating_system?->isWindows() ?? false,
             'bitlocker_status' => $hardware->bitlocker_status,
@@ -144,6 +154,9 @@ class OrganizationInventoryReports
             'collected_at' => $virtualware->inventory_collected_at,
             'url' => route('assets.virtualware.show', $virtualware),
             'status_label' => $virtualware->status->label(),
+            'category' => $virtualware->category,
+            'category_label' => $virtualware->category->label(),
+            'is_linked_to_drone' => $virtualware->inventory_collected_at !== null,
             'payload' => $payload,
             'is_windows' => false,
             'bitlocker_status' => null,
@@ -165,7 +178,11 @@ class OrganizationInventoryReports
             InventoryReport::UnencryptedDisks => $this->isUnencrypted($device),
             InventoryReport::StaleInventory => $this->isStale($device),
             InventoryReport::MissingRecoveryKeys => $this->isMissingRecoveryKey($device),
-            InventoryReport::UnassignedDevices => (bool) $device['is_unassigned'],
+            InventoryReport::UnassignedDevices => $this->isLaptopOrDesktop($device) && (bool) $device['is_unassigned'],
+            InventoryReport::LaptopsDesktopsDrone => $this->isLaptopOrDesktop($device),
+            InventoryReport::FullDevicesSoc2 => true,
+            InventoryReport::UntrackedDevices => $this->isLaptopOrDesktop($device) && $this->isStale($device),
+            InventoryReport::UntrackedServersAndVirtualware => $this->isServerOrVirtualware($device) && $this->isStale($device),
         })->values();
     }
 
@@ -183,6 +200,8 @@ class OrganizationInventoryReports
             'assigned_to' => $device['assigned_to'],
             'collected_at' => $device['collected_at'],
             'url' => $device['url'],
+            'category_label' => $device['category_label'],
+            'is_linked_to_drone' => (bool) $device['is_linked_to_drone'],
             'detail' => $this->detail($device, $report),
         ];
     }
@@ -199,7 +218,38 @@ class OrganizationInventoryReports
             InventoryReport::StaleInventory => $this->staleDetail($device),
             InventoryReport::MissingRecoveryKeys => __('No recovery key stored.'),
             InventoryReport::UnassignedDevices => (string) $device['status_label'],
+            InventoryReport::LaptopsDesktopsDrone => $device['is_linked_to_drone']
+                ? __('Linked to Drone')
+                : __('Not linked to Drone'),
+            InventoryReport::FullDevicesSoc2 => (string) $device['status_label'],
+            InventoryReport::UntrackedDevices => $this->staleDetail($device),
+            InventoryReport::UntrackedServersAndVirtualware => $this->staleDetail($device),
         };
+    }
+
+    /**
+     * @param  array<string, mixed>  $device
+     */
+    private function isLaptopOrDesktop(array $device): bool
+    {
+        if ($device['asset_type'] !== 'hardware') {
+            return false;
+        }
+
+        return in_array($device['category'], [HardwareCategory::Laptop, HardwareCategory::Desktop], true);
+    }
+
+    /**
+     * @param  array<string, mixed>  $device
+     */
+    private function isServerOrVirtualware(array $device): bool
+    {
+        if ($device['asset_type'] === 'virtualware') {
+            return true;
+        }
+
+        return $device['asset_type'] === 'hardware'
+            && $device['category'] === HardwareCategory::Server;
     }
 
     /**

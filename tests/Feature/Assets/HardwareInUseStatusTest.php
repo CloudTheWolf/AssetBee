@@ -1,6 +1,7 @@
 <?php
 
 use App\Actions\Assets\AssignHardware;
+use App\Enums\HardwareCategory;
 use App\Enums\HardwareStatus;
 use App\Enums\InventoryReport;
 use App\Models\Hardware;
@@ -64,6 +65,7 @@ test('unassigned devices report excludes in use hardware', function () {
     Hardware::factory()->create([
         'organization_id' => $organization->id,
         'name' => 'Spare Laptop',
+        'category' => HardwareCategory::Laptop,
         'status' => HardwareStatus::Available,
         'assigned_userware_id' => null,
     ]);
@@ -73,9 +75,16 @@ test('unassigned devices report excludes in use hardware', function () {
         'status' => HardwareStatus::InUse,
         'assigned_userware_id' => null,
     ]);
+    Hardware::factory()->server()->create([
+        'organization_id' => $organization->id,
+        'name' => 'Spare Server',
+        'status' => HardwareStatus::Available,
+        'assigned_userware_id' => null,
+    ]);
 
     $this->get(route('reports.show', InventoryReport::UnassignedDevices->value))
         ->assertOk()
         ->assertSee('Spare Laptop')
-        ->assertDontSee('Production Host');
+        ->assertDontSee('Production Host')
+        ->assertDontSee('Spare Server');
 });
