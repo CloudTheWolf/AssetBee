@@ -112,8 +112,9 @@
             <div class="font-medium">{{ __('Disk encryption') }}</div>
             @forelse ($encryption as $volume)
                 @php
-                    $hasRecoveryKey = collect($volume['keyProtectors'] ?? [])
-                        ->contains(fn ($protector) => filled(data_get($protector, 'recoveryKey')) && filled(data_get($protector, 'keyProtectorId')));
+                    $hasRecoveryKey = \App\Support\InventoryProbe::volumeHasRecoveryKey($volume);
+                    $isTpmOnly = \App\Support\InventoryProbe::volumeIsTpmOnly($volume);
+                    $isProtected = \App\Support\InventoryProbe::volumeIsProtected($volume);
                     $keyProtectorIds = collect($volume['keyProtectors'] ?? [])
                         ->map(fn ($protector) => data_get($protector, 'keyProtectorId'))
                         ->filter(fn ($identifier) => is_string($identifier) && $identifier !== '')
@@ -137,8 +138,10 @@
                             </flux:text>
                         @endforeach
                     </div>
-                    @if ($hasRecoveryKey)
-                        <div class="flex items-center gap-2">
+                    <div class="flex flex-wrap items-center justify-end gap-2">
+                        @if ($isTpmOnly)
+                            <flux:badge size="sm" color="amber">{{ __('TPM Only (No Key)') }}</flux:badge>
+                        @elseif ($hasRecoveryKey)
                             <flux:badge size="sm" color="green">{{ __('Recovery key stored') }}</flux:badge>
                             <flux:tooltip :content="__('Reveal Recovery Key')">
                                 <flux:button
@@ -148,8 +151,10 @@
                                     wire:click="revealRecoveryKey({{ $loop->index }})"
                                 />
                             </flux:tooltip>
-                        </div>
-                    @endif
+                        @elseif ($isProtected)
+                            <flux:badge size="sm" color="zinc">{{ __('No recovery key') }}</flux:badge>
+                        @endif
+                    </div>
                 </div>
             @empty
                 <flux:text>{{ __('No encryption details collected.') }}</flux:text>

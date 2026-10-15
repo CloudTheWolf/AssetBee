@@ -438,7 +438,11 @@ class OrganizationInventoryReports
      */
     private function isMissingRecoveryKey(array $device): bool
     {
-        if ($device['asset_type'] !== 'hardware' || $device['recovery_key_stored']) {
+        if ($device['asset_type'] !== 'hardware') {
+            return false;
+        }
+
+        if ($device['recovery_key_stored'] || InventoryProbe::hasRecoveryKey($device['payload'])) {
             return false;
         }
 

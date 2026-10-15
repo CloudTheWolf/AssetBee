@@ -250,6 +250,21 @@ test('the stale inventory report includes devices never collected', function () 
 test('the missing recovery keys report lists encrypted hardware without a stored key', function () {
     [, $organization] = actingAsOrganizationMember();
 
+    $tpmOnlyPayload = inventoryPayload();
+    $tpmOnlyPayload['diskEncryption'] = [
+        'status' => 'available',
+        'value' => [
+            [
+                'volume' => 'C:',
+                'technology' => 'BitLocker',
+                'state' => 'TPM Only (No Key)',
+                'recoveryKeys' => [],
+                'keyProtectors' => [],
+                'protectionStatus' => 'On',
+            ],
+        ],
+    ];
+
     Hardware::factory()->create([
         'organization_id' => $organization->id,
         'name' => 'No Recovery Key',
@@ -257,7 +272,7 @@ test('the missing recovery keys report lists encrypted hardware without a stored
         'bitlocker_status' => BitLockerStatus::Enabled,
         'bitlocker_recovery_key' => null,
         'inventory_collected_at' => now(),
-        'inventory_payload' => inventoryPayload(),
+        'inventory_payload' => $tpmOnlyPayload,
     ]);
     Hardware::factory()->create([
         'organization_id' => $organization->id,
@@ -268,11 +283,21 @@ test('the missing recovery keys report lists encrypted hardware without a stored
         'inventory_collected_at' => now(),
         'inventory_payload' => inventoryPayload(),
     ]);
+    Hardware::factory()->create([
+        'organization_id' => $organization->id,
+        'name' => 'Payload Key Only',
+        'operating_system' => HardwareOperatingSystem::Windows11,
+        'bitlocker_status' => BitLockerStatus::Enabled,
+        'bitlocker_recovery_key' => null,
+        'inventory_collected_at' => now(),
+        'inventory_payload' => inventoryPayload(),
+    ]);
 
     $this->get(route('reports.show', InventoryReport::MissingRecoveryKeys->value))
         ->assertOk()
         ->assertSee('No Recovery Key')
-        ->assertDontSee('Keyed Laptop');
+        ->assertDontSee('Keyed Laptop')
+        ->assertDontSee('Payload Key Only');
 });
 
 test('the unassigned devices report includes available laptops and desktops only', function () {

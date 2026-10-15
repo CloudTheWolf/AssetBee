@@ -65,4 +65,52 @@ class InventoryProbe
 
         return is_string($state) && str_contains(strtolower($state), 'encrypted');
     }
+
+    /**
+     * @param  array<string, mixed>  $volume
+     */
+    public static function volumeIsTpmOnly(array $volume): bool
+    {
+        $state = $volume['state'] ?? null;
+
+        return is_string($state) && str_contains(strtolower($state), 'tpm only');
+    }
+
+    /**
+     * @param  array<string, mixed>  $volume
+     */
+    public static function volumeHasRecoveryKey(array $volume): bool
+    {
+        foreach ($volume['keyProtectors'] ?? [] as $protector) {
+            if (
+                is_array($protector)
+                && is_string($protector['recoveryKey'] ?? null)
+                && $protector['recoveryKey'] !== ''
+            ) {
+                return true;
+            }
+        }
+
+        foreach ($volume['recoveryKeys'] ?? [] as $recoveryKey) {
+            if (is_string($recoveryKey) && $recoveryKey !== '') {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     */
+    public static function hasRecoveryKey(array $payload): bool
+    {
+        foreach (self::list($payload, 'diskEncryption') as $volume) {
+            if (self::volumeHasRecoveryKey($volume)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
 }

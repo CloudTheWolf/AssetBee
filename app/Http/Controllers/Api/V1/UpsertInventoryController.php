@@ -135,6 +135,10 @@ class UpsertInventoryController extends Controller
             $attributes['serial_number'] = $serialNumber;
         }
 
+        if ($asset instanceof Hardware) {
+            $attributes = array_merge($attributes, $this->bitlockerAttributes($payload));
+        }
+
         $asset->update($attributes);
     }
 
@@ -199,25 +203,36 @@ class UpsertInventoryController extends Controller
             $attributes['storage_gb'] = $this->bytesToGigabytes($totalBytes);
         }
 
-        if ($this->wasCollected($payload, 'diskEncryption')) {
-            $encryption = data_get($payload, 'diskEncryption.value', []);
-            $encryptedDisks = is_array($encryption) ? $encryption : [];
-            $hasEncryptedVolume = false;
+        return array_merge($attributes, $this->bitlockerAttributes($payload));
+    }
 
-            foreach ($encryptedDisks as $disk) {
-                if (is_array($disk) && InventoryProbe::volumeIsProtected($disk)) {
-                    $hasEncryptedVolume = true;
-                    break;
-                }
-            }
-
-            $attributes['bitlocker_status'] = $hasEncryptedVolume
-                ? BitLockerStatus::Enabled
-                : BitLockerStatus::Disabled;
-            $attributes['bitlocker_recovery_key'] = $this->recoveryKeys($encryptedDisks);
+    /**
+     * @param  array<string, mixed>  $payload
+     * @return array<string, mixed>
+     */
+    private function bitlockerAttributes(array $payload): array
+    {
+        if (! $this->wasCollected($payload, 'diskEncryption')) {
+            return [];
         }
 
-        return $attributes;
+        $encryption = data_get($payload, 'diskEncryption.value', []);
+        $encryptedDisks = is_array($encryption) ? $encryption : [];
+        $hasEncryptedVolume = false;
+
+        foreach ($encryptedDisks as $disk) {
+            if (is_array($disk) && InventoryProbe::volumeIsProtected($disk)) {
+                $hasEncryptedVolume = true;
+                break;
+            }
+        }
+
+        return [
+            'bitlocker_status' => $hasEncryptedVolume
+                ? BitLockerStatus::Enabled
+                : BitLockerStatus::Disabled,
+            'bitlocker_recovery_key' => $this->recoveryKeys($encryptedDisks),
+        ];
     }
 
     /**

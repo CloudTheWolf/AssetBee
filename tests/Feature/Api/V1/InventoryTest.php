@@ -357,6 +357,53 @@ test('hardware show page displays collected inventory details', function () {
         ->assertDontSee(__('BitLocker status'));
 });
 
+test('hardware show page displays tpm only encryption status', function () {
+    [, $organization] = actingAsOrganizationMember();
+    [, $plainTextKey] = OrganizationApiKey::issue($organization, 'Collector');
+
+    $this->withToken($plainTextKey)
+        ->postJson('/api/v1/inventory', inventoryPayload([
+            'diskEncryption' => [
+                'status' => 'available',
+                'value' => [
+                    [
+                        'volume' => 'C:',
+                        'technology' => 'BitLocker',
+                        'state' => 'FullyEncrypted',
+                        'recoveryKeys' => [
+                            '111111-222222-333333-444444-555555-666666-777777-888888',
+                        ],
+                        'keyProtectors' => [
+                            [
+                                'keyProtectorId' => '{11111111-2222-3333-4444-555555555555}',
+                                'recoveryKey' => '111111-222222-333333-444444-555555-666666-777777-888888',
+                            ],
+                        ],
+                        'protectionStatus' => 'On',
+                    ],
+                    [
+                        'volume' => 'D:',
+                        'technology' => 'BitLocker',
+                        'state' => 'TPM Only (No Key)',
+                        'recoveryKeys' => [],
+                        'keyProtectors' => [],
+                        'protectionStatus' => 'On',
+                    ],
+                ],
+            ],
+        ]))
+        ->assertCreated();
+
+    $hardware = Hardware::query()->sole();
+
+    $this->get(route('assets.hardware.show', $hardware))
+        ->assertOk()
+        ->assertSee('D:')
+        ->assertSee('TPM Only (No Key)')
+        ->assertSee(__('TPM Only (No Key)'))
+        ->assertSee(__('Recovery key stored'));
+});
+
 test('hardware show page can reveal a disk recovery key', function () {
     [, $organization] = actingAsOrganizationMember();
     [, $plainTextKey] = OrganizationApiKey::issue($organization, 'Collector');
@@ -551,6 +598,30 @@ test('inventory endpoint updates existing hardware by name without converting ty
         ->and($hardware->fresh()->cpu)->toBe('Existing CPU')
         ->and($hardware->fresh()->category)->toBe(HardwareCategory::Laptop)
         ->and($hardware->fresh()->serial_number)->toBe('PF5FH9HR');
+});
+
+test('inventory endpoint refreshes bitlocker fields when updating existing hardware', function () {
+    $organization = Organization::factory()->create();
+    [, $plainTextKey] = OrganizationApiKey::issue($organization, 'Collector');
+
+    $hardware = Hardware::factory()->create([
+        'organization_id' => $organization->id,
+        'name' => 'UKMICHAELH25',
+        'serial_number' => 'PF5FH9HR',
+        'bitlocker_status' => BitLockerStatus::Disabled,
+        'bitlocker_recovery_key' => null,
+    ]);
+
+    $this->withToken($plainTextKey)
+        ->putJson('/api/v1/inventory', inventoryPayload())
+        ->assertOk()
+        ->assertJsonPath('data.id', $hardware->id);
+
+    $hardware->refresh();
+
+    expect($hardware->bitlocker_status)->toBe(BitLockerStatus::Enabled)
+        ->and($hardware->bitlocker_recovery_key)->toContain('016148-202037')
+        ->and($hardware->bitlocker_recovery_key)->toContain('A8414EAF-085F-4A35-AB76-D4F4B88B5607');
 });
 
 test('virtualware show page displays searchable sbom inventory', function () {
