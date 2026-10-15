@@ -47,4 +47,22 @@ class InventoryProbe
 
         return is_array($value) ? $value : null;
     }
+
+    /**
+     * Prefer protectionStatus when present; otherwise fall back to state containing "encrypted".
+     *
+     * @param  array<string, mixed>  $volume
+     */
+    public static function volumeIsProtected(array $volume): bool
+    {
+        $protectionStatus = $volume['protectionStatus'] ?? null;
+
+        if (is_string($protectionStatus) && $protectionStatus !== '') {
+            return strcasecmp($protectionStatus, 'On') === 0;
+        }
+
+        $state = $volume['state'] ?? null;
+
+        return is_string($state) && str_contains(strtolower($state), 'encrypted');
+    }
 }

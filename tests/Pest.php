@@ -115,13 +115,16 @@ function inventoryPayload(array $overrides = []): array
                     'volume' => 'C:',
                     'technology' => 'BitLocker',
                     'state' => 'FullyEncrypted',
-                    'recoveryKeys' => [],
+                    'recoveryKeys' => [
+                        '016148-202037-546898-706926-484627-138688-405482-446105',
+                    ],
                     'keyProtectors' => [
                         [
                             'keyProtectorId' => '{A8414EAF-085F-4A35-AB76-D4F4B88B5607}',
                             'recoveryKey' => '016148-202037-546898-706926-484627-138688-405482-446105',
                         ],
                     ],
+                    'protectionStatus' => 'On',
                 ],
             ],
         ],

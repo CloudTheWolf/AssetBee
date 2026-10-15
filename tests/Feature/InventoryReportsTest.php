@@ -206,6 +206,7 @@ test('the unencrypted disks report includes bitlocker disabled hardware', functi
                         'state' => 'FullyDecrypted',
                         'recoveryKeys' => [],
                         'keyProtectors' => [],
+                        'protectionStatus' => 'Off',
                     ],
                 ],
             ],

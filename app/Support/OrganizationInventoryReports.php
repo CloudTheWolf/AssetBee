@@ -387,7 +387,7 @@ class OrganizationInventoryReports
         }
 
         $encryptedVolumes = collect(InventoryProbe::list($device['payload'], 'diskEncryption'))
-            ->filter(fn (array $volume): bool => str_contains(strtolower((string) ($volume['state'] ?? '')), 'encrypted'))
+            ->filter(fn (array $volume): bool => InventoryProbe::volumeIsProtected($volume))
             ->count();
 
         return $encryptedVolumes > 0 ? 'encrypted' : 'unencrypted';

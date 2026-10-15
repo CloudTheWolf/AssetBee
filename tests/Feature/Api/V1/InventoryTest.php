@@ -34,6 +34,83 @@ test('inventory endpoint enforces the version 1 schema', function () {
         ->assertJsonValidationErrors(['deviceName.status', 'manufacturer', 'unexpected']);
 });
 
+test('inventory endpoint accepts disk encryption protectionStatus and tpm-only volumes', function () {
+    $organization = Organization::factory()->create();
+    [, $plainTextKey] = OrganizationApiKey::issue($organization, 'Collector');
+
+    $payload = inventoryPayload([
+        'deviceName' => ['status' => 'available', 'value' => 'WIN-TEST'],
+        'serialNumber' => ['status' => 'available', 'value' => 'ABC123'],
+        'diskEncryption' => [
+            'status' => 'available',
+            'value' => [
+                [
+                    'volume' => 'C:',
+                    'technology' => 'BitLocker',
+                    'state' => 'FullyEncrypted',
+                    'recoveryKeys' => [
+                        '111111-222222-333333-444444-555555-666666-777777-888888',
+                    ],
+                    'keyProtectors' => [
+                        [
+                            'keyProtectorId' => '{11111111-2222-3333-4444-555555555555}',
+                            'recoveryKey' => '111111-222222-333333-444444-555555-666666-777777-888888',
+                        ],
+                    ],
+                    'protectionStatus' => 'On',
+                ],
+                [
+                    'volume' => 'D:',
+                    'technology' => 'BitLocker',
+                    'state' => 'TPM Only (No Key)',
+                    'recoveryKeys' => [],
+                    'keyProtectors' => [],
+                    'protectionStatus' => 'On',
+                ],
+            ],
+        ],
+    ]);
+
+    $this->withToken($plainTextKey)
+        ->postJson('/api/v1/inventory', $payload)
+        ->assertCreated()
+        ->assertJsonPath('data.name', 'WIN-TEST')
+        ->assertJsonPath('data.serialNumber', 'ABC123');
+
+    $hardware = Hardware::query()->sole();
+
+    expect($hardware->bitlocker_status)->toBe(BitLockerStatus::Enabled)
+        ->and($hardware->bitlocker_recovery_key)->toContain('111111-222222')
+        ->and(data_get($hardware->inventory_payload, 'diskEncryption.value.0.protectionStatus'))->toBe('On')
+        ->and(data_get($hardware->inventory_payload, 'diskEncryption.value.1.state'))->toBe('TPM Only (No Key)')
+        ->and(data_get($hardware->inventory_payload, 'diskEncryption.value.1.protectionStatus'))->toBe('On');
+});
+
+test('inventory endpoint treats protectionStatus Off as bitlocker disabled', function () {
+    $organization = Organization::factory()->create();
+    [, $plainTextKey] = OrganizationApiKey::issue($organization, 'Collector');
+
+    $this->withToken($plainTextKey)
+        ->postJson('/api/v1/inventory', inventoryPayload([
+            'diskEncryption' => [
+                'status' => 'available',
+                'value' => [
+                    [
+                        'volume' => 'C:',
+                        'technology' => 'BitLocker',
+                        'state' => 'FullyDecrypted',
+                        'recoveryKeys' => [],
+                        'keyProtectors' => [],
+                        'protectionStatus' => 'Off',
+                    ],
+                ],
+            ],
+        ]))
+        ->assertCreated();
+
+    expect(Hardware::query()->sole()->bitlocker_status)->toBe(BitLockerStatus::Disabled);
+});
+
 test('inventory endpoint creates encrypted organization-scoped hardware', function () {
     $organization = Organization::factory()->create();
     [$apiKey, $plainTextKey] = OrganizationApiKey::issue($organization, 'Collector');
@@ -274,6 +351,7 @@ test('hardware show page displays collected inventory details', function () {
         ->assertSee('pkg:generic/WatchGuard%20EPDR@8.1.0')
         ->assertSee(__('Search SBOM components…'))
         ->assertSee(__('Recovery key stored'))
+        ->assertSee(__('Protection: :status', ['status' => 'On']))
         ->assertSee(__('Identifier').': A8414EAF-085F-4A35-AB76-D4F4B88B5607')
         ->assertDontSee('{A8414EAF-085F-4A35-AB76-D4F4B88B5607}')
         ->assertDontSee(__('BitLocker status'));

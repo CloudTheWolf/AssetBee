@@ -16,6 +16,7 @@ use App\Http\Requests\Api\V1\UpsertInventoryRequest;
 use App\Models\Hardware;
 use App\Models\Organization;
 use App\Models\Virtualware;
+use App\Support\InventoryProbe;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
 
@@ -204,12 +205,7 @@ class UpsertInventoryController extends Controller
             $hasEncryptedVolume = false;
 
             foreach ($encryptedDisks as $disk) {
-                $state = is_array($disk) ? ($disk['state'] ?? null) : null;
-
-                if (
-                    is_string($state)
-                    && str_contains(strtolower($state), 'encrypted')
-                ) {
+                if (is_array($disk) && InventoryProbe::volumeIsProtected($disk)) {
                     $hasEncryptedVolume = true;
                     break;
                 }

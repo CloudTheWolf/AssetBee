@@ -124,7 +124,13 @@
                 <div class="flex items-start justify-between gap-4 py-2" wire:key="encryption-{{ $loop->index }}">
                     <div class="space-y-1">
                         <div class="font-medium">{{ $volume['volume'] ?? '—' }}</div>
-                        <flux:text>{{ ($volume['technology'] ?? '—').' · '.($volume['state'] ?? '—') }}</flux:text>
+                        <flux:text>
+                            {{ collect([
+                                $volume['technology'] ?? null,
+                                $volume['state'] ?? null,
+                                isset($volume['protectionStatus']) ? __('Protection: :status', ['status' => $volume['protectionStatus']]) : null,
+                            ])->filter()->implode(' · ') }}
+                        </flux:text>
                         @foreach ($keyProtectorIds as $keyProtectorId)
                             <flux:text class="break-all font-mono text-sm">
                                 {{ __('Identifier') }}: {{ $keyProtectorId }}

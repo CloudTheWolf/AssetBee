@@ -4,6 +4,7 @@ paths:
   - app/Support/OrganizationInventoryReports.php
   - app/Support/SimplePdf.php
   - app/Support/OrganizationCostBreakdownReport.php
+  - app/Support/InventoryProbe.php
 ---
 
 # Support
@@ -13,6 +14,9 @@ Audit rows are metadata only (action, actor snapshot, target type/id, summary na
 
 ## Inventory reports filter decrypted payloads in PHP
 Inventory reports (pending updates, missing AV, encryption, stale inventory, recovery keys, unassigned laptops/desktops, laptops/desktops Drone link, full SOC 2 device inventory, untracked laptop/desktop devices, untracked servers & virtualware) are computed in PHP from decrypted inventory payloads. Do not query encrypted inventory_payload in SQL. Keep findings metadata-only: no recovery keys or inventory blobs in the UI. “Linked to Drone” means inventory_collected_at is set. Untracked means no inventory_collected_at or inventory older than 30 days.
+
+## Disk encryption uses protectionStatus when present
+Drone diskEncryption volumes include optional protectionStatus (`On`/`Off`) and may report state `TPM Only (No Key)`. Use InventoryProbe::volumeIsProtected: prefer protectionStatus, else fall back to state containing “encrypted”. TPM-only volumes with protection On count as encrypted even without recovery keys.
 
 ## PDFs use branded SimplePdf headers
 PDFs use SimplePdf with a black header containing public/img/logo.png. Inventory report PDFs are metadata-only: names, types, assignment, and finding summaries; never recovery keys or inventory payloads.

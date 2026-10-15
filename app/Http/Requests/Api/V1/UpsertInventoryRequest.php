@@ -118,7 +118,7 @@ class UpsertInventoryRequest extends FormRequest
             'diskEncryption' => ['required', 'array:status,value,detail'],
             'diskEncryption.status' => $this->probeStatusRules(),
             'diskEncryption.value' => ['nullable', 'array', 'max:100'],
-            'diskEncryption.value.*' => ['array:volume,technology,state,recoveryKeys,keyProtectors'],
+            'diskEncryption.value.*' => ['array:volume,technology,state,recoveryKeys,keyProtectors,protectionStatus'],
             'diskEncryption.value.*.volume' => ['required', 'string', 'max:255'],
             'diskEncryption.value.*.technology' => ['required', 'string', 'max:100'],
             'diskEncryption.value.*.state' => ['required', 'string', 'max:100'],
@@ -128,6 +128,7 @@ class UpsertInventoryRequest extends FormRequest
             'diskEncryption.value.*.keyProtectors.*' => ['array:keyProtectorId,recoveryKey'],
             'diskEncryption.value.*.keyProtectors.*.keyProtectorId' => ['required', 'string', 'max:255'],
             'diskEncryption.value.*.keyProtectors.*.recoveryKey' => ['nullable', 'string', 'max:255'],
+            'diskEncryption.value.*.protectionStatus' => ['nullable', 'string', Rule::in(['On', 'Off'])],
             'diskEncryption.detail' => ['nullable', 'string', 'max:1000'],
 
             'domainWorkspace' => ['required', 'array:status,value,detail'],

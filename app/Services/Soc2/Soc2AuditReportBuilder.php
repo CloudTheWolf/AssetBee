@@ -6,6 +6,7 @@ use App\Enums\VirtualwareProvider;
 use App\Models\Hardware;
 use App\Models\Organization;
 use App\Models\Virtualware;
+use App\Support\InventoryProbe;
 use Carbon\CarbonInterface;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
@@ -262,7 +263,7 @@ class Soc2AuditReportBuilder
     ): array {
         $encryptionVolumes = $this->probeList($payload, 'diskEncryption');
         $encryptedVolumes = collect($encryptionVolumes)->filter(
-            fn (array $volume): bool => str_contains(strtolower((string) ($volume['state'] ?? '')), 'encrypted'),
+            fn (array $volume): bool => InventoryProbe::volumeIsProtected($volume),
         )->count();
 
         $antivirus = $this->probeList($payload, 'antivirus');
