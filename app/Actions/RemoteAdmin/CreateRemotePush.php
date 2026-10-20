@@ -61,20 +61,29 @@ class CreateRemotePush
             $validated['remote_package_id'] = null;
         }
 
-        $hardwareIds = collect($validated['hardware_ids'] ?? [])->map(fn ($id) => (int) $id);
+        /** @var list<int|string> $rawHardwareIds */
+        $rawHardwareIds = is_array($validated['hardware_ids'] ?? null)
+            ? $validated['hardware_ids']
+            : [];
+
+        /** @var list<int> $hardwareIds */
+        $hardwareIds = array_values(array_unique(array_map(
+            static fn (int|string $id): int => (int) $id,
+            $rawHardwareIds,
+        )));
 
         if (! empty($validated['device_group_id'])) {
             $groupIds = $organization->deviceGroups()
                 ->whereKey($validated['device_group_id'])
                 ->firstOrFail()
                 ->hardwares()
-                ->pluck('hardwares.id');
-            $hardwareIds = $hardwareIds->merge($groupIds);
+                ->pluck('hardwares.id')
+                ->map(static fn ($id): int => (int) $id)
+                ->all();
+            $hardwareIds = array_values(array_unique([...$hardwareIds, ...$groupIds]));
         }
 
-        $hardwareIds = $hardwareIds->unique()->values();
-
-        if ($hardwareIds->isEmpty()) {
+        if ($hardwareIds === []) {
             throw ValidationException::withMessages([
                 'hardware_ids' => __('Select at least one device or a group with members.'),
             ]);
