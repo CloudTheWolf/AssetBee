@@ -1,5 +1,6 @@
 <?php
 
+use App\Enums\RemotePushStatus;
 use App\Enums\RemotePushTargetStatus;
 use App\Enums\RemotePushType;
 use App\Models\Hardware;
@@ -119,7 +120,7 @@ test('drone command verify authorizes assigned device and rejects others', funct
         ->assertNotFound()
         ->assertJsonPath('authorized', false);
 
-    $push->update(['status' => \App\Enums\RemotePushStatus::Cancelled]);
+    $push->update(['status' => RemotePushStatus::Cancelled]);
 
     $this->withToken($plainTextKey)
         ->postJson("/api/v1/drone/commands/{$target->id}/verify", [

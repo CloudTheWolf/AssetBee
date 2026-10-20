@@ -31,4 +31,3 @@ Route::middleware(['auth', 'verified', 'organization'])->group(function () {
     Route::get('assets/documents/{document}/download', DownloadAssetDocumentController::class)
         ->name('assets.documents.download');
 });
-
