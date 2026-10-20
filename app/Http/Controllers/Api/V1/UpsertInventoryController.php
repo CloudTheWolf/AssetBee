@@ -66,7 +66,7 @@ class UpsertInventoryController extends Controller
 
         [$asset, $created] = $result;
 
-        return $this->responseFor($asset, $created);
+        return $this->responseFor($organization, $asset, $created);
     }
 
     private function findExistingAsset(
@@ -400,8 +400,12 @@ class UpsertInventoryController extends Controller
         return $keys === [] ? null : implode(PHP_EOL, $keys);
     }
 
-    private function responseFor(Hardware|Virtualware $asset, bool $created): JsonResponse
+    private function responseFor(Organization $organization, Hardware|Virtualware $asset, bool $created): JsonResponse
     {
+        $drone = [
+            'enableDriveEncryption' => (bool) $organization->enable_drive_encryption,
+        ];
+
         if ($asset instanceof Virtualware) {
             return response()->json([
                 'data' => [
@@ -414,6 +418,7 @@ class UpsertInventoryController extends Controller
                     'status' => $asset->status->value,
                     'collectedAtUtc' => $asset->inventory_collected_at?->toIso8601String(),
                 ],
+                'drone' => $drone,
             ], $created ? 201 : 200);
         }
 
@@ -433,6 +438,7 @@ class UpsertInventoryController extends Controller
                 'bitlockerStatus' => $asset->bitlocker_status?->value,
                 'collectedAtUtc' => $asset->inventory_collected_at?->toIso8601String(),
             ],
+            'drone' => $drone,
         ], $created ? 201 : 200);
     }
 }

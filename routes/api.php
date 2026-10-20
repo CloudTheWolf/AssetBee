@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\V1\DroneSettingsController;
 use App\Http\Controllers\Api\V1\Soc2AuditController;
 use App\Http\Controllers\Api\V1\UpsertInventoryController;
 use Illuminate\Support\Facades\Route;
@@ -9,6 +10,8 @@ Route::prefix('v1')
     ->group(function (): void {
         Route::post('inventory', UpsertInventoryController::class);
         Route::put('inventory', UpsertInventoryController::class);
+
+        Route::get('drone/settings', DroneSettingsController::class);
 
         Route::get('audit/soc2', [Soc2AuditController::class, 'json']);
         Route::get('audit/soc2.pdf', [Soc2AuditController::class, 'pdf']);

@@ -23,6 +23,7 @@ class OrganizationFactory extends Factory
             'name' => $name,
             'slug' => Str::slug($name).'-'.Str::lower(Str::random(4)),
             'virtualware_sync_enabled' => false,
+            'enable_drive_encryption' => false,
         ];
     }
 
@@ -30,6 +31,13 @@ class OrganizationFactory extends Factory
     {
         return $this->state(fn (): array => [
             'virtualware_sync_enabled' => true,
+        ]);
+    }
+
+    public function withDriveEncryption(): static
+    {
+        return $this->state(fn (): array => [
+            'enable_drive_encryption' => true,
         ]);
     }
 

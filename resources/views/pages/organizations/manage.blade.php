@@ -32,6 +32,8 @@ new #[Title('Organization settings')] class extends Component
 
     public bool $cost_sync_enabled = false;
 
+    public bool $enable_drive_encryption = false;
+
     public string $invite_email = '';
 
     public string $invite_role = 'member';
@@ -49,6 +51,7 @@ new #[Title('Organization settings')] class extends Component
         $this->google_hosted_domains = $organization->googleDomains()->pluck('domain')->implode("\n");
         $this->virtualware_sync_enabled = (bool) $organization->virtualware_sync_enabled;
         $this->cost_sync_enabled = (bool) $organization->cost_sync_enabled;
+        $this->enable_drive_encryption = (bool) $organization->enable_drive_encryption;
     }
 
     public function save(UpdateOrganization $updateOrganization): void
@@ -61,6 +64,7 @@ new #[Title('Organization settings')] class extends Component
             'google_hosted_domains' => $this->google_hosted_domains,
             'virtualware_sync_enabled' => $this->virtualware_sync_enabled,
             'cost_sync_enabled' => $this->cost_sync_enabled,
+            'enable_drive_encryption' => $this->enable_drive_encryption,
         ]);
 
         unset($this->organization);
@@ -238,6 +242,11 @@ new #[Title('Organization settings')] class extends Component
             wire:model="cost_sync_enabled"
             :label="__('Automatic cost sync')"
             :description="__('Once daily via cost:sync, refresh software and cloud tenant costs from configured providers. Saving cost sync on an asset also enables this.')"
+        />
+        <flux:checkbox
+            wire:model="enable_drive_encryption"
+            :label="__('Enable Windows drive encryption')"
+            :description="__('When on, AssetBee Drone turns on BitLocker for fixed drives on Windows desktops and laptops that are unencrypted or missing a recovery key, then reports the key on the next sync.')"
         />
         <flux:textarea
             wire:model="google_hosted_domains"

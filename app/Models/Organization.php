@@ -21,6 +21,7 @@ use Laravel\Cashier\Billable;
  * @property string $slug
  * @property bool $virtualware_sync_enabled
  * @property bool $cost_sync_enabled
+ * @property bool $enable_drive_encryption
  * @property int|null $subscription_package_id
  * @property string|null $stripe_id
  * @property string|null $pm_type
@@ -32,7 +33,7 @@ use Laravel\Cashier\Billable;
  * @property-read OrganizationSubscription|null $plan
  * @property-read SubscriptionPackage|null $package
  */
-#[Fillable(['name', 'slug', 'virtualware_sync_enabled', 'cost_sync_enabled'])]
+#[Fillable(['name', 'slug', 'virtualware_sync_enabled', 'cost_sync_enabled', 'enable_drive_encryption'])]
 class Organization extends Model
 {
     /** @use HasFactory<OrganizationFactory> */
@@ -46,6 +47,7 @@ class Organization extends Model
         return [
             'virtualware_sync_enabled' => 'boolean',
             'cost_sync_enabled' => 'boolean',
+            'enable_drive_encryption' => 'boolean',
         ];
     }
 

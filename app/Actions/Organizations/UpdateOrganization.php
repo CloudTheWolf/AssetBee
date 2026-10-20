@@ -26,6 +26,7 @@ class UpdateOrganization
             'google_hosted_domains' => ['nullable'],
             'virtualware_sync_enabled' => ['sometimes', 'boolean'],
             'cost_sync_enabled' => ['sometimes', 'boolean'],
+            'enable_drive_encryption' => ['sometimes', 'boolean'],
         ])->validate();
 
         return DB::transaction(function () use ($organization, $validated, $input) {
@@ -39,6 +40,9 @@ class UpdateOrganization
                     : [],
                 ...array_key_exists('cost_sync_enabled', $validated)
                     ? ['cost_sync_enabled' => (bool) $validated['cost_sync_enabled']]
+                    : [],
+                ...array_key_exists('enable_drive_encryption', $validated)
+                    ? ['enable_drive_encryption' => (bool) $validated['enable_drive_encryption']]
                     : [],
             ]);
 
