@@ -3,6 +3,7 @@
 use App\Actions\RemoteAdmin\CancelRemotePush;
 use App\Enums\RemotePushTargetStatus;
 use App\Models\RemotePush;
+use App\Models\RemotePushTarget;
 use App\Support\CurrentOrganization;
 use Flux\Flux;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
@@ -20,6 +21,10 @@ new #[Title('Remote push')] class extends Component
 
     public bool $incompleteOnly = true;
 
+    public bool $showTargetDetailModal = false;
+
+    public ?int $selectedTargetId = null;
+
     public function mount(RemotePush $remotePush): void
     {
         $this->authorize('view', $remotePush);
@@ -33,6 +38,23 @@ new #[Title('Remote push')] class extends Component
         $cancelRemotePush->handle($this->remotePush);
         $this->remotePush->refresh();
         Flux::toast(variant: 'success', text: __('Push cancelled.'));
+    }
+
+    public function openTargetDetail(int $targetId): void
+    {
+        $this->authorize('view', $this->remotePush);
+
+        $exists = $this->remotePush->targets()->whereKey($targetId)->exists();
+        abort_unless($exists, 404);
+
+        $this->selectedTargetId = $targetId;
+        $this->showTargetDetailModal = true;
+    }
+
+    public function closeTargetDetailModal(): void
+    {
+        $this->showTargetDetailModal = false;
+        $this->selectedTargetId = null;
     }
 
     #[Computed]
@@ -49,6 +71,19 @@ new #[Title('Remote push')] class extends Component
             )
             ->orderBy('id')
             ->get();
+    }
+
+    #[Computed]
+    public function selectedTarget(): ?RemotePushTarget
+    {
+        if ($this->selectedTargetId === null) {
+            return null;
+        }
+
+        return $this->remotePush->targets()
+            ->with('hardware')
+            ->whereKey($this->selectedTargetId)
+            ->first();
     }
 
     #[Computed]
@@ -104,9 +139,13 @@ new #[Title('Remote push')] class extends Component
             @forelse ($this->targets as $target)
                 <flux:table.row wire:key="target-{{ $target->id }}">
                     <flux:table.cell>
-                        <a href="{{ route('assets.hardware.show', $target->hardware) }}" class="font-medium text-accent" wire:navigate>
+                        <button
+                            type="button"
+                            class="font-medium text-accent hover:underline"
+                            wire:click="openTargetDetail({{ $target->id }})"
+                        >
                             {{ $target->hardware->name }}
-                        </a>
+                        </button>
                     </flux:table.cell>
                     <flux:table.cell>{{ $target->hardware->serial_number ?: '—' }}</flux:table.cell>
                     <flux:table.cell>
@@ -137,4 +176,64 @@ new #[Title('Remote push')] class extends Component
             @endforelse
         </flux:table.rows>
     </flux:table>
+
+    <flux:modal wire:model="showTargetDetailModal" class="max-w-2xl" @close="closeTargetDetailModal">
+        @if ($this->selectedTarget)
+            @php($target = $this->selectedTarget)
+            <div class="space-y-6">
+                <div class="space-y-2">
+                    <flux:heading size="lg">{{ $target->hardware->name }}</flux:heading>
+                    <flux:text>
+                        {{ $target->hardware->serial_number ?: __('No serial number') }}
+                        ·
+                        <flux:badge :color="$target->status->color()">{{ $target->status->label() }}</flux:badge>
+                    </flux:text>
+                </div>
+
+                <div class="grid gap-4 sm:grid-cols-2">
+                    <div>
+                        <flux:text class="font-medium">{{ __('Scheduled') }}</flux:text>
+                        <div>{{ $target->scheduled_for?->timezone(config('app.timezone'))->format('Y-m-d H:i') ?? '—' }}</div>
+                    </div>
+                    <div>
+                        <flux:text class="font-medium">{{ __('Postpone deadline') }}</flux:text>
+                        <div>{{ $target->postpone_deadline_at?->timezone(config('app.timezone'))->format('Y-m-d H:i') ?? '—' }}</div>
+                    </div>
+                    <div>
+                        <flux:text class="font-medium">{{ __('First notified') }}</flux:text>
+                        <div>{{ $target->first_notified_at?->timezone(config('app.timezone'))->format('Y-m-d H:i') ?? '—' }}</div>
+                    </div>
+                    <div>
+                        <flux:text class="font-medium">{{ __('Completed') }}</flux:text>
+                        <div>{{ $target->completed_at?->timezone(config('app.timezone'))->format('Y-m-d H:i') ?? '—' }}</div>
+                    </div>
+                </div>
+
+                @if ($target->error)
+                    <div class="space-y-2">
+                        <flux:text class="font-medium">{{ __('Error') }}</flux:text>
+                        <div class="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-300">
+                            {{ $target->error }}
+                        </div>
+                    </div>
+                @endif
+
+                <div class="space-y-2">
+                    <flux:text class="font-medium">{{ __('Result') }}</flux:text>
+                    @if ($target->result_json)
+                        <pre class="max-h-96 overflow-auto rounded-lg border border-zinc-200 bg-zinc-50 p-3 font-mono text-xs dark:border-zinc-700 dark:bg-zinc-900">{{ json_encode($target->result_json, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) }}</pre>
+                    @else
+                        <flux:text>{{ __('No result payload yet.') }}</flux:text>
+                    @endif
+                </div>
+
+                <div class="flex justify-end gap-2">
+                    <flux:button variant="ghost" :href="route('assets.hardware.show', $target->hardware)" wire:navigate>
+                        {{ __('Open device') }}
+                    </flux:button>
+                    <flux:button variant="primary" wire:click="closeTargetDetailModal">{{ __('Close') }}</flux:button>
+                </div>
+            </div>
+        @endif
+    </flux:modal>
 </div>
