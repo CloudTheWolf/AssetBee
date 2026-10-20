@@ -18,7 +18,7 @@ class DeviceGroupFactory extends Factory
     {
         return [
             'organization_id' => Organization::factory(),
-            'name' => implode(' ', fake()->unique()->words(2)).' group',
+            'name' => fake()->unique()->word().' '.fake()->word().' group',
             'description' => fake()->optional()->sentence(),
         ];
     }
