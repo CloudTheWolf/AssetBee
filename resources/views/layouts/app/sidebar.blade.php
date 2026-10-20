@@ -74,6 +74,17 @@
                         <flux:sidebar.item icon="cube" :href="route('assets.software.index')" :current="request()->routeIs('assets.software.*')" wire:navigate>
                             {{ __('Software') }}
                         </flux:sidebar.item>
+                        <flux:sidebar.item icon="rectangle-group" :href="route('assets.device-groups.index')" :current="request()->routeIs('assets.device-groups.*')" wire:navigate>
+                            {{ __('Device groups') }}
+                        </flux:sidebar.item>
+                        @can('viewAny', App\Models\RemotePush::class)
+                            <flux:sidebar.item icon="paper-airplane" :href="route('assets.remote-pushes.index')" :current="request()->routeIs('assets.remote-pushes.*')" wire:navigate>
+                                {{ __('Remote pushes') }}
+                            </flux:sidebar.item>
+                            <flux:sidebar.item icon="archive-box" :href="route('assets.remote-packages.index')" :current="request()->routeIs('assets.remote-packages.*')" wire:navigate>
+                                {{ __('Remote packages') }}
+                            </flux:sidebar.item>
+                        @endcan
                     </flux:sidebar.group>
                 @endif
             </flux:sidebar.nav>

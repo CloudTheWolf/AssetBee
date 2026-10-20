@@ -29,15 +29,18 @@ class PurgeSoftDeletedAssets
      */
     public function handle(?int $retentionDays = null): array
     {
-        $retentionDays ??= (int) config('assets.soft_delete_retention_days', 30);
-        $cutoff = now()->subDays(max(0, $retentionDays));
+        $defaultDays = (int) config('assets.soft_delete_retention_days', 30);
+        $cutoff = now()->subDays(max(0, $retentionDays ?? $defaultDays));
+        $hardwareCutoff = $retentionDays !== null
+            ? $cutoff
+            : now()->subMinutes(max(0, (int) config('assets.hardware_soft_delete_retention_minutes', 1)));
 
         return [
             'allocations_released' => $this->releaseAllocations(),
             'purged' => [
                 'software' => $this->purgeSoftwares($cutoff),
                 'userware' => $this->purgeUserwares($cutoff),
-                'hardware' => $this->purgeHardwares($cutoff),
+                'hardware' => $this->purgeHardwares($hardwareCutoff),
                 'virtualware' => $this->purgeVirtualwares($cutoff),
                 'cloud_tenants' => $this->purgeCloudTenants($cutoff),
             ],

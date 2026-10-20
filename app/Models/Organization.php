@@ -157,6 +157,30 @@ class Organization extends Model
     }
 
     /**
+     * @return HasMany<DeviceGroup, $this>
+     */
+    public function deviceGroups(): HasMany
+    {
+        return $this->hasMany(DeviceGroup::class);
+    }
+
+    /**
+     * @return HasMany<RemotePackage, $this>
+     */
+    public function remotePackages(): HasMany
+    {
+        return $this->hasMany(RemotePackage::class);
+    }
+
+    /**
+     * @return HasMany<RemotePush, $this>
+     */
+    public function remotePushes(): HasMany
+    {
+        return $this->hasMany(RemotePush::class);
+    }
+
+    /**
      * @return HasMany<AssetDocument, $this>
      */
     public function assetDocuments(): HasMany

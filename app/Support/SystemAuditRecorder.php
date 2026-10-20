@@ -4,6 +4,7 @@ namespace App\Support;
 
 use App\Models\Organization;
 use App\Models\OrganizationApiKey;
+use App\Models\RemotePushTarget;
 use App\Models\SoftwareAssignment;
 use App\Models\SubscriptionPackage;
 use App\Models\SystemAudit;
@@ -131,6 +132,12 @@ class SystemAuditRecorder
             $softwareOrganizationId = $target->software()->value('organization_id');
 
             return is_numeric($softwareOrganizationId) ? (int) $softwareOrganizationId : null;
+        }
+
+        if ($target instanceof RemotePushTarget) {
+            $pushOrganizationId = $target->remotePush()->value('organization_id');
+
+            return is_numeric($pushOrganizationId) ? (int) $pushOrganizationId : null;
         }
 
         return CurrentOrganization::id();

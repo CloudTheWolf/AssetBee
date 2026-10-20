@@ -10,6 +10,7 @@ use App\Models\Userware;
 use App\Models\UserwareAccount;
 use App\Models\Virtualware;
 use Illuminate\Support\Facades\Queue;
+use Illuminate\Support\Facades\Schedule;
 
 test('job releases allocations for soft-deleted software without waiting for retention', function () {
     $organization = createOrganizationMember()[1];
@@ -132,6 +133,27 @@ test('job permanently removes soft-deleted assets after retention expires', func
         ->and(CloudTenant::withTrashed()->find($tenant->id))->toBeNull();
 });
 
+test('hardware is permanently removed after its short retention window', function () {
+    config(['assets.hardware_soft_delete_retention_minutes' => 1]);
+
+    $organization = createOrganizationMember()[1];
+
+    $ready = Hardware::factory()->create(['organization_id' => $organization->id]);
+    $recent = Hardware::factory()->create(['organization_id' => $organization->id]);
+
+    $ready->delete();
+    $recent->delete();
+
+    Hardware::withTrashed()->whereKey($ready->id)->update(['deleted_at' => now()->subMinutes(2)]);
+    Hardware::withTrashed()->whereKey($recent->id)->update(['deleted_at' => now()->subSeconds(30)]);
+
+    $result = app(PurgeSoftDeletedAssets::class)->handle();
+
+    expect($result['purged']['hardware'])->toBe(1)
+        ->and(Hardware::withTrashed()->find($ready->id))->toBeNull()
+        ->and(Hardware::withTrashed()->find($recent->id))->not->toBeNull();
+});
+
 test('queued job dispatches the purge action', function () {
     Queue::fake();
 
@@ -140,4 +162,16 @@ test('queued job dispatches the purge action', function () {
     Queue::assertPushed(PurgeSoftDeletedAssetsJob::class, function (PurgeSoftDeletedAssetsJob $job): bool {
         return $job->retentionDays === 7;
     });
+});
+
+test('soft-deleted asset purge is scheduled every minute', function () {
+    $events = collect(Schedule::events())
+        ->filter(fn ($event): bool => ($event->description ?? null) === 'purge-soft-deleted-assets'
+            || str_contains($event->description ?? '', PurgeSoftDeletedAssetsJob::class));
+
+    expect($events)->not->toBeEmpty();
+
+    $event = $events->first();
+
+    expect($event->expression)->toBe('* * * * *');
 });

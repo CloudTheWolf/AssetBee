@@ -342,23 +342,30 @@ new #[Title('Hardware')] class extends Component {
 }; ?>
 
 <div class="mx-auto flex w-full max-w-3xl flex-col gap-6">
-    <div class="flex items-center gap-3">
-        <flux:button size="sm" :href="route('assets.hardware.index')" wire:navigate icon="arrow-left">{{ __('Back') }}</flux:button>
-        <div>
-            <flux:heading size="xl">{{ $hardware->name }}</flux:heading>
-            <flux:text>
-                {{ $hardware->category->label() }}
-                @if ($hardware->asset_tag)
-                    · {{ $hardware->asset_tag }}
-                @endif
-                @if ($hardware->is_vm_host)
-                    · {{ __('VM host') }}
-                @endif
-                @if ($hardware->inventory_collected_at)
-                    · {{ __('Inventory :when', ['when' => $hardware->inventory_collected_at->diffForHumans()]) }}
-                @endif
-            </flux:text>
+    <div class="flex flex-wrap items-center justify-between gap-3">
+        <div class="flex items-center gap-3">
+            <flux:button size="sm" :href="route('assets.hardware.index')" wire:navigate icon="arrow-left">{{ __('Back') }}</flux:button>
+            <div>
+                <flux:heading size="xl">{{ $hardware->name }}</flux:heading>
+                <flux:text>
+                    {{ $hardware->category->label() }}
+                    @if ($hardware->asset_tag)
+                        · {{ $hardware->asset_tag }}
+                    @endif
+                    @if ($hardware->is_vm_host)
+                        · {{ __('VM host') }}
+                    @endif
+                    @if ($hardware->inventory_collected_at)
+                        · {{ __('Inventory :when', ['when' => $hardware->inventory_collected_at->diffForHumans()]) }}
+                    @endif
+                </flux:text>
+            </div>
         </div>
+        @can('create', App\Models\RemotePush::class)
+            <flux:button size="sm" variant="primary" :href="route('assets.remote-pushes.create', ['hardware_id' => $hardware->id])" wire:navigate>
+                {{ __('Push…') }}
+            </flux:button>
+        @endcan
     </div>
 
     <form wire:submit="save" class="flex flex-col gap-6 rounded-xl border border-zinc-200 p-6 dark:border-zinc-700">

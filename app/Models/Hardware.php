@@ -12,6 +12,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
@@ -174,5 +175,22 @@ class Hardware extends Model
     public function documents(): MorphMany
     {
         return $this->morphMany(AssetDocument::class, 'documentable');
+    }
+
+    /**
+     * @return BelongsToMany<DeviceGroup, $this>
+     */
+    public function deviceGroups(): BelongsToMany
+    {
+        return $this->belongsToMany(DeviceGroup::class, 'device_group_hardware')
+            ->withTimestamps();
+    }
+
+    /**
+     * @return HasMany<RemotePushTarget, $this>
+     */
+    public function remotePushTargets(): HasMany
+    {
+        return $this->hasMany(RemotePushTarget::class);
     }
 }

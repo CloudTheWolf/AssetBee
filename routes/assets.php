@@ -19,6 +19,16 @@ Route::middleware(['auth', 'verified', 'organization'])->group(function () {
     Route::livewire('assets/cloud-tenants', 'pages::assets.cloud-tenants.index')->name('assets.cloud-tenants.index');
     Route::livewire('assets/cloud-tenants/{cloudTenant}', 'pages::assets.cloud-tenants.show')->name('assets.cloud-tenants.show');
 
+    Route::livewire('assets/device-groups', 'pages::assets.device-groups.index')->name('assets.device-groups.index');
+    Route::livewire('assets/device-groups/{deviceGroup}', 'pages::assets.device-groups.show')->name('assets.device-groups.show');
+
+    Route::livewire('assets/remote-packages', 'pages::assets.remote-packages.index')->name('assets.remote-packages.index');
+
+    Route::livewire('assets/remote-pushes', 'pages::assets.remote-pushes.index')->name('assets.remote-pushes.index');
+    Route::livewire('assets/remote-pushes/create', 'pages::assets.remote-pushes.create')->name('assets.remote-pushes.create');
+    Route::livewire('assets/remote-pushes/{remotePush}', 'pages::assets.remote-pushes.show')->name('assets.remote-pushes.show');
+
     Route::get('assets/documents/{document}/download', DownloadAssetDocumentController::class)
         ->name('assets.documents.download');
 });
+

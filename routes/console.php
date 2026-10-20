@@ -54,6 +54,6 @@ Schedule::command('cost:sync')
     ->name('cost-sync');
 
 Schedule::job(new PurgeSoftDeletedAssets)
-    ->daily()
+    ->everyMinute()
     ->withoutOverlapping()
     ->name('purge-soft-deleted-assets');
