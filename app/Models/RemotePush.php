@@ -107,7 +107,7 @@ class RemotePush extends Model
             : $this->packages()->pluck('remote_packages.name');
 
         if ($names->isEmpty()) {
-            return $this->package?->name ?? '';
+            return $this->package !== null ? $this->package->name : '';
         }
 
         if ($names->count() === 1) {
