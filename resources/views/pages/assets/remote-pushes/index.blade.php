@@ -1,8 +1,10 @@
 <?php
 
+use App\Actions\RemoteAdmin\DeleteRemotePush;
 use App\Enums\RemotePushStatus;
 use App\Models\RemotePush;
 use App\Support\CurrentOrganization;
+use Flux\Flux;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Title;
@@ -26,11 +28,20 @@ new #[Title('Remote pushes')] class extends Component
         $this->resetPage();
     }
 
+    public function delete(RemotePush $remotePush, DeleteRemotePush $deleteRemotePush): void
+    {
+        $this->authorize('delete', $remotePush);
+        abort_unless($remotePush->organization_id === CurrentOrganization::require()->id, 404);
+
+        $deleteRemotePush->handle($remotePush);
+        Flux::toast(variant: 'success', text: __('Remote push deleted.'));
+    }
+
     #[Computed]
     public function pushes()
     {
         return RemotePush::query()
-            ->with(['package', 'creator'])
+            ->with(['packages', 'package', 'creator'])
             ->withCount([
                 'targets',
                 'targets as incomplete_targets_count' => fn ($query) => $query->whereIn(
@@ -68,7 +79,7 @@ new #[Title('Remote pushes')] class extends Component
     <flux:table>
         <flux:table.columns>
             <flux:table.column>{{ __('Type') }}</flux:table.column>
-            <flux:table.column>{{ __('Package') }}</flux:table.column>
+            <flux:table.column>{{ __('Packages') }}</flux:table.column>
             <flux:table.column>{{ __('Status') }}</flux:table.column>
             <flux:table.column>{{ __('Targets') }}</flux:table.column>
             <flux:table.column>{{ __('Incomplete') }}</flux:table.column>
@@ -79,7 +90,7 @@ new #[Title('Remote pushes')] class extends Component
             @forelse ($this->pushes as $push)
                 <flux:table.row wire:key="push-{{ $push->id }}">
                     <flux:table.cell class="font-medium">{{ $push->type->label() }}</flux:table.cell>
-                    <flux:table.cell>{{ $push->package?->name ?? '—' }}</flux:table.cell>
+                    <flux:table.cell>{{ $push->packageSummary() !== '' ? $push->packageSummary() : '—' }}</flux:table.cell>
                     <flux:table.cell>
                         <flux:badge :color="$push->status->color()">{{ $push->status->label() }}</flux:badge>
                     </flux:table.cell>
@@ -93,7 +104,19 @@ new #[Title('Remote pushes')] class extends Component
                     </flux:table.cell>
                     <flux:table.cell>{{ $push->created_at?->timezone(config('app.timezone'))->format('Y-m-d H:i') }}</flux:table.cell>
                     <flux:table.cell>
-                        <flux:button size="sm" :href="route('assets.remote-pushes.show', $push)" wire:navigate>{{ __('Open') }}</flux:button>
+                        <div class="flex justify-end gap-2">
+                            <flux:button size="sm" :href="route('assets.remote-pushes.show', $push)" wire:navigate>{{ __('Open') }}</flux:button>
+                            @can('delete', $push)
+                                <flux:button
+                                    size="sm"
+                                    variant="danger"
+                                    wire:click="delete({{ $push->id }})"
+                                    wire:confirm="{{ __('Permanently delete this push and all target history?') }}"
+                                >
+                                    {{ __('Delete') }}
+                                </flux:button>
+                            @endcan
+                        </div>
                     </flux:table.cell>
                 </flux:table.row>
             @empty

@@ -34,6 +34,16 @@ class DroneCommandSerializer
     public function serializeTarget(RemotePushTarget $target): array
     {
         $push = $target->remotePush;
+        $push->loadMissing(['packages', 'package']);
+
+        $packages = $push->packages
+            ->map(fn ($package) => $package->toDronePayload())
+            ->values()
+            ->all();
+
+        if ($packages === [] && $push->package !== null) {
+            $packages = [$push->package->toDronePayload()];
+        }
 
         return [
             'id' => $target->id,
@@ -44,7 +54,8 @@ class DroneCommandSerializer
             'firstNotifiedAt' => $target->first_notified_at?->toIso8601String(),
             'postponeDeadlineAt' => $target->postpone_deadline_at?->toIso8601String(),
             'scheduledFor' => $target->scheduled_for?->toIso8601String(),
-            'package' => $push->package?->toDronePayload(),
+            'package' => $packages[0] ?? null,
+            'packages' => $packages,
         ];
     }
 }

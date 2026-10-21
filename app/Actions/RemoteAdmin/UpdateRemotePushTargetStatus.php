@@ -53,6 +53,8 @@ class UpdateRemotePushTargetStatus
             RemotePushTargetStatus::Running,
         ], true)) {
             $attributes['first_notified_at'] = $now;
+            // Hard ceiling for postpone/schedule. Drone also auto-installs after 15
+            // minutes with no user response (see AssetBee.Drone RemoteInstallTiming).
             $attributes['postpone_deadline_at'] = $now->copy()->addDay();
         }
 

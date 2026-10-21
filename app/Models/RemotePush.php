@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
@@ -27,6 +28,7 @@ use Illuminate\Support\Collection;
  * @property-read Organization $organization
  * @property-read User|null $creator
  * @property-read RemotePackage|null $package
+ * @property-read Collection<int, RemotePackage> $packages
  * @property-read Collection<int, RemotePushTarget> $targets
  */
 #[Fillable([
@@ -70,6 +72,8 @@ class RemotePush extends Model
     }
 
     /**
+     * Primary/legacy package column (first package). Prefer {@see packages()}.
+     *
      * @return BelongsTo<RemotePackage, $this>
      */
     public function package(): BelongsTo
@@ -78,11 +82,39 @@ class RemotePush extends Model
     }
 
     /**
+     * @return BelongsToMany<RemotePackage, $this>
+     */
+    public function packages(): BelongsToMany
+    {
+        return $this->belongsToMany(RemotePackage::class, 'remote_push_package')
+            ->withPivot('position')
+            ->withTimestamps()
+            ->orderByPivot('position');
+    }
+
+    /**
      * @return HasMany<RemotePushTarget, $this>
      */
     public function targets(): HasMany
     {
         return $this->hasMany(RemotePushTarget::class);
+    }
+
+    public function packageSummary(): string
+    {
+        $names = $this->relationLoaded('packages')
+            ? $this->packages->pluck('name')
+            : $this->packages()->pluck('remote_packages.name');
+
+        if ($names->isEmpty()) {
+            return $this->package?->name ?? '';
+        }
+
+        if ($names->count() === 1) {
+            return (string) $names->first();
+        }
+
+        return $names->take(2)->implode(', ').($names->count() > 2 ? ' +'.($names->count() - 2) : '');
     }
 
     public function refreshCompletionStatus(): void

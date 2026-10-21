@@ -20,7 +20,8 @@ new #[Title('New remote push')] class extends Component
 
     public string $type = 'bitlocker_status';
 
-    public string $remote_package_id = '';
+    /** @var list<int|string> */
+    public array $remote_package_ids = [];
 
     #[Url]
     public string $device_group_id = '';
@@ -67,7 +68,7 @@ new #[Title('New remote push')] class extends Component
             auth()->user(),
             [
                 'type' => $this->type,
-                'remote_package_id' => $this->remote_package_id !== '' ? (int) $this->remote_package_id : null,
+                'remote_package_ids' => array_map('intval', $this->remote_package_ids),
                 'device_group_id' => $this->device_group_id !== '' ? (int) $this->device_group_id : null,
                 'hardware_ids' => array_map('intval', $this->hardware_ids),
                 'notes' => $this->notes !== '' ? $this->notes : null,
@@ -128,18 +129,28 @@ new #[Title('New remote push')] class extends Component
         </flux:select>
 
         @if ($type === 'install_package')
-            <flux:select wire:model="remote_package_id" :label="__('Package')" required>
-                <option value="">{{ __('Select a package') }}</option>
-                @foreach ($this->packages as $package)
-                    <option value="{{ $package->id }}">{{ $package->name }} ({{ $package->source->label() }})</option>
-                @endforeach
-            </flux:select>
-            @if ($this->packages->isEmpty())
-                <flux:text>
-                    {{ __('No packages yet.') }}
-                    <a href="{{ route('assets.remote-packages.index') }}" class="text-accent" wire:navigate>{{ __('Add one') }}</a>
-                </flux:text>
-            @endif
+            <div class="flex flex-col gap-3">
+                <flux:heading size="sm">{{ __('Packages') }}</flux:heading>
+                <flux:text>{{ __('Select one or more packages to install in order.') }}</flux:text>
+                <ul class="max-h-64 divide-y divide-zinc-200 overflow-y-auto rounded-lg border border-zinc-200 dark:divide-zinc-700 dark:border-zinc-700">
+                    @forelse ($this->packages as $package)
+                        <li class="flex items-center gap-3 p-3" wire:key="push-pkg-{{ $package->id }}">
+                            <flux:checkbox wire:model="remote_package_ids" value="{{ $package->id }}" />
+                            <div>
+                                <div class="font-medium">{{ $package->name }}</div>
+                                <flux:text class="text-sm">{{ $package->source->label() }}</flux:text>
+                            </div>
+                        </li>
+                    @empty
+                        <li class="p-3">
+                            <flux:text>
+                                {{ __('No packages yet.') }}
+                                <a href="{{ route('assets.remote-packages.index') }}" class="text-accent" wire:navigate>{{ __('Add one') }}</a>
+                            </flux:text>
+                        </li>
+                    @endforelse
+                </ul>
+            </div>
         @endif
 
         <flux:select wire:model="device_group_id" :label="__('Device group (optional)')">

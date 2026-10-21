@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
@@ -68,6 +69,16 @@ class RemotePackage extends Model
     public function remotePushes(): HasMany
     {
         return $this->hasMany(RemotePush::class);
+    }
+
+    /**
+     * @return BelongsToMany<RemotePush, $this>
+     */
+    public function pushes(): BelongsToMany
+    {
+        return $this->belongsToMany(RemotePush::class, 'remote_push_package')
+            ->withPivot('position')
+            ->withTimestamps();
     }
 
     /**

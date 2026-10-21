@@ -18,11 +18,16 @@ test('drone commands endpoint requires api key and returns pending targets by se
         'serial_number' => 'SN-CMD-1',
         'name' => 'WIN-CMD',
     ]);
-    $package = RemotePackage::factory()->create(['organization_id' => $organization->id]);
+    $packageA = RemotePackage::factory()->create(['organization_id' => $organization->id, 'name' => 'Pkg A']);
+    $packageB = RemotePackage::factory()->create(['organization_id' => $organization->id, 'name' => 'Pkg B']);
     $push = RemotePush::factory()->create([
         'organization_id' => $organization->id,
         'type' => RemotePushType::InstallPackage,
-        'remote_package_id' => $package->id,
+        'remote_package_id' => $packageA->id,
+    ]);
+    $push->packages()->sync([
+        $packageA->id => ['position' => 0],
+        $packageB->id => ['position' => 1],
     ]);
     $target = RemotePushTarget::factory()->create([
         'remote_push_id' => $push->id,
@@ -40,9 +45,10 @@ test('drone commands endpoint requires api key and returns pending targets by se
         ->assertJsonPath('data.0.id', $target->id)
         ->assertJsonPath('data.0.type', 'install_package')
         ->assertJsonPath('data.0.requiresUserConsent', true)
-        ->assertJsonPath('data.0.package.name', $package->name);
+        ->assertJsonPath('data.0.package.name', 'Pkg A')
+        ->assertJsonPath('data.0.packages.0.name', 'Pkg A')
+        ->assertJsonPath('data.0.packages.1.name', 'Pkg B');
 });
-
 test('drone command status enforces postpone deadline', function () {
     $organization = Organization::factory()->create();
     [, $plainTextKey] = OrganizationApiKey::issue($organization, 'Collector');

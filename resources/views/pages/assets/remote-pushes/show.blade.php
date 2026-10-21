@@ -1,6 +1,8 @@
 <?php
 
 use App\Actions\RemoteAdmin\CancelRemotePush;
+use App\Actions\RemoteAdmin\DeleteRemotePush;
+use App\Actions\RemoteAdmin\ResetRemotePushTarget;
 use App\Enums\RemotePushTargetStatus;
 use App\Models\RemotePush;
 use App\Models\RemotePushTarget;
@@ -29,7 +31,7 @@ new #[Title('Remote push')] class extends Component
     {
         $this->authorize('view', $remotePush);
         abort_unless($remotePush->organization_id === CurrentOrganization::require()->id, 404);
-        $this->remotePush = $remotePush->load(['package', 'creator']);
+        $this->remotePush = $remotePush->load(['packages', 'package', 'creator']);
     }
 
     public function cancel(CancelRemotePush $cancelRemotePush): void
@@ -38,6 +40,31 @@ new #[Title('Remote push')] class extends Component
         $cancelRemotePush->handle($this->remotePush);
         $this->remotePush->refresh();
         Flux::toast(variant: 'success', text: __('Push cancelled.'));
+    }
+
+    public function delete(DeleteRemotePush $deleteRemotePush): void
+    {
+        $this->authorize('delete', $this->remotePush);
+        $deleteRemotePush->handle($this->remotePush);
+        Flux::toast(variant: 'success', text: __('Remote push deleted.'));
+        $this->redirect(route('assets.remote-pushes.index', absolute: false), navigate: true);
+    }
+
+    public function resetTarget(int $targetId, ResetRemotePushTarget $resetRemotePushTarget): void
+    {
+        $this->authorize('update', $this->remotePush);
+
+        $target = $this->remotePush->targets()->whereKey($targetId)->firstOrFail();
+        $resetRemotePushTarget->handle($target);
+
+        $this->remotePush->refresh()->load(['packages', 'package', 'creator']);
+        unset($this->targets, $this->incompleteCount, $this->selectedTarget);
+
+        if ($this->selectedTargetId === $targetId) {
+            $this->selectedTargetId = $targetId;
+        }
+
+        Flux::toast(variant: 'success', text: __('Target reset. Drone will pick it up again on the next poll.'));
     }
 
     public function openTargetDetail(int $targetId): void
@@ -103,7 +130,13 @@ new #[Title('Remote push')] class extends Component
         <div>
             <flux:heading size="xl">{{ $remotePush->type->label() }}</flux:heading>
             <flux:text>
-                {{ $remotePush->package?->name ? __('Package: :name', ['name' => $remotePush->package->name]) : __('Probe command') }}
+                @if ($remotePush->packages->isNotEmpty())
+                    {{ __('Packages: :names', ['names' => $remotePush->packages->pluck('name')->implode(', ')]) }}
+                @elseif ($remotePush->package)
+                    {{ __('Package: :name', ['name' => $remotePush->package->name]) }}
+                @else
+                    {{ __('Probe command') }}
+                @endif
                 ·
                 <flux:badge :color="$remotePush->status->color()">{{ $remotePush->status->label() }}</flux:badge>
             </flux:text>
@@ -111,15 +144,39 @@ new #[Title('Remote push')] class extends Component
                 <flux:text class="mt-2">{{ $remotePush->notes }}</flux:text>
             @endif
         </div>
-        <div class="flex gap-2">
+        <div class="flex flex-wrap gap-2">
             <flux:button size="sm" :href="route('assets.remote-pushes.index')" wire:navigate icon="arrow-left">{{ __('Back') }}</flux:button>
             @if ($remotePush->status === App\Enums\RemotePushStatus::Open)
                 <flux:button size="sm" variant="danger" wire:click="cancel" wire:confirm="{{ __('Cancel this push for remaining devices?') }}">
                     {{ __('Cancel push') }}
                 </flux:button>
             @endif
+            @can('delete', $remotePush)
+                <flux:button
+                    size="sm"
+                    variant="danger"
+                    wire:click="delete"
+                    wire:confirm="{{ __('Permanently delete this push and all target history?') }}"
+                >
+                    {{ __('Delete push') }}
+                </flux:button>
+            @endcan
         </div>
     </div>
+
+    @if ($remotePush->packages->isNotEmpty())
+        <div class="rounded-xl border border-zinc-200 p-4 dark:border-zinc-700">
+            <flux:heading size="sm" class="mb-3">{{ __('Install order') }}</flux:heading>
+            <ol class="list-decimal space-y-1 pl-5">
+                @foreach ($remotePush->packages as $package)
+                    <li wire:key="pkg-order-{{ $package->id }}">
+                        <span class="font-medium">{{ $package->name }}</span>
+                        <flux:text class="inline text-sm">({{ $package->source->label() }})</flux:text>
+                    </li>
+                @endforeach
+            </ol>
+        </div>
+    @endif
 
     <div class="flex flex-wrap items-center justify-between gap-3">
         <flux:heading size="lg">{{ __('Targets') }}</flux:heading>
@@ -134,6 +191,7 @@ new #[Title('Remote push')] class extends Component
             <flux:table.column>{{ __('Scheduled') }}</flux:table.column>
             <flux:table.column>{{ __('Deadline') }}</flux:table.column>
             <flux:table.column>{{ __('Detail') }}</flux:table.column>
+            <flux:table.column></flux:table.column>
         </flux:table.columns>
         <flux:table.rows>
             @forelse ($this->targets as $target)
@@ -166,10 +224,22 @@ new #[Title('Remote push')] class extends Component
                             —
                         @endif
                     </flux:table.cell>
+                    <flux:table.cell>
+                        @can('update', $remotePush)
+                            <flux:button
+                                size="sm"
+                                variant="ghost"
+                                wire:click="resetTarget({{ $target->id }})"
+                                wire:confirm="{{ __('Reset this device so Drone runs the push again?') }}"
+                            >
+                                {{ __('Reset') }}
+                            </flux:button>
+                        @endcan
+                    </flux:table.cell>
                 </flux:table.row>
             @empty
                 <flux:table.row>
-                    <flux:table.cell colspan="6">
+                    <flux:table.cell colspan="7">
                         {{ $incompleteOnly ? __('All targets have finished.') : __('No targets.') }}
                     </flux:table.cell>
                 </flux:table.row>
@@ -227,7 +297,16 @@ new #[Title('Remote push')] class extends Component
                     @endif
                 </div>
 
-                <div class="flex justify-end gap-2">
+                <div class="flex flex-wrap justify-end gap-2">
+                    @can('update', $remotePush)
+                        <flux:button
+                            variant="ghost"
+                            wire:click="resetTarget({{ $target->id }})"
+                            wire:confirm="{{ __('Reset this device so Drone runs the push again?') }}"
+                        >
+                            {{ __('Reset & re-queue') }}
+                        </flux:button>
+                    @endcan
                     <flux:button variant="ghost" :href="route('assets.hardware.show', $target->hardware)" wire:navigate>
                         {{ __('Open device') }}
                     </flux:button>

@@ -37,7 +37,7 @@ class ListDroneCommandsController extends Controller
         }
 
         $targets = RemotePushTarget::query()
-            ->with(['remotePush.package'])
+            ->with(['remotePush.packages', 'remotePush.package'])
             ->where('hardware_id', $hardware->id)
             ->whereHas('remotePush', function ($query) use ($organization): void {
                 $query->where('organization_id', $organization->id)

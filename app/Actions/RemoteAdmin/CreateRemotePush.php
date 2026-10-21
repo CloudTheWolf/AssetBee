@@ -27,6 +27,12 @@ class CreateRemotePush
     {
         $validated = Validator::make($input, [
             'type' => ['required', Rule::enum(RemotePushType::class)],
+            'remote_package_ids' => ['nullable', 'array'],
+            'remote_package_ids.*' => [
+                'integer',
+                Rule::exists('remote_packages', 'id')->where('organization_id', $organization->id),
+            ],
+            // Legacy single-package field still accepted.
             'remote_package_id' => [
                 'nullable',
                 'integer',
@@ -51,14 +57,25 @@ class CreateRemotePush
             ? $validated['type']
             : RemotePushType::from((string) $validated['type']);
 
-        if ($type->requiresPackage() && empty($validated['remote_package_id'])) {
+        /** @var list<int> $packageIds */
+        $packageIds = [];
+        if (is_array($validated['remote_package_ids'] ?? null)) {
+            $packageIds = array_values(array_unique(array_map(
+                static fn (int|string $id): int => (int) $id,
+                $validated['remote_package_ids'],
+            )));
+        } elseif (! empty($validated['remote_package_id'])) {
+            $packageIds = [(int) $validated['remote_package_id']];
+        }
+
+        if ($type->requiresPackage() && $packageIds === []) {
             throw ValidationException::withMessages([
-                'remote_package_id' => __('A package is required for install pushes.'),
+                'remote_package_ids' => __('Select at least one package for install pushes.'),
             ]);
         }
 
         if (! $type->requiresPackage()) {
-            $validated['remote_package_id'] = null;
+            $packageIds = [];
         }
 
         /** @var list<int|string> $rawHardwareIds */
@@ -89,15 +106,21 @@ class CreateRemotePush
             ]);
         }
 
-        $push = DB::transaction(function () use ($organization, $actor, $validated, $type, $hardwareIds): RemotePush {
+        $push = DB::transaction(function () use ($organization, $actor, $validated, $type, $hardwareIds, $packageIds): RemotePush {
             /** @var RemotePush $push */
             $push = $organization->remotePushes()->create([
                 'created_by' => $actor->id,
                 'type' => $type,
-                'remote_package_id' => $validated['remote_package_id'] ?? null,
+                'remote_package_id' => $packageIds[0] ?? null,
                 'status' => RemotePushStatus::Open,
                 'notes' => $validated['notes'] ?? null,
             ]);
+
+            $sync = [];
+            foreach ($packageIds as $position => $packageId) {
+                $sync[$packageId] = ['position' => $position];
+            }
+            $push->packages()->sync($sync);
 
             foreach ($hardwareIds as $hardwareId) {
                 $push->targets()->create([
@@ -111,6 +134,6 @@ class CreateRemotePush
 
         $this->auditRecorder->record('remote_push.created', $push, $organization->id);
 
-        return $push->load(['package', 'targets.hardware']);
+        return $push->load(['packages', 'package', 'targets.hardware']);
     }
 }

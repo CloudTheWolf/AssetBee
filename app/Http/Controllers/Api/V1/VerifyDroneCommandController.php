@@ -42,7 +42,7 @@ class VerifyDroneCommandController extends Controller
         }
 
         $target = RemotePushTarget::query()
-            ->with(['remotePush.package'])
+            ->with(['remotePush.packages', 'remotePush.package'])
             ->whereKey($targetId)
             ->where('hardware_id', $hardware->id)
             ->whereHas('remotePush', function ($query) use ($organization): void {
@@ -83,7 +83,8 @@ class VerifyDroneCommandController extends Controller
             ], 403);
         }
 
-        if ($push->type->requiresPackage() && $push->package === null) {
+        $hasPackages = $push->packages->isNotEmpty() || $push->package !== null;
+        if ($push->type->requiresPackage() && ! $hasPackages) {
             return response()->json([
                 'authorized' => false,
                 'reason' => 'Install package is missing from the catalog.',
