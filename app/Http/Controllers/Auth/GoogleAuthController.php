@@ -95,7 +95,7 @@ class GoogleAuthController extends Controller
                 ->withErrors($exception->errors());
         }
 
-        Auth::login($user, remember: true);
+        Auth::login($user);
 
         $invitation = Registration::pendingInvitation();
 

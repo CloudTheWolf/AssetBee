@@ -48,8 +48,6 @@
                 @endif
             </div>
 
-            <flux:checkbox name="remember" :label="__('Remember me')" :checked="old('remember')" />
-
             <flux:button variant="primary" type="submit" class="mt-1 w-full" data-test="login-button">
                 {{ __('Log in') }}
             </flux:button>

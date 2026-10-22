@@ -64,6 +64,15 @@ class OrganizationInventoryReports
             $lines[] = __('Not linked to Drone').': '.($rows->count() - $linked);
         }
 
+        if ($report === InventoryReport::DroneVersion) {
+            $withVersion = $rows->filter(
+                fn (array $row): bool => is_string($row['detail'] ?? null)
+                    && $row['detail'] !== __('No version available'),
+            )->count();
+            $lines[] = __('With version').': '.$withVersion;
+            $lines[] = __('No version available').': '.($rows->count() - $withVersion);
+        }
+
         $lines[] = '';
 
         if ($rows->isEmpty()) {
@@ -180,6 +189,7 @@ class OrganizationInventoryReports
             InventoryReport::MissingRecoveryKeys => $this->isMissingRecoveryKey($device),
             InventoryReport::UnassignedDevices => $this->isLaptopOrDesktop($device) && (bool) $device['is_unassigned'],
             InventoryReport::LaptopsDesktopsDrone => $this->isLaptopOrDesktop($device),
+            InventoryReport::DroneVersion => $this->isLaptopOrDesktop($device),
             InventoryReport::FullDevicesSoc2 => true,
             InventoryReport::UntrackedDevices => $this->isLaptopOrDesktop($device) && $this->isStale($device),
             InventoryReport::UntrackedServersAndVirtualware => $this->isServerOrVirtualware($device) && $this->isStale($device),
@@ -221,10 +231,24 @@ class OrganizationInventoryReports
             InventoryReport::LaptopsDesktopsDrone => $device['is_linked_to_drone']
                 ? __('Linked to Drone')
                 : __('Not linked to Drone'),
+            InventoryReport::DroneVersion => $this->droneVersionDetail($device),
             InventoryReport::FullDevicesSoc2 => (string) $device['status_label'],
             InventoryReport::UntrackedDevices => $this->staleDetail($device),
             InventoryReport::UntrackedServersAndVirtualware => $this->staleDetail($device),
         };
+    }
+
+    /**
+     * @param  array<string, mixed>  $device
+     */
+    private function droneVersionDetail(array $device): string
+    {
+        $version = SbomListing::versionForGenericPurl(
+            InventoryProbe::value($device['payload'], 'sbom'),
+            'AssetBee Drone',
+        );
+
+        return $version ?? __('No version available');
     }
 
     /**

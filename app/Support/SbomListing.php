@@ -78,4 +78,56 @@ class SbomListing
 
         return $count;
     }
+
+    /**
+     * Return the version from the first SBOM component whose purl matches
+     * `pkg:generic/{encodedName}@VERSION` (or a space instead of `%20`).
+     *
+     * @param  array<string, mixed>|null  $sbomValue  The sbom probe value (targets/format), not the status wrapper.
+     */
+    public static function versionForGenericPurl(?array $sbomValue, string $packageName): ?string
+    {
+        if ($sbomValue === null) {
+            return null;
+        }
+
+        $encodedName = rawurlencode($packageName);
+        $pattern = '#^pkg:generic/(?:'.preg_quote($encodedName, '#').'|'.preg_quote($packageName, '#').')@(.+)$#i';
+
+        foreach ($sbomValue['targets'] ?? [] as $target) {
+            if (! is_array($target) || ! is_array($target['components'] ?? null)) {
+                continue;
+            }
+
+            foreach ($target['components'] as $component) {
+                if (! is_array($component)) {
+                    continue;
+                }
+
+                $purl = $component['purl'] ?? null;
+
+                if (! is_string($purl) || $purl === '') {
+                    continue;
+                }
+
+                if (preg_match($pattern, $purl, $matches) !== 1) {
+                    continue;
+                }
+
+                $fromPurl = rawurldecode($matches[1]);
+
+                if ($fromPurl !== '') {
+                    return $fromPurl;
+                }
+
+                $fromField = $component['version'] ?? null;
+
+                if (is_string($fromField) && trim($fromField) !== '') {
+                    return trim($fromField);
+                }
+            }
+        }
+
+        return null;
+    }
 }

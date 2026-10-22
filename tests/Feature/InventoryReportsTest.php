@@ -21,6 +21,7 @@ test('organization members can view the reports index', function () {
         ->assertSee(__('Missing antivirus'))
         ->assertSee(__('Unencrypted disks'))
         ->assertSee(__('Laptops & desktops'))
+        ->assertSee(__('Drone version'))
         ->assertSee(__('Full device inventory (SOC 2)'))
         ->assertSee(__('Untracked devices'))
         ->assertSee(__('Untracked servers & virtualware'));
@@ -378,6 +379,106 @@ test('the laptops and desktops report lists devices with drone link status', fun
         ->assertDontSee('Should Not Appear VM');
 });
 
+test('the drone version report lists laptop and desktop drone versions from sbom', function () {
+    [, $organization] = actingAsOrganizationMember();
+
+    Hardware::factory()->create([
+        'organization_id' => $organization->id,
+        'name' => 'Drone Laptop',
+        'category' => HardwareCategory::Laptop,
+        'inventory_collected_at' => now(),
+        'inventory_payload' => inventoryPayload([
+            'sbom' => [
+                'status' => 'available',
+                'value' => [
+                    'format' => 'CycloneDX',
+                    'specVersion' => '1.6',
+                    'generatedAtUtc' => '2026-08-11T14:44:20+00:00',
+                    'targets' => [
+                        [
+                            'bomRef' => 'host',
+                            'kind' => 'host',
+                            'name' => 'Drone Laptop',
+                            'components' => [
+                                [
+                                    'name' => 'AssetBee Drone',
+                                    'version' => '2.4.1',
+                                    'type' => 'application',
+                                    'purl' => 'pkg:generic/AssetBee%20Drone@2.4.1',
+                                    'publisher' => 'AssetBee',
+                                ],
+                            ],
+                        ],
+                    ],
+                ],
+            ],
+        ]),
+    ]);
+    Hardware::factory()->create([
+        'organization_id' => $organization->id,
+        'name' => 'No Version Desktop',
+        'category' => HardwareCategory::Desktop,
+        'inventory_collected_at' => now(),
+        'inventory_payload' => inventoryPayload(),
+    ]);
+    Hardware::factory()->create([
+        'organization_id' => $organization->id,
+        'name' => 'Never Inventoried Laptop',
+        'category' => HardwareCategory::Laptop,
+        'inventory_collected_at' => null,
+        'inventory_payload' => null,
+    ]);
+    Hardware::factory()->create([
+        'organization_id' => $organization->id,
+        'name' => 'Office Server',
+        'category' => HardwareCategory::Server,
+        'inventory_collected_at' => now(),
+        'inventory_payload' => inventoryPayload([
+            'hardwareType' => ['status' => 'available', 'value' => 'server'],
+            'sbom' => [
+                'status' => 'available',
+                'value' => [
+                    'format' => 'CycloneDX',
+                    'specVersion' => '1.6',
+                    'generatedAtUtc' => '2026-08-11T14:44:20+00:00',
+                    'targets' => [
+                        [
+                            'bomRef' => 'host',
+                            'kind' => 'host',
+                            'name' => 'Office Server',
+                            'components' => [
+                                [
+                                    'name' => 'AssetBee Drone',
+                                    'version' => '9.9.9',
+                                    'type' => 'application',
+                                    'purl' => 'pkg:generic/AssetBee%20Drone@9.9.9',
+                                    'publisher' => 'AssetBee',
+                                ],
+                            ],
+                        ],
+                    ],
+                ],
+            ],
+        ]),
+    ]);
+    Virtualware::factory()->create([
+        'organization_id' => $organization->id,
+        'name' => 'Should Not Appear VM',
+    ]);
+
+    $this->get(route('reports.show', InventoryReport::DroneVersion->value))
+        ->assertOk()
+        ->assertSee(__('Drone version'))
+        ->assertSee('Drone Laptop')
+        ->assertSee('2.4.1')
+        ->assertSee('No Version Desktop')
+        ->assertSee(__('No version available'))
+        ->assertSee('Never Inventoried Laptop')
+        ->assertDontSee('Office Server')
+        ->assertDontSee('9.9.9')
+        ->assertDontSee('Should Not Appear VM');
+});
+
 test('the full device soc2 report lists hardware and virtualware with device types', function () {
     [, $organization] = actingAsOrganizationMember();
 
@@ -596,6 +697,60 @@ test('the laptops and desktops pdf includes drone link breakdown counts', functi
         ->and($contents)->toContain('Unlinked Desktop')
         ->and($contents)->toContain('Linked to Drone')
         ->and($contents)->toContain('Not linked to Drone');
+});
+
+test('the drone version pdf includes version breakdown counts', function () {
+    [, $organization] = actingAsOrganizationMember();
+
+    Hardware::factory()->create([
+        'organization_id' => $organization->id,
+        'name' => 'Versioned Laptop',
+        'category' => HardwareCategory::Laptop,
+        'inventory_collected_at' => now(),
+        'inventory_payload' => inventoryPayload([
+            'sbom' => [
+                'status' => 'available',
+                'value' => [
+                    'format' => 'CycloneDX',
+                    'specVersion' => '1.6',
+                    'generatedAtUtc' => '2026-08-11T14:44:20+00:00',
+                    'targets' => [
+                        [
+                            'bomRef' => 'host',
+                            'kind' => 'host',
+                            'name' => 'Versioned Laptop',
+                            'components' => [
+                                [
+                                    'name' => 'AssetBee Drone',
+                                    'version' => '3.0.0',
+                                    'type' => 'application',
+                                    'purl' => 'pkg:generic/AssetBee%20Drone@3.0.0',
+                                    'publisher' => 'AssetBee',
+                                ],
+                            ],
+                        ],
+                    ],
+                ],
+            ],
+        ]),
+    ]);
+    Hardware::factory()->create([
+        'organization_id' => $organization->id,
+        'name' => 'Missing Version Desktop',
+        'category' => HardwareCategory::Desktop,
+        'inventory_collected_at' => null,
+        'inventory_payload' => null,
+    ]);
+
+    $contents = $this->get(route('reports.pdf', InventoryReport::DroneVersion->value))
+        ->assertOk()
+        ->streamedContent();
+
+    expect($contents)->toContain('Versioned Laptop')
+        ->and($contents)->toContain('3.0.0')
+        ->and($contents)->toContain('Missing Version Desktop')
+        ->and($contents)->toContain('With version')
+        ->and($contents)->toContain('No version available');
 });
 
 test('report pdf downloads do not include other organization devices', function () {

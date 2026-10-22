@@ -12,7 +12,13 @@ test('login screen can be rendered', function () {
         ->assertSee(__('Hardware, software, cloud, and the people who use them — in one place.'))
         ->assertSee(asset('img/logo.png'), false)
         ->assertSee(asset('img/splash.png'), false)
-        ->assertSee(__('Continue with Google'));
+        ->assertSee(__('Continue with Google'))
+        ->assertDontSee(__('Remember me'));
+});
+
+test('sessions expire after four hours and when the browser closes', function () {
+    expect(config('session.lifetime'))->toBe(240)
+        ->and(config('session.expire_on_close'))->toBeTrue();
 });
 
 test('users can authenticate using the login screen', function () {

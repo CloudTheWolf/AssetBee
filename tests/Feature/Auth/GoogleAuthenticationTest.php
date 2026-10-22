@@ -71,10 +71,15 @@ test('existing users can authenticate with google', function () {
         'hd' => 'acme.com',
     ]));
 
-    $this->get(route('auth.google.callback'))
+    $response = $this->get(route('auth.google.callback'))
         ->assertRedirect(route('dashboard', absolute: false));
 
     $this->assertAuthenticatedAs($user);
+
+    $rememberCookies = collect($response->headers->getCookies())
+        ->filter(fn ($cookie) => str_starts_with($cookie->getName(), 'remember_web_'));
+
+    expect($rememberCookies)->toBeEmpty();
 });
 
 test('existing email accounts are linked to google on first workspace login', function () {
