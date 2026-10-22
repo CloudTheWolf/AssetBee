@@ -43,7 +43,7 @@ RUN bun run build
 # -----------------------------------------------------------------------------
 # Production runtime (FrankenPHP + Laravel Octane)
 # -----------------------------------------------------------------------------
-FROM dunglas/frankenphp:1-php8.4-bookworm AS production
+FROM dunglas/frankenphp:1.13.2-php8.4-bookworm AS production
 
 # Stop Inheriting image vendor
 LABEL org.opencontainers.image.vendor="CloudTheWolf"
