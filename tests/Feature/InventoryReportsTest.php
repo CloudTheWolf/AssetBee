@@ -469,6 +469,7 @@ test('the drone version report lists laptop and desktop drone versions from sbom
     $this->get(route('reports.show', InventoryReport::DroneVersion->value))
         ->assertOk()
         ->assertSee(__('Drone version'))
+        ->assertSee(__('All versions'))
         ->assertSee('Drone Laptop')
         ->assertSee('2.4.1')
         ->assertSee('No Version Desktop')
@@ -477,6 +478,85 @@ test('the drone version report lists laptop and desktop drone versions from sbom
         ->assertDontSee('Office Server')
         ->assertDontSee('9.9.9')
         ->assertDontSee('Should Not Appear VM');
+});
+
+test('the drone version report can filter by version', function () {
+    [, $organization] = actingAsOrganizationMember();
+
+    Hardware::factory()->create([
+        'organization_id' => $organization->id,
+        'name' => 'Version Two Laptop',
+        'category' => HardwareCategory::Laptop,
+        'inventory_collected_at' => now(),
+        'inventory_payload' => inventoryPayloadWithDroneVersion('2.4.1'),
+    ]);
+    Hardware::factory()->create([
+        'organization_id' => $organization->id,
+        'name' => 'Version One Desktop',
+        'category' => HardwareCategory::Desktop,
+        'inventory_collected_at' => now(),
+        'inventory_payload' => inventoryPayloadWithDroneVersion('1.0.0'),
+    ]);
+    Hardware::factory()->create([
+        'organization_id' => $organization->id,
+        'name' => 'Missing Version Laptop',
+        'category' => HardwareCategory::Laptop,
+        'inventory_collected_at' => null,
+        'inventory_payload' => null,
+    ]);
+
+    Livewire::test('pages::reports.show', ['report' => InventoryReport::DroneVersion->value])
+        ->set('versionFilter', '2.4.1')
+        ->assertSee('Version Two Laptop')
+        ->assertDontSee('Version One Desktop')
+        ->assertDontSee('Missing Version Laptop')
+        ->set('versionFilter', '__none__')
+        ->assertSee('Missing Version Laptop')
+        ->assertDontSee('Version Two Laptop')
+        ->assertDontSee('Version One Desktop');
+});
+
+test('the drone version report can sort by version', function () {
+    [, $organization] = actingAsOrganizationMember();
+
+    Hardware::factory()->create([
+        'organization_id' => $organization->id,
+        'name' => 'Newer Laptop',
+        'category' => HardwareCategory::Laptop,
+        'inventory_collected_at' => now(),
+        'inventory_payload' => inventoryPayloadWithDroneVersion('2.4.1'),
+    ]);
+    Hardware::factory()->create([
+        'organization_id' => $organization->id,
+        'name' => 'Older Desktop',
+        'category' => HardwareCategory::Desktop,
+        'inventory_collected_at' => now(),
+        'inventory_payload' => inventoryPayloadWithDroneVersion('1.0.0'),
+    ]);
+    Hardware::factory()->create([
+        'organization_id' => $organization->id,
+        'name' => 'Zulu Missing Version',
+        'category' => HardwareCategory::Laptop,
+        'inventory_collected_at' => null,
+        'inventory_payload' => null,
+    ]);
+
+    Livewire::test('pages::reports.show', ['report' => InventoryReport::DroneVersion->value])
+        ->call('sort', 'version')
+        ->assertSet('sortBy', 'version')
+        ->assertSet('sortDirection', 'asc')
+        ->assertSeeInOrder([
+            'Older Desktop',
+            'Newer Laptop',
+            'Zulu Missing Version',
+        ])
+        ->call('sort', 'version')
+        ->assertSet('sortDirection', 'desc')
+        ->assertSeeInOrder([
+            'Newer Laptop',
+            'Older Desktop',
+            'Zulu Missing Version',
+        ]);
 });
 
 test('the full device soc2 report lists hardware and virtualware with device types', function () {

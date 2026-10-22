@@ -66,8 +66,7 @@ class OrganizationInventoryReports
 
         if ($report === InventoryReport::DroneVersion) {
             $withVersion = $rows->filter(
-                fn (array $row): bool => is_string($row['detail'] ?? null)
-                    && $row['detail'] !== __('No version available'),
+                fn (array $row): bool => filled($row['version'] ?? null),
             )->count();
             $lines[] = __('With version').': '.$withVersion;
             $lines[] = __('No version available').': '.($rows->count() - $withVersion);
@@ -202,7 +201,7 @@ class OrganizationInventoryReports
      */
     private function present(array $device, InventoryReport $report): array
     {
-        return [
+        $row = [
             'asset_type' => $device['asset_type'],
             'id' => $device['id'],
             'name' => $device['name'],
@@ -214,6 +213,12 @@ class OrganizationInventoryReports
             'is_linked_to_drone' => (bool) $device['is_linked_to_drone'],
             'detail' => $this->detail($device, $report),
         ];
+
+        if ($report === InventoryReport::DroneVersion) {
+            $row['version'] = $this->droneVersion($device);
+        }
+
+        return $row;
     }
 
     /**
@@ -241,14 +246,20 @@ class OrganizationInventoryReports
     /**
      * @param  array<string, mixed>  $device
      */
-    private function droneVersionDetail(array $device): string
+    private function droneVersion(array $device): ?string
     {
-        $version = SbomListing::versionForGenericPurl(
+        return SbomListing::versionForGenericPurl(
             InventoryProbe::value($device['payload'], 'sbom'),
             'AssetBee Drone',
         );
+    }
 
-        return $version ?? __('No version available');
+    /**
+     * @param  array<string, mixed>  $device
+     */
+    private function droneVersionDetail(array $device): string
+    {
+        return $this->droneVersion($device) ?? __('No version available');
     }
 
     /**

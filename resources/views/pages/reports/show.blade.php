@@ -5,6 +5,7 @@ use App\Support\CurrentOrganization;
 use App\Support\OrganizationInventoryReports;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Illuminate\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Collection;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Locked;
 use Livewire\Attributes\Title;
@@ -16,10 +17,18 @@ new #[Title('Report')] class extends Component
     use AuthorizesRequests;
     use WithPagination;
 
+    public const VERSION_FILTER_NONE = '__none__';
+
     #[Locked]
     public InventoryReport $reportType;
 
     public string $search = '';
+
+    public string $versionFilter = '';
+
+    public string $sortBy = 'name';
+
+    public string $sortDirection = 'asc';
 
     public function mount(string $report): void
     {
@@ -33,6 +42,73 @@ new #[Title('Report')] class extends Component
         $this->resetPage();
     }
 
+    public function updatingVersionFilter(): void
+    {
+        $this->resetPage();
+    }
+
+    public function sort(string $column): void
+    {
+        if (! $this->canSortByVersion() || $column !== 'version') {
+            return;
+        }
+
+        if ($this->sortBy === $column) {
+            $this->sortDirection = $this->sortDirection === 'asc' ? 'desc' : 'asc';
+        } else {
+            $this->sortBy = $column;
+            $this->sortDirection = 'asc';
+        }
+
+        $this->resetPage();
+    }
+
+    public function canSortByVersion(): bool
+    {
+        return $this->reportType === InventoryReport::DroneVersion;
+    }
+
+    /**
+     * @return Collection<int, array<string, mixed>>
+     */
+    #[Computed]
+    public function reportRows(): Collection
+    {
+        return app(OrganizationInventoryReports::class)
+            ->rows(CurrentOrganization::require(), $this->reportType);
+    }
+
+    /**
+     * @return list<string>
+     */
+    #[Computed]
+    public function versionOptions(): array
+    {
+        if (! $this->canSortByVersion()) {
+            return [];
+        }
+
+        return $this->reportRows
+            ->pluck('version')
+            ->filter(fn (mixed $version): bool => is_string($version) && $version !== '')
+            ->unique()
+            ->sort(fn (string $left, string $right): int => version_compare($left, $right))
+            ->values()
+            ->all();
+    }
+
+    #[Computed]
+    public function hasDevicesWithoutVersion(): bool
+    {
+        if (! $this->canSortByVersion()) {
+            return false;
+        }
+
+        return $this->reportRows->contains(
+            fn (array $row): bool => blank($row['version'] ?? null),
+        );
+    }
+
     /**
      * @return LengthAwarePaginator<int, array<string, mixed>>
      */
@@ -40,10 +116,10 @@ new #[Title('Report')] class extends Component
     public function rows(): LengthAwarePaginator
     {
         $search = mb_strtolower(trim($this->search));
+        $versionFilter = $this->canSortByVersion() ? $this->versionFilter : '';
 
-        $items = app(OrganizationInventoryReports::class)
-            ->rows(CurrentOrganization::require(), $this->reportType)
-            ->when($search !== '', function ($rows) use ($search) {
+        $items = $this->reportRows
+            ->when($search !== '', function (Collection $rows) use ($search): Collection {
                 return $rows->filter(function (array $row) use ($search): bool {
                     $haystack = mb_strtolower(implode(' ', array_filter([
                         $row['name'],
@@ -51,11 +127,52 @@ new #[Title('Report')] class extends Component
                         $row['assigned_to'],
                         $row['category_label'],
                         $row['detail'],
+                        $row['version'] ?? null,
                     ])));
 
                     return str_contains($haystack, $search);
                 })->values();
+            })
+            ->when($versionFilter !== '', function (Collection $rows) use ($versionFilter): Collection {
+                return $rows->filter(function (array $row) use ($versionFilter): bool {
+                    $version = $row['version'] ?? null;
+
+                    if ($versionFilter === self::VERSION_FILTER_NONE) {
+                        return blank($version);
+                    }
+
+                    return is_string($version) && $version === $versionFilter;
+                })->values();
             });
+
+        if ($this->canSortByVersion() && $this->sortBy === 'version') {
+            $direction = $this->sortDirection === 'desc' ? 'desc' : 'asc';
+
+            $items = $items->sort(function (array $left, array $right) use ($direction): int {
+                $leftVersion = is_string($left['version'] ?? null) ? $left['version'] : null;
+                $rightVersion = is_string($right['version'] ?? null) ? $right['version'] : null;
+
+                if ($leftVersion === null && $rightVersion === null) {
+                    return strcasecmp((string) $left['name'], (string) $right['name']);
+                }
+
+                if ($leftVersion === null) {
+                    return 1;
+                }
+
+                if ($rightVersion === null) {
+                    return -1;
+                }
+
+                $comparison = version_compare($leftVersion, $rightVersion);
+
+                if ($comparison === 0) {
+                    return strcasecmp((string) $left['name'], (string) $right['name']);
+                }
+
+                return $direction === 'desc' ? -$comparison : $comparison;
+            })->values();
+        }
 
         $page = $this->getPage();
         $perPage = 25;
@@ -86,19 +203,43 @@ new #[Title('Report')] class extends Component
         </div>
     </div>
 
-    <flux:input
-        wire:model.live.debounce.300ms="search"
-        icon="magnifying-glass"
-        :placeholder="__('Search devices…')"
-        class="max-w-md"
-    />
+    <div class="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+        <flux:input
+            wire:model.live.debounce.300ms="search"
+            icon="magnifying-glass"
+            :placeholder="__('Search devices…')"
+            class="max-w-md flex-1 sm:min-w-56"
+        />
+
+        @if ($this->canSortByVersion())
+            <flux:select wire:model.live="versionFilter" class="sm:w-56" data-test="version-filter">
+                <option value="">{{ __('All versions') }}</option>
+                @if ($this->hasDevicesWithoutVersion)
+                    <option value="__none__">{{ __('No version available') }}</option>
+                @endif
+                @foreach ($this->versionOptions as $version)
+                    <option value="{{ $version }}">{{ $version }}</option>
+                @endforeach
+            </flux:select>
+        @endif
+    </div>
 
     <flux:table :paginate="$this->rows">
         <flux:table.columns>
             <flux:table.column>{{ __('Device') }}</flux:table.column>
             <flux:table.column>{{ __('Type') }}</flux:table.column>
             <flux:table.column>{{ __('Assigned to') }}</flux:table.column>
-            <flux:table.column>{{ $reportType->detailHeading() }}</flux:table.column>
+            @if ($this->canSortByVersion())
+                <flux:table.column
+                    sortable
+                    :sorted="$sortBy === 'version'"
+                    :direction="$sortDirection"
+                    wire:click="sort('version')"
+                    data-test="version-sort"
+                >{{ $reportType->detailHeading() }}</flux:table.column>
+            @else
+                <flux:table.column>{{ $reportType->detailHeading() }}</flux:table.column>
+            @endif
         </flux:table.columns>
         <flux:table.rows>
             @forelse ($this->rows as $row)

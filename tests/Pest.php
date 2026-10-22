@@ -65,6 +65,39 @@ function actingAsOrganizationMember(
  * @param  array<string, mixed>  $overrides
  * @return array<string, mixed>
  */
+/**
+ * @return array<string, mixed>
+ */
+function inventoryPayloadWithDroneVersion(string $version): array
+{
+    return inventoryPayload([
+        'sbom' => [
+            'status' => 'available',
+            'value' => [
+                'format' => 'CycloneDX',
+                'specVersion' => '1.6',
+                'generatedAtUtc' => '2026-08-11T14:44:20+00:00',
+                'targets' => [
+                    [
+                        'bomRef' => 'host',
+                        'kind' => 'host',
+                        'name' => 'device',
+                        'components' => [
+                            [
+                                'name' => 'AssetBee Drone',
+                                'version' => $version,
+                                'type' => 'application',
+                                'purl' => 'pkg:generic/AssetBee%20Drone@'.$version,
+                                'publisher' => 'AssetBee',
+                            ],
+                        ],
+                    ],
+                ],
+            ],
+        ],
+    ]);
+}
+
 function inventoryPayload(array $overrides = []): array
 {
     return array_replace_recursive([
