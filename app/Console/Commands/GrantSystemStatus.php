@@ -21,7 +21,7 @@ class GrantSystemStatus extends Command
             return self::FAILURE;
         }
 
-        $email = strtolower((string) $this->argument('email'));
+        $email = $this->input()->string('email')->lower()->toString();
         $user = User::query()->whereRaw('LOWER(email) = ?', [$email])->first();
 
         if ($user === null) {
