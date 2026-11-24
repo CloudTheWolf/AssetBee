@@ -2,6 +2,10 @@
 
 namespace App\Http\Requests\Api\V1;
 
+use App\Actions\Assets\RecordInventorySyncFailure;
+use App\Models\Organization;
+use App\Models\OrganizationApiKey;
+use Illuminate\Contracts\Validation\Validator as ValidatorContract;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
@@ -41,6 +45,71 @@ class UpsertInventoryRequest extends FormRequest
     public function authorize(): bool
     {
         return $this->attributes->has('organization');
+    }
+
+    protected function failedValidation(ValidatorContract $validator): void
+    {
+        $organization = $this->attributes->get('organization');
+
+        if ($organization instanceof Organization) {
+            $apiKey = $this->attributes->get('organizationApiKey');
+            $errorCount = $validator->errors()->count();
+            $message = (string) $validator->errors()->first();
+
+            if ($errorCount > 1) {
+                $remaining = $errorCount - 1;
+                $message .= ' (and '.$remaining.' more '.($remaining === 1 ? 'error' : 'errors').')';
+            }
+
+            app(RecordInventorySyncFailure::class)->handle(
+                $organization,
+                $this->all(),
+                $message !== '' ? $message : __('Inventory sync failed.'),
+                $validator->errors()->toArray(),
+                422,
+                $apiKey instanceof OrganizationApiKey ? $apiKey : null,
+            );
+        }
+
+        parent::failedValidation($validator);
+    }
+
+    /**
+     * Normalize BitLocker volume fields drones sometimes send empty or numeric.
+     */
+    protected function prepareForValidation(): void
+    {
+        $diskEncryption = $this->input('diskEncryption');
+
+        if (! is_array($diskEncryption) || ! is_array($diskEncryption['value'] ?? null)) {
+            return;
+        }
+
+        $volumes = [];
+
+        foreach ($diskEncryption['value'] as $volume) {
+            if (! is_array($volume)) {
+                $volumes[] = $volume;
+
+                continue;
+            }
+
+            $state = $volume['state'] ?? null;
+
+            if (! is_string($state) || trim($state) === '') {
+                $volume['state'] = 'Unknown';
+            }
+
+            if (array_key_exists('protectionStatus', $volume)) {
+                $volume['protectionStatus'] = $this->normalizeProtectionStatus($volume['protectionStatus']);
+            }
+
+            $volumes[] = $volume;
+        }
+
+        $diskEncryption['value'] = $volumes;
+
+        $this->merge(['diskEncryption' => $diskEncryption]);
     }
 
     /**
@@ -128,7 +197,7 @@ class UpsertInventoryRequest extends FormRequest
             'diskEncryption.value.*.keyProtectors.*' => ['array:keyProtectorId,recoveryKey'],
             'diskEncryption.value.*.keyProtectors.*.keyProtectorId' => ['required', 'string', 'max:255'],
             'diskEncryption.value.*.keyProtectors.*.recoveryKey' => ['nullable', 'string', 'max:255'],
-            'diskEncryption.value.*.protectionStatus' => ['nullable', 'string', Rule::in(['On', 'Off'])],
+            'diskEncryption.value.*.protectionStatus' => ['nullable', 'string', Rule::in(['On', 'Off', 'Unknown'])],
             'diskEncryption.detail' => ['nullable', 'string', 'max:1000'],
 
             'domainWorkspace' => ['required', 'array:status,value,detail'],
@@ -242,5 +311,44 @@ class UpsertInventoryRequest extends FormRequest
     private function probeStatusRules(): array
     {
         return ['required', 'string', Rule::in(self::PROBE_STATUSES)];
+    }
+
+    /**
+     * Map BitLocker ProtectionStatus enums/numerics onto On/Off/Unknown.
+     */
+    private function normalizeProtectionStatus(mixed $value): ?string
+    {
+        if ($value === null) {
+            return null;
+        }
+
+        if (is_bool($value)) {
+            return $value ? 'On' : 'Off';
+        }
+
+        if (is_int($value) || (is_string($value) && is_numeric(trim($value)))) {
+            return match ((int) $value) {
+                0 => 'Off',
+                1 => 'On',
+                default => 'Unknown',
+            };
+        }
+
+        if (! is_string($value)) {
+            return null;
+        }
+
+        $trimmed = trim($value);
+
+        if ($trimmed === '') {
+            return null;
+        }
+
+        return match (strtolower($trimmed)) {
+            'on' => 'On',
+            'off' => 'Off',
+            'unknown' => 'Unknown',
+            default => $trimmed,
+        };
     }
 }

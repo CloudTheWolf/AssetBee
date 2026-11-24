@@ -111,6 +111,51 @@ test('inventory endpoint treats protectionStatus Off as bitlocker disabled', fun
     expect(Hardware::query()->sole()->bitlocker_status)->toBe(BitLockerStatus::Disabled);
 });
 
+test('inventory endpoint normalizes empty disk encryption state and protectionStatus', function () {
+    $organization = Organization::factory()->create();
+    [, $plainTextKey] = OrganizationApiKey::issue($organization, 'Collector');
+
+    $this->withToken($plainTextKey)
+        ->postJson('/api/v1/inventory', inventoryPayload([
+            'diskEncryption' => [
+                'status' => 'available',
+                'value' => [
+                    [
+                        'volume' => 'C:',
+                        'technology' => 'BitLocker',
+                        'state' => 'FullyEncrypted',
+                        'recoveryKeys' => [],
+                        'keyProtectors' => [],
+                        'protectionStatus' => 'On',
+                    ],
+                    [
+                        'volume' => 'D:',
+                        'technology' => 'BitLocker',
+                        'state' => '',
+                        'recoveryKeys' => [],
+                        'keyProtectors' => [],
+                        'protectionStatus' => '',
+                    ],
+                    [
+                        'volume' => 'E:',
+                        'technology' => 'BitLocker',
+                        'state' => 'FullyDecrypted',
+                        'recoveryKeys' => [],
+                        'keyProtectors' => [],
+                        'protectionStatus' => 2,
+                    ],
+                ],
+            ],
+        ]))
+        ->assertCreated();
+
+    $hardware = Hardware::query()->sole();
+
+    expect(data_get($hardware->inventory_payload, 'diskEncryption.value.1.state'))->toBe('Unknown')
+        ->and(data_get($hardware->inventory_payload, 'diskEncryption.value.1.protectionStatus'))->toBeNull()
+        ->and(data_get($hardware->inventory_payload, 'diskEncryption.value.2.protectionStatus'))->toBe('Unknown');
+});
+
 test('inventory endpoint creates encrypted organization-scoped hardware', function () {
     $organization = Organization::factory()->create();
     [$apiKey, $plainTextKey] = OrganizationApiKey::issue($organization, 'Collector');

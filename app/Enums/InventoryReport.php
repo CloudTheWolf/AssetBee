@@ -15,6 +15,7 @@ enum InventoryReport: string
     case FullDevicesSoc2 = 'full-devices-soc2';
     case UntrackedDevices = 'untracked-devices';
     case UntrackedServersAndVirtualware = 'untracked-servers-and-virtualware';
+    case FailedInventorySyncs = 'failed-inventory-syncs';
 
     public function title(): string
     {
@@ -30,6 +31,7 @@ enum InventoryReport: string
             self::FullDevicesSoc2 => __('Full device inventory (SOC 2)'),
             self::UntrackedDevices => __('Untracked devices'),
             self::UntrackedServersAndVirtualware => __('Untracked servers & virtualware'),
+            self::FailedInventorySyncs => __('Failed Drone syncs'),
         };
     }
 
@@ -47,6 +49,7 @@ enum InventoryReport: string
             self::FullDevicesSoc2 => __('Complete hardware and virtualware inventory with device type for SOC 2 evidence.'),
             self::UntrackedDevices => __('Laptops and desktops with no Drone inventory in the last 30 days, including manually added devices.'),
             self::UntrackedServersAndVirtualware => __('Servers and virtualware with no Drone inventory in the last 30 days, including manually added devices.'),
+            self::FailedInventorySyncs => __('Devices whose latest Drone inventory push was rejected, with the validation or sync error.'),
         };
     }
 
@@ -64,6 +67,7 @@ enum InventoryReport: string
             self::FullDevicesSoc2 => 'clipboard-document-list',
             self::UntrackedDevices => 'exclamation-triangle',
             self::UntrackedServersAndVirtualware => 'cloud',
+            self::FailedInventorySyncs => 'x-circle',
         };
     }
 
@@ -81,6 +85,7 @@ enum InventoryReport: string
             self::FullDevicesSoc2 => __('Status'),
             self::UntrackedDevices => __('Last inventory'),
             self::UntrackedServersAndVirtualware => __('Last inventory'),
+            self::FailedInventorySyncs => __('Failure'),
         };
     }
 }

@@ -24,7 +24,8 @@ test('organization members can view the reports index', function () {
         ->assertSee(__('Drone version'))
         ->assertSee(__('Full device inventory (SOC 2)'))
         ->assertSee(__('Untracked devices'))
-        ->assertSee(__('Untracked servers & virtualware'));
+        ->assertSee(__('Untracked servers & virtualware'))
+        ->assertSee(__('Failed Drone syncs'));
 });
 
 test('guests cannot view reports', function () {

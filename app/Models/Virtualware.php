@@ -10,6 +10,8 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Carbon;
 
@@ -132,5 +134,21 @@ class Virtualware extends Model
     public function assignedUserware(): BelongsTo
     {
         return $this->belongsTo(Userware::class, 'assigned_userware_id');
+    }
+
+    /**
+     * @return HasMany<InventorySyncFailure, $this>
+     */
+    public function inventorySyncFailures(): HasMany
+    {
+        return $this->hasMany(InventorySyncFailure::class);
+    }
+
+    /**
+     * @return HasOne<InventorySyncFailure, $this>
+     */
+    public function latestInventorySyncFailure(): HasOne
+    {
+        return $this->hasOne(InventorySyncFailure::class)->latestOfMany('last_failed_at');
     }
 }

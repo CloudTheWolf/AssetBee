@@ -245,7 +245,11 @@ new #[Title('Report')] class extends Component
             @forelse ($this->rows as $row)
                 <flux:table.row :key="$row['asset_type'].'-'.$row['id']">
                     <flux:table.cell>
-                        <a href="{{ $row['url'] }}" class="font-medium text-accent" wire:navigate>{{ $row['name'] }}</a>
+                        @if (filled($row['url'] ?? null))
+                            <a href="{{ $row['url'] }}" class="font-medium text-accent" wire:navigate>{{ $row['name'] }}</a>
+                        @else
+                            <span class="font-medium">{{ $row['name'] }}</span>
+                        @endif
                         @if ($row['serial_number'])
                             <flux:text>{{ $row['serial_number'] }}</flux:text>
                         @endif

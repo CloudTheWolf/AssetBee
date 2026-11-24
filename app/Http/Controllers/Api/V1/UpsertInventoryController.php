@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Actions\Assets\ClearInventorySyncFailures;
 use App\Actions\Assets\CreateHardware;
 use App\Actions\Assets\CreateVirtualware;
 use App\Enums\BitLockerStatus;
@@ -26,6 +27,7 @@ class UpsertInventoryController extends Controller
         UpsertInventoryRequest $request,
         CreateHardware $createHardware,
         CreateVirtualware $createVirtualware,
+        ClearInventorySyncFailures $clearInventorySyncFailures,
     ): JsonResponse {
         /** @var Organization $organization */
         $organization = $request->attributes->get('organization');
@@ -65,6 +67,8 @@ class UpsertInventoryController extends Controller
         }, attempts: 3);
 
         [$asset, $created] = $result;
+
+        $clearInventorySyncFailures->handle($organization, $asset, $serialNumber, $deviceName);
 
         return $this->responseFor($organization, $asset, $created);
     }

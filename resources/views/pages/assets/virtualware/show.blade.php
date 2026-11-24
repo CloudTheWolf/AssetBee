@@ -233,6 +233,19 @@ new #[Title('Virtualware')] class extends Component {
         </div>
     </div>
 
+    @if ($virtualware->latestInventorySyncFailure)
+        <flux:callout variant="danger" icon="x-circle" :heading="__('Latest Drone sync failed')">
+            <div class="space-y-3">
+                <div>{{ $virtualware->latestInventorySyncFailure->detailSummary() }}</div>
+                @can('viewReports', $virtualware->organization)
+                    <flux:button size="sm" :href="route('reports.show', App\Enums\InventoryReport::FailedInventorySyncs->value)" wire:navigate>
+                        {{ __('View failed syncs') }}
+                    </flux:button>
+                @endcan
+            </div>
+        </flux:callout>
+    @endif
+
     <form wire:submit="save" class="flex flex-col gap-6 rounded-xl border border-zinc-200 p-6 dark:border-zinc-700">
         <flux:input wire:model="name" :label="__('Name')" required :disabled="! auth()->user()->can('update', $virtualware)" />
         <flux:select wire:model="provider" :label="__('Provider')" :disabled="! auth()->user()->can('update', $virtualware)">

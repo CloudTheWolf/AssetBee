@@ -14,6 +14,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Carbon;
@@ -192,5 +193,21 @@ class Hardware extends Model
     public function remotePushTargets(): HasMany
     {
         return $this->hasMany(RemotePushTarget::class);
+    }
+
+    /**
+     * @return HasMany<InventorySyncFailure, $this>
+     */
+    public function inventorySyncFailures(): HasMany
+    {
+        return $this->hasMany(InventorySyncFailure::class);
+    }
+
+    /**
+     * @return HasOne<InventorySyncFailure, $this>
+     */
+    public function latestInventorySyncFailure(): HasOne
+    {
+        return $this->hasOne(InventorySyncFailure::class)->latestOfMany('last_failed_at');
     }
 }

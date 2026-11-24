@@ -8,6 +8,7 @@ use App\Enums\HardwareStatus;
 use App\Enums\InventoryReport;
 use App\Enums\VirtualwareStatus;
 use App\Models\Hardware;
+use App\Models\InventorySyncFailure;
 use App\Models\Organization;
 use App\Models\Virtualware;
 use Carbon\CarbonInterface;
@@ -23,11 +24,14 @@ class OrganizationInventoryReports
     public function catalog(Organization $organization): array
     {
         $devices = $this->devices($organization);
+        $failedSyncCount = $organization->inventorySyncFailures()->count();
 
         return array_map(
             fn (InventoryReport $report): array => [
                 'report' => $report,
-                'count' => $this->matching($devices, $report)->count(),
+                'count' => $report === InventoryReport::FailedInventorySyncs
+                    ? $failedSyncCount
+                    : $this->matching($devices, $report)->count(),
             ],
             InventoryReport::cases(),
         );
@@ -38,6 +42,10 @@ class OrganizationInventoryReports
      */
     public function rows(Organization $organization, InventoryReport $report): Collection
     {
+        if ($report === InventoryReport::FailedInventorySyncs) {
+            return $this->failedSyncRows($organization);
+        }
+
         return $this->matching($this->devices($organization), $report)
             ->map(fn (array $device): array => $this->present($device, $report))
             ->values();
@@ -192,6 +200,7 @@ class OrganizationInventoryReports
             InventoryReport::FullDevicesSoc2 => true,
             InventoryReport::UntrackedDevices => $this->isLaptopOrDesktop($device) && $this->isStale($device),
             InventoryReport::UntrackedServersAndVirtualware => $this->isServerOrVirtualware($device) && $this->isStale($device),
+            InventoryReport::FailedInventorySyncs => false,
         })->values();
     }
 
@@ -240,7 +249,69 @@ class OrganizationInventoryReports
             InventoryReport::FullDevicesSoc2 => (string) $device['status_label'],
             InventoryReport::UntrackedDevices => $this->staleDetail($device),
             InventoryReport::UntrackedServersAndVirtualware => $this->staleDetail($device),
+            InventoryReport::FailedInventorySyncs => '',
         };
+    }
+
+    /**
+     * @return Collection<int, array<string, mixed>>
+     */
+    private function failedSyncRows(Organization $organization): Collection
+    {
+        return $organization->inventorySyncFailures()
+            ->with(['hardware.assignedUserware', 'virtualware.assignedUserware'])
+            ->orderByDesc('last_failed_at')
+            ->get()
+            ->map(function (InventorySyncFailure $failure): array {
+                $hardware = $failure->hardware;
+                $virtualware = $failure->virtualware;
+
+                if ($hardware instanceof Hardware) {
+                    return [
+                        'asset_type' => 'hardware',
+                        'id' => $hardware->id,
+                        'name' => $hardware->name,
+                        'serial_number' => $hardware->serial_number ?: $failure->serial_number,
+                        'assigned_to' => $hardware->assignedUserware?->name,
+                        'collected_at' => $hardware->inventory_collected_at,
+                        'url' => route('assets.hardware.show', $hardware),
+                        'category_label' => $hardware->category->label(),
+                        'is_linked_to_drone' => $hardware->inventory_collected_at !== null,
+                        'detail' => $failure->detailSummary(),
+                    ];
+                }
+
+                if ($virtualware instanceof Virtualware) {
+                    return [
+                        'asset_type' => 'virtualware',
+                        'id' => $virtualware->id,
+                        'name' => $virtualware->name,
+                        'serial_number' => $virtualware->serial_number ?: $failure->serial_number,
+                        'assigned_to' => $virtualware->assignedUserware?->name,
+                        'collected_at' => $virtualware->inventory_collected_at,
+                        'url' => route('assets.virtualware.show', $virtualware),
+                        'category_label' => $virtualware->category->label(),
+                        'is_linked_to_drone' => $virtualware->inventory_collected_at !== null,
+                        'detail' => $failure->detailSummary(),
+                    ];
+                }
+
+                return [
+                    'asset_type' => 'sync_failure',
+                    'id' => $failure->id,
+                    'name' => $failure->displayName(),
+                    'serial_number' => $failure->serial_number,
+                    'assigned_to' => null,
+                    'collected_at' => null,
+                    'url' => null,
+                    'category_label' => $failure->platform
+                        ? strtoupper($failure->platform)
+                        : __('Unknown'),
+                    'is_linked_to_drone' => false,
+                    'detail' => $failure->detailSummary(),
+                ];
+            })
+            ->values();
     }
 
     /**

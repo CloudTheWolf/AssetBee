@@ -141,6 +141,14 @@ class Organization extends Model
     }
 
     /**
+     * @return HasMany<InventorySyncFailure, $this>
+     */
+    public function inventorySyncFailures(): HasMany
+    {
+        return $this->hasMany(InventorySyncFailure::class);
+    }
+
+    /**
      * @return HasMany<Software, $this>
      */
     public function softwares(): HasMany
