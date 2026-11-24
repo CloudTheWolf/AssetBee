@@ -258,7 +258,8 @@ class OrganizationInventoryReports
      */
     private function failedSyncRows(Organization $organization): Collection
     {
-        return $organization->inventorySyncFailures()
+        /** @var Collection<int, array<string, mixed>> $rows */
+        $rows = $organization->inventorySyncFailures()
             ->with(['hardware.assignedUserware', 'virtualware.assignedUserware'])
             ->orderByDesc('last_failed_at')
             ->get()
@@ -296,6 +297,8 @@ class OrganizationInventoryReports
                     ];
                 }
 
+                $platform = $failure->platform;
+
                 return [
                     'asset_type' => 'sync_failure',
                     'id' => $failure->id,
@@ -304,14 +307,16 @@ class OrganizationInventoryReports
                     'assigned_to' => null,
                     'collected_at' => null,
                     'url' => null,
-                    'category_label' => $failure->platform
-                        ? strtoupper($failure->platform)
-                        : __('Unknown'),
+                    'category_label' => is_string($platform) && $platform !== ''
+                        ? strtoupper($platform)
+                        : (string) __('Unknown'),
                     'is_linked_to_drone' => false,
                     'detail' => $failure->detailSummary(),
                 ];
             })
             ->values();
+
+        return $rows;
     }
 
     /**

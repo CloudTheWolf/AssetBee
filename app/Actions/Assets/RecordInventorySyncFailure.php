@@ -15,7 +15,7 @@ class RecordInventorySyncFailure
      * Persist a sanitized inventory sync failure for UI tracking.
      *
      * @param  array<string, mixed>  $payload
-     * @param  array<string, list<string>>  $errors
+     * @param  array<string, mixed>  $errors
      */
     public function handle(
         Organization $organization,
@@ -106,10 +106,11 @@ class RecordInventorySyncFailure
         $sanitized = [];
 
         foreach ($errors as $field => $messages) {
-            if (! is_string($field) || ! is_array($messages)) {
+            if (! is_array($messages)) {
                 continue;
             }
 
+            /** @var list<string> $cleanMessages */
             $cleanMessages = [];
 
             foreach ($messages as $message) {
@@ -121,7 +122,7 @@ class RecordInventorySyncFailure
             }
 
             if ($cleanMessages !== []) {
-                $sanitized[Str::limit($field, 255, '')] = array_values(array_slice($cleanMessages, 0, 20));
+                $sanitized[Str::limit((string) $field, 255, '')] = array_slice($cleanMessages, 0, 20);
             }
         }
 

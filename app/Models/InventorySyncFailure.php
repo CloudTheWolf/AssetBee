@@ -2,12 +2,12 @@
 
 namespace App\Models;
 
+use Carbon\CarbonInterface;
 use Database\Factories\InventorySyncFailureFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Support\Carbon;
 
 /**
  * @property int $id
@@ -23,10 +23,10 @@ use Illuminate\Support\Carbon;
  * @property string $message
  * @property array<string, list<string>>|null $errors
  * @property int $attempt_count
- * @property Carbon $first_failed_at
- * @property Carbon $last_failed_at
- * @property Carbon|null $created_at
- * @property Carbon|null $updated_at
+ * @property CarbonInterface $first_failed_at
+ * @property CarbonInterface $last_failed_at
+ * @property CarbonInterface|null $created_at
+ * @property CarbonInterface|null $updated_at
  */
 #[Fillable([
     'organization_id',
