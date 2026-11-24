@@ -32,8 +32,7 @@ class UpsertInventoryController extends Controller
         /** @var Organization $organization */
         $organization = $request->attributes->get('organization');
         $payload = $request->validated();
-        $serialNumber = trim((string) data_get($payload, 'serialNumber.value'));
-        $deviceName = trim((string) data_get($payload, 'deviceName.value'));
+        [$deviceName, $serialNumber] = $this->identityValues($payload);
         $preferredType = ($payload['type'] ?? null) === 'virtualware' ? 'virtualware' : 'hardware';
 
         /** @var array{0: Hardware|Virtualware, 1: bool} $result */
@@ -124,7 +123,7 @@ class UpsertInventoryController extends Controller
         array $payload,
         string $serialNumber,
     ): void {
-        $deviceName = trim((string) data_get($payload, 'deviceName.value'));
+        [$deviceName] = $this->identityValues($payload);
 
         $attributes = [
             'inventory_collected_at' => $payload['collectedAtUtc'],
@@ -152,9 +151,11 @@ class UpsertInventoryController extends Controller
      */
     private function hardwareAttributes(array $payload): array
     {
+        [$deviceName, $serialNumber] = $this->identityValues($payload);
+
         $attributes = [
-            'name' => trim((string) data_get($payload, 'deviceName.value')),
-            'serial_number' => trim((string) data_get($payload, 'serialNumber.value')),
+            'name' => $deviceName !== '' ? $deviceName : $serialNumber,
+            'serial_number' => $serialNumber !== '' ? $serialNumber : null,
             'asset_tag' => null,
             'manufacturer' => null,
             'model' => null,
@@ -245,11 +246,13 @@ class UpsertInventoryController extends Controller
      */
     private function virtualwareAttributes(array $payload): array
     {
+        [$deviceName, $serialNumber] = $this->identityValues($payload);
+
         return [
-            'name' => trim((string) data_get($payload, 'deviceName.value')),
+            'name' => $deviceName !== '' ? $deviceName : $serialNumber,
             'provider' => VirtualwareProvider::Other,
             'external_id' => null,
-            'serial_number' => trim((string) data_get($payload, 'serialNumber.value')),
+            'serial_number' => $serialNumber !== '' ? $serialNumber : null,
             'category' => VirtualwareCategory::Vm,
             'status' => VirtualwareStatus::Running,
             'host_hardware_id' => null,
@@ -328,6 +331,22 @@ class UpsertInventoryController extends Controller
             'macos' => HardwareOperatingSystem::Macos,
             default => HardwareOperatingSystem::Other,
         };
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     * @return array{0: string, 1: string}
+     */
+    private function identityValues(array $payload): array
+    {
+        $deviceName = $this->wasCollected($payload, 'deviceName')
+            ? trim((string) data_get($payload, 'deviceName.value'))
+            : '';
+        $serialNumber = $this->wasCollected($payload, 'serialNumber')
+            ? trim((string) data_get($payload, 'serialNumber.value'))
+            : '';
+
+        return [$deviceName, $serialNumber];
     }
 
     /**

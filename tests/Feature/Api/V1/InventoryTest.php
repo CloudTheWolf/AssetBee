@@ -86,6 +86,51 @@ test('inventory endpoint accepts disk encryption protectionStatus and tpm-only v
         ->and(data_get($hardware->inventory_payload, 'diskEncryption.value.1.protectionStatus'))->toBe('On');
 });
 
+test('inventory endpoint accepts devices without an available serialNumber probe', function () {
+    $organization = Organization::factory()->create();
+    [, $plainTextKey] = OrganizationApiKey::issue($organization, 'Collector');
+
+    $this->withToken($plainTextKey)
+        ->postJson('/api/v1/inventory', inventoryPayload([
+            'deviceName' => ['status' => 'available', 'value' => 'NO-SERIAL-PC'],
+            'serialNumber' => [
+                'status' => 'unavailable',
+                'value' => null,
+                'detail' => 'BIOS serial number was not reported.',
+            ],
+        ]))
+        ->assertCreated()
+        ->assertJsonPath('data.name', 'NO-SERIAL-PC')
+        ->assertJsonPath('data.serialNumber', null);
+
+    $hardware = Hardware::query()->sole();
+
+    expect($hardware->name)->toBe('NO-SERIAL-PC')
+        ->and($hardware->serial_number)->toBeNull()
+        ->and(data_get($hardware->inventory_payload, 'serialNumber.status'))->toBe('unavailable');
+});
+
+test('inventory endpoint rejects payloads with neither deviceName nor serialNumber', function () {
+    $organization = Organization::factory()->create();
+    [, $plainTextKey] = OrganizationApiKey::issue($organization, 'Collector');
+
+    $this->withToken($plainTextKey)
+        ->postJson('/api/v1/inventory', inventoryPayload([
+            'deviceName' => [
+                'status' => 'unavailable',
+                'value' => null,
+                'detail' => 'Hostname unavailable.',
+            ],
+            'serialNumber' => [
+                'status' => 'unavailable',
+                'value' => null,
+                'detail' => 'BIOS serial number was not reported.',
+            ],
+        ]))
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors(['deviceName.status']);
+});
+
 test('inventory endpoint treats protectionStatus Off as bitlocker disabled', function () {
     $organization = Organization::factory()->create();
     [, $plainTextKey] = OrganizationApiKey::issue($organization, 'Collector');

@@ -279,17 +279,30 @@ class UpsertInventoryRequest extends FormRequest
                     $validator->errors()->add($property, "The {$property} property is not allowed.");
                 }
 
-                foreach (['deviceName', 'serialNumber'] as $probe) {
-                    if ($this->input("{$probe}.status") !== 'available') {
-                        $validator->errors()->add(
-                            "{$probe}.status",
-                            "The {$probe} probe must be available to identify the hardware.",
-                        );
-                    }
+                $deviceNameAvailable = $this->input('deviceName.status') === 'available'
+                    && trim((string) $this->input('deviceName.value')) !== '';
+                $serialNumberAvailable = $this->input('serialNumber.status') === 'available'
+                    && trim((string) $this->input('serialNumber.value')) !== '';
 
-                    if (trim((string) $this->input("{$probe}.value")) === '') {
-                        $validator->errors()->add("{$probe}.value", "The {$probe} value is required.");
-                    }
+                if (! $deviceNameAvailable && ! $serialNumberAvailable) {
+                    $validator->errors()->add(
+                        'deviceName.status',
+                        'Either the deviceName or serialNumber probe must be available to identify the hardware.',
+                    );
+                }
+
+                if (
+                    $this->input('deviceName.status') === 'available'
+                    && trim((string) $this->input('deviceName.value')) === ''
+                ) {
+                    $validator->errors()->add('deviceName.value', 'The deviceName value is required.');
+                }
+
+                if (
+                    $this->input('serialNumber.status') === 'available'
+                    && trim((string) $this->input('serialNumber.value')) === ''
+                ) {
+                    $validator->errors()->add('serialNumber.value', 'The serialNumber value is required.');
                 }
 
                 if (
